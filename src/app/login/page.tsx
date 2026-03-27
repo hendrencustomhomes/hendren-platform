@@ -67,7 +67,7 @@ export default function LoginPage() {
               </label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)}
                 placeholder="you@example.com" required autoFocus
-                style={{ width: '100%', padding: '9px 11px', border: '1px solid #ccc', borderRadius: '7px', fontSize: '13px', fontFamily: 'ui-monospace, monospace', boxSizing: 'border-box', outline: 'none' }}
+                style={{ width: '100%', padding: '9px 11px', border: '1px solid #ccc', borderRadius: '7px', fontSize: '13px', fontFamily: 'ui-monospace, monospace', boxSizing: 'border-box', outline: 'none', color: '#1a1a18', backgroundColor: '#fff' }}
               />
             </div>
             {error && <div style={{ fontSize: '12px', color: '#dc2626', marginBottom: '12px' }}>{error}</div>}
@@ -93,7 +93,7 @@ export default function LoginPage() {
               </label>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••" required autoFocus
-                style={{ width: '100%', padding: '9px 11px', border: '1px solid #ccc', borderRadius: '7px', fontSize: '13px', fontFamily: 'ui-monospace, monospace', boxSizing: 'border-box', outline: 'none' }}
+                style={{ width: '100%', padding: '9px 11px', border: '1px solid #ccc', borderRadius: '7px', fontSize: '13px', fontFamily: 'ui-monospace, monospace', boxSizing: 'border-box', outline: 'none', color: '#1a1a18', backgroundColor: '#fff' }}
               />
             </div>
             {error && <div style={{ fontSize: '12px', color: '#dc2626', marginBottom: '12px' }}>{error}</div>}
