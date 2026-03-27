@@ -5,17 +5,13 @@ export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.SUPABASE_URL_OVERRIDE || process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_ANON_KEY_OVERRIDE || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
+        getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          )
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -25,13 +21,11 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Refresh session — do not remove this
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Auth guard: redirect unauthenticated users to /login
-  // Except for the login page itself and public assets
   const { pathname } = request.nextUrl
   const isPublic = pathname.startsWith('/login') ||
+    pathname.startsWith('/auth') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon')
 
