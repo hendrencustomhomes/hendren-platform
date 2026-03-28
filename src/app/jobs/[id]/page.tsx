@@ -5,7 +5,7 @@ const STAGES = ['intake','takeoff','estimate','contract','selections','procureme
 const STAGE_LABELS: Record<string,string> = {intake:'Intake',takeoff:'Takeoff',estimate:'Estimate',contract:'Contract',selections:'Selections',procurement:'Procurement',schedule:'Schedule',draws:'Draws',construction:'Build'}
 const STAGE_ICONS: Record<string,string> = {intake:'📋',takeoff:'📐',estimate:'💲',contract:'✍️',selections:'🎨',procurement:'📦',schedule:'📅',draws:'💰',construction:'🏗️'}
 
-export default async function JobDetailPage({ params }: { params: { id: string } }) {
+export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -13,7 +13,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
   const { data: job } = await supabase
     .from('jobs')
     .select(`*, profiles!jobs_pm_id_fkey(full_name)`)
-    .eq('id', params.id)
+    .eq('id', (await params).id)
     .single()
 
   if (!job) notFound()
