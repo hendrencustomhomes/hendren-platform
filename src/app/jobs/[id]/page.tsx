@@ -6,6 +6,7 @@ const STAGE_LABELS: Record<string,string> = {intake:'Intake',takeoff:'Takeoff',e
 const STAGE_ICONS: Record<string,string> = {intake:'📋',takeoff:'📐',estimate:'💲',contract:'✍️',selections:'🎨',procurement:'📦',schedule:'📅',draws:'💰',construction:'🏗️'}
 
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -13,7 +14,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const { data: job } = await supabase
     .from('jobs')
     .select(`*, profiles!jobs_pm_id_fkey(full_name)`)
-    .eq('id', (await params).id)
+    .eq('id', id)
     .single()
 
   if (!job) notFound()
@@ -27,18 +28,18 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const { data: checklistState } = await supabase
     .from('job_checklist_state')
     .select('*, checklist_items(id, stage, label, is_required, sort_order)')
-    .eq('job_id', params.id)
+    .eq('job_id', id)
 
   const { data: issues } = await supabase
     .from('issues')
     .select('*')
-    .eq('job_id', params.id)
+    .eq('job_id', id)
     .order('created_at', { ascending: false })
 
   const { data: logs } = await supabase
     .from('job_logs')
     .select('*, profiles(full_name)')
-    .eq('job_id', params.id)
+    .eq('job_id', id)
     .order('created_at', { ascending: false })
 
   const curIdx = STAGES.indexOf(job.current_stage)
