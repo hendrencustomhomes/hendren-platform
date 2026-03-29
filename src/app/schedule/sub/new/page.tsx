@@ -1,5 +1,6 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -7,11 +8,12 @@ const TRADES = ['Concrete/Foundation','Framing','Rough Electrical','Rough Plumbi
 
 export default function NewSubPage() {
   const router = useRouter()
+  const sp = useSearchParams()
   const [jobs, setJobs] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState({
-    job_id: '', trade: 'Framing', sub_name: '', trade_contact: '',
+    job_id: sp.get('job')||'', trade: 'Framing', sub_name: '', trade_contact: '',
     status: 'tentative', start_date: '', end_date: '', notes: '',
     depends_on: 'contract_signed', is_critical_path: false,
   })

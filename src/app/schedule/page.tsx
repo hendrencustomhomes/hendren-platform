@@ -40,20 +40,17 @@ const STATUS_COLORS: Record<string, string> = {
   Issue: '#dc2626',
 }
 
-export default async function SchedulePage() {
+export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ job?: string }> }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: subs } = await supabase
-    .from('sub_schedule')
-    .select('*, jobs(id, client_name, color)')
-    .order('start_date', { ascending: true, nullsFirst: false })
-
-  const { data: orders } = await supabase
-    .from('procurement_items')
-    .select('*, jobs(id, client_name, color)')
-    .order('order_by_date', { ascending: true, nullsFirst: false })
+  const { job: jobFilter } = await searchParams
+  const subsQ = supabase.from('sub_schedule').select('*, jobs(id, client_name, color)').order('start_date',{ascending:true,nullsFirst:false})
+  const ordersQ = supabase.from('procurement_items').select('*, jobs(id, client_name, color)').order('order_by_date',{ascending:true,nullsFirst:false})
+  if (jobFilter) { subsQ.eq('job_id',jobFilter); ordersQ.eq('job_id',jobFilter) }
+  const { data: subs } = await subsQ
+  const { data: orders } = await ordersQ
 
   const subList = subs || []
   const orderList = orders || []
@@ -69,7 +66,7 @@ export default async function SchedulePage() {
       {/* Topbar */}
       <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', position: 'sticky', top: 0, zIndex: 100 }}>
         <a href="/" style={{ fontSize: '13px', color: 'var(--blue)', textDecoration: 'none' }}>← Dashboard</a>
-        <div style={{ fontSize: '15px', fontWeight: '700', flex: 1 }}>Master Schedule</div>
+        <div style={{ fontSize: '15px', fontWeight: '700', flex: 1 }}>Master Schedule{jobFilter ? ' — This Job' : ''}</div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <a href="/schedule/sub/new" style={{ fontSize: '12px', fontWeight: '600', padding: '6px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', textDecoration: 'none', color: 'var(--text)' }}>+ Sub</a>
           <a href="/schedule/order/new" style={{ fontSize: '12px', fontWeight: '600', padding: '6px 12px', background: 'var(--text)', color: 'var(--bg)', borderRadius: '6px', textDecoration: 'none' }}>+ Order</a>
