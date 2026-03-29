@@ -1,12 +1,12 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 
 const TRADES = ['Concrete/Foundation','Framing','Rough Electrical','Rough Plumbing','HVAC','Insulation','Drywall','Finish Electrical','Finish Plumbing','Tile','Flooring','Cabinetry','Trim/Millwork','Paint','Exterior/Roofing','Landscaping','Demo','Other']
 
-export default function NewOrderPage() {
+function NewOrderForm() {
   const router = useRouter()
   const sp = useSearchParams()
   const [jobs, setJobs] = useState<any[]>([])
@@ -143,4 +143,8 @@ export default function NewOrderPage() {
       </div>
     </div>
   )
+}
+
+export default function NewOrderPage() {
+  return <Suspense fallback={null}><NewOrderForm /></Suspense>
 }

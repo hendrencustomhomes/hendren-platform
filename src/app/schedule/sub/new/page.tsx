@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 
 const TRADES = ['Concrete/Foundation','Framing','Rough Electrical','Rough Plumbing','HVAC','Insulation','Drywall','Finish Electrical','Finish Plumbing','Tile','Flooring','Cabinetry','Trim/Millwork','Paint','Exterior/Roofing','Landscaping','Demo','Other']
 
-export default function NewSubPage() {
+function NewSubForm() {
   const router = useRouter()
   const sp = useSearchParams()
   const [jobs, setJobs] = useState<any[]>([])
@@ -117,4 +117,8 @@ export default function NewSubPage() {
       </div>
     </div>
   )
+}
+
+export default function NewSubPage() {
+  return <Suspense fallback={null}><NewSubForm /></Suspense>
 }

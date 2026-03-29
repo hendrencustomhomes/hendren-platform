@@ -89,7 +89,6 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           stageLabels={STAGE_LABELS}
           stageIcons={STAGE_ICONS}
           statusColors={STATUS_COLORS}
-          fmtDate={fmtDate}
           userId={user.id}
         />
       </div>
