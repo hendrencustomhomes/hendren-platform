@@ -1,26 +1,44 @@
-@import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --bg: #f7f6f3;
+  --surface: #ffffff;
+  --border: #e2dfd8;
+  --text: #1a1a18;
+  --text-muted: #777777;
+  --text-faint: #bbbbbb;
+  --blue: #2563eb;
+  --blue-bg: #eff6ff;
+  --green: #16a34a;
+  --green-bg: #f0fdf4;
+  --red: #dc2626;
+  --red-bg: #fef2f2;
+  --amber: #b45309;
+  --amber-bg: #fffbeb;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #111110;
+    --surface: #1c1c1a;
+    --border: #2e2e2b;
+    --text: #e8e6e0;
+    --text-muted: #888884;
+    --text-faint: #444442;
+    --blue: #60a5fa;
+    --blue-bg: #1e2a3a;
+    --green: #4ade80;
+    --green-bg: #142a1e;
+    --red: #f87171;
+    --red-bg: #2a1414;
+    --amber: #fbbf24;
+    --amber-bg: #2a2010;
   }
 }
 
+* { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
 }
