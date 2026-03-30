@@ -3,17 +3,47 @@ import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 
 type Props = {
-  jobId: string; job: any; stageItems: Record<string,any[]>
-  checkedMap: Record<string,boolean>; stateMap: Record<string,string>
-  issues: any[]; logs: any[]; subs: any[]; orders: any[]
-  stages: string[]; stageLabels: Record<string,string>; stageIcons: Record<string,string>
-  statusColors: Record<string,string>; userId: string
+  jobId: string
+  job: any
+  stageItems: Record<string, any[]>
+  checkedMap: Record<string, boolean>
+  stateMap: Record<string, string>
+  issues: any[]
+  logs: any[]
+  subs: any[]
+  orders: any[]
+  selections: any[]
+  takeoffItems: any[]
+  estimates: any[]
+  files: any[]
+  stages: string[]
+  stageLabels: Record<string, string>
+  stageIcons: Record<string, string>
+  statusColors: Record<string, string>
+  userId: string
 }
 
 export default function JobTabs(props: Props) {
-  const { jobId, job, stageItems, checkedMap: initChecked, stateMap: initState,
-    issues: initIssues, logs: initLogs, subs, orders,
-    stages, stageLabels, stageIcons, statusColors, userId } = props
+const {
+  jobId,
+  job,
+  stageItems,
+  checkedMap: initChecked,
+  stateMap: initState,
+  issues: initIssues,
+  logs: initLogs,
+  subs,
+  orders,
+  selections,
+  takeoffItems,
+  estimates,
+  files,
+  stages,
+  stageLabels,
+  stageIcons,
+  statusColors,
+  userId,
+} = props
   const fmtDate = (d: string|null) => d ? new Date(d).toLocaleDateString("en-US",{month:"short",day:"numeric"}) : "—"
 
   const [tab, setTab] = useState('checklist')
