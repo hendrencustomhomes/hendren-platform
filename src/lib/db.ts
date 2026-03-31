@@ -71,15 +71,14 @@ export async function getJobFiles(
   supabase: SupabaseClient,
   jobId: string,
 ): Promise<JobFile[]> {
-const { data, error } = await supabase.rpc(
+  const { data, error } = await supabase.rpc(
     'get_job_files',
     { p_job_id: jobId },
   );
-
   if (error) throw error;
-  return (data ?? []) as JobFile[]
+  return (data ?? []) as JobFile[];
 }
- 
+
 export async function getCompanyCompliance(
   supabase: SupabaseClient,
   companyId: string,
@@ -88,9 +87,8 @@ export async function getCompanyCompliance(
     'get_company_compliance',
     { p_company_id: companyId },
   );
-
   if (error || !data) throw error ?? new Error('Company compliance not found');
-  return (data ?? []) as CompanyCompliance[];
+  return data as CompanyCompliance;
 }
 
 export async function getJobWithDetails(
@@ -104,9 +102,8 @@ export async function getJobWithDetails(
     )
     .eq('id', jobId)
     .single();
-
   if (error || !data) throw error ?? new Error('Job not found');
-  return (data ?? []) as JobWithDetails[];
+  return data as JobWithDetails;
 }
 
 export async function getCompanies(
@@ -125,7 +122,6 @@ export async function getCompanies(
   }
 
   const { data, error } = await query;
-
   if (error) throw error;
   return (data ?? []) as CompanyRow[];
 }
