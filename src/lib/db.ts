@@ -71,7 +71,7 @@ export async function getJobFiles(
   supabase: SupabaseClient,
   jobId: string,
 ): Promise<JobFile[]> {
-  const { data, error } = await supabase.rpc<JobFile>(
+const { data, error } = await supabase.rpc(
     'get_job_files',
     { p_job_id: jobId },
   );
