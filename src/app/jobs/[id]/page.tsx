@@ -13,7 +13,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: job } = await supabase.from('jobs').select(`*, profiles!jobs_pm_id_fkey(full_name)`).eq('id',id).single()
+  const { data: job } = await supabase.from('jobs').select(`*, profiles!jobs_pm_id_fkey(full_name, phone)`).eq('id',id).single()
   if (!job) notFound()
 
   const [

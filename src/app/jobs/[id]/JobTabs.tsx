@@ -95,8 +95,11 @@ const {
     setIssues(i=>i.map(x=>x.id===issueId?{...x,resolved:true}:x))
   }
 
-  const TABS = ['checklist','log','issues','subs','orders','files']
-  const TAB_LABELS: Record<string,string> = {checklist:'Checklist',log:'Log',issues:`Issues${issues.filter(i=>!i.resolved).length?' ('+issues.filter(i=>!i.resolved).length+')':''}`,subs:'Subs',orders:'Orders',files:'Files'}
+  const TABS = ['info','checklist','log','issues','subs','orders','files']
+  const TAB_LABELS: Record<string,string> = {info:'Info',checklist:'Checklist',log:'Log',issues:`Issues${issues.filter(i=>!i.resolved).length?' ('+issues.filter(i=>!i.resolved).length+')':''}`,subs:'Subs',orders:'Orders',files:'Files'}
+
+  const [editingScope, setEditingScope] = useState(false)
+  const [scopeValue, setScopeValue] = useState(job.scope_notes || '')
 
   const inp = {width:'100%',padding:'8px 10px',border:'1px solid var(--border)',borderRadius:'7px',fontSize:'12px',fontFamily:'ui-monospace,monospace',boxSizing:'border-box' as const,outline:'none',background:'var(--surface)',color:'var(--text)'}
 
@@ -110,6 +113,85 @@ const {
           </button>
         ))}
       </div>
+
+      {/* INFO */}
+      {tab==='info' && (
+        <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+          <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'10px',padding:'12px 14px'}}>
+            <div style={{fontSize:'11px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'8px'}}>Core</div>
+            <div style={{fontSize:'12px',marginBottom:'6px'}}><strong>Client:</strong> {job.client_name}</div>
+            <div style={{fontSize:'12px',marginBottom:'6px'}}><strong>Address:</strong> {job.address}</div>
+            <div style={{fontSize:'12px',marginBottom:'6px'}}><strong>PM:</strong> {(job.profiles as any)?.full_name || '—'}</div>
+            <div style={{fontSize:'12px'}}><strong>Phone:</strong> {(job.profiles as any)?.phone || '—'}</div>
+          </div>
+
+          <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'10px',padding:'12px 14px'}}>
+            <div style={{fontSize:'11px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'8px'}}>Project</div>
+            <div style={{fontSize:'12px',marginBottom:'6px'}}><strong>Sq Ft:</strong> {job.sqft || '—'}</div>
+            <div style={{fontSize:'12px',marginBottom:'6px'}}><strong>Lot Sq Ft:</strong> {job.lot_sqft || '—'}</div>
+            <div style={{fontSize:'12px',marginBottom:'6px'}}><strong>Referral:</strong> {job.referral_source || '—'}</div>
+            <div style={{fontSize:'12px'}}><strong>Contract:</strong> {job.contract_type === 'cost_plus' ? 'Cost Plus' : 'Fixed Price'}</div>
+          </div>
+
+          <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'10px',padding:'12px 14px'}}>
+            <div style={{fontSize:'11px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'8px'}}>Financial</div>
+            <div style={{fontSize:'12px',marginBottom:'6px'}}><strong>Margin:</strong> {job.margin_pct}%</div>
+            <div style={{fontSize:'12px'}}><strong>Overhead:</strong> {job.overhead_pct}%</div>
+          </div>
+
+          <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'10px',padding:'12px 14px'}}>
+            <div style={{fontSize:'11px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'8px'}}>Operational</div>
+            <div style={{fontSize:'12px',marginBottom:'6px'}}><strong>Stage:</strong> {job.current_stage}</div>
+            <div style={{fontSize:'12px'}}>
+              <strong>Scope:</strong>{' '}
+              {!editingScope ? (
+                <>
+                  {job.scope_notes || '—'}{' '}
+                  <button onClick={()=>{setScopeValue(job.scope_notes||'');setEditingScope(true)}} style={{marginLeft:'6px',fontSize:'11px'}}>Edit</button>
+                </>
+              ) : (
+                <div style={{marginTop:'6px'}}>
+                  <textarea value={scopeValue} onChange={e=>setScopeValue(e.target.value)} style={{...inp,minHeight:'60px'}} />
+                  <div style={{marginTop:'6px',display:'flex',gap:'6px'}}>
+                    <button
+                      onClick={async()=>{
+                        const supabase = createClient()
+                        const { error } = await supabase
+                          .from('jobs')
+                          .update({ scope_notes: scopeValue })
+                          .eq('id', job.id)
+
+                        if (!error) {
+                          job.scope_notes = scopeValue
+                          setEditingScope(false)
+                        } else {
+                          alert('Failed to save')
+                        }
+                      }}
+                      style={{fontSize:'11px'}}
+                    >
+                      Save
+                    </button>
+                    <button onClick={()=>setEditingScope(false)} style={{fontSize:'11px'}}>Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'10px',padding:'12px 14px'}}>
+            <div style={{fontSize:'11px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'8px'}}>Links</div>
+            <div style={{fontSize:'12px'}}>
+              <strong>Drive:</strong>{' '}
+              {job.drive_folder_url ? (
+                <a href={job.drive_folder_url} target="_blank" rel="noreferrer" style={{color:'var(--blue)'}}>
+                  Open Folder
+                </a>
+              ) : '—'}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CHECKLIST */}
       {tab==='checklist' && (
