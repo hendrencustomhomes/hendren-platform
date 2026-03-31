@@ -1,3 +1,4 @@
+import FilesTab from '@/components/FilesTab'
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
@@ -94,8 +95,8 @@ const {
     setIssues(i=>i.map(x=>x.id===issueId?{...x,resolved:true}:x))
   }
 
-  const TABS = ['checklist','log','issues','subs','orders']
-  const TAB_LABELS: Record<string,string> = {checklist:'Checklist',log:'Log',issues:`Issues${issues.filter(i=>!i.resolved).length?' ('+issues.filter(i=>!i.resolved).length+')':''}`,subs:'Subs',orders:'Orders'}
+  const TABS = ['checklist','log','issues','subs','orders','files']
+  const TAB_LABELS: Record<string,string> = {checklist:'Checklist',log:'Log',issues:`Issues${issues.filter(i=>!i.resolved).length?' ('+issues.filter(i=>!i.resolved).length+')':''}`,subs:'Subs',orders:'Orders',files:'Files'}
 
   const inp = {width:'100%',padding:'8px 10px',border:'1px solid var(--border)',borderRadius:'7px',fontSize:'12px',fontFamily:'ui-monospace,monospace',boxSizing:'border-box' as const,outline:'none',background:'var(--surface)',color:'var(--text)'}
 
@@ -274,5 +275,6 @@ const {
         </div>
       )}
     </div>
+      {tab==='files' && <FilesTab jobId={jobId} />}
   )
 }
