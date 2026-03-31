@@ -1,5 +1,5 @@
-import FilesTab from '@/components/FilesTab'
 'use client'
+import FilesTab from '@/components/FilesTab'
 import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 
