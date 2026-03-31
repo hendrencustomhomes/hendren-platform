@@ -2,7 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 
 export type JobFile = {
   id: string;
-  folder: string;
+  category: string;
   filename: string;
   display_name: string;
   storage_path: string;
