@@ -77,7 +77,7 @@ const { data, error } = await supabase.rpc(
   );
 
   if (error) throw error;
-  return data ?? JobFile[];
+  return (data ?? []) as JobFile[]
 }
 
 export async function getCompanyCompliance(
