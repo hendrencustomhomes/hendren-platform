@@ -77,7 +77,7 @@ const { data, error } = await supabase.rpc(
   );
 
   if (error) throw error;
-  return data ?? [];
+  return data ?? JobFile[];
 }
 
 export async function getCompanyCompliance(
@@ -90,7 +90,7 @@ export async function getCompanyCompliance(
   );
 
   if (error || !data) throw error ?? new Error('Company compliance not found');
-  return data;
+  return data ?? CompanyCompliance[];
 }
 
 export async function getJobWithDetails(
@@ -98,7 +98,7 @@ export async function getJobWithDetails(
   jobId: string,
 ): Promise<JobWithDetails> {
   const { data, error } = await supabase
-    .from<JobWithDetails>('jobs')
+    .from('jobs')
     .select(
       '*, profiles!jobs_pm_id_fkey(full_name), issues(id,severity,resolved), sub_schedule(id,status,start_date,trade,sub_name), procurement_items(id,status,order_by_date,description,trade)',
     )
@@ -106,7 +106,7 @@ export async function getJobWithDetails(
     .single();
 
   if (error || !data) throw error ?? new Error('Job not found');
-  return data;
+  return data ?? JobWithDetails[];
 }
 
 export async function getCompanies(
@@ -114,7 +114,7 @@ export async function getCompanies(
   type?: CompanyType,
 ): Promise<CompanyRow[]> {
   const query = supabase
-    .from<CompanyRow>('companies')
+    .from('companies')
     .select(
       'id,name,type,email,phone,is_active,coi_gl_expires,coi_wc_expires,w9_received_at,general_contract_signed_at',
     )
@@ -127,5 +127,5 @@ export async function getCompanies(
   const { data, error } = await query;
 
   if (error) throw error;
-  return data ?? [];
+  return data ?? CompanyRow[];
 }
