@@ -90,7 +90,7 @@ export async function getCompanyCompliance(
   );
 
   if (error || !data) throw error ?? new Error('Company compliance not found');
-  return data ?? CompanyCompliance[];
+  return (data ?? []) as CompanyCompliance[];
 }
 
 export async function getJobWithDetails(
@@ -106,7 +106,7 @@ export async function getJobWithDetails(
     .single();
 
   if (error || !data) throw error ?? new Error('Job not found');
-  return data ?? JobWithDetails[];
+  return (data ?? []) as JobWithDetails[];
 }
 
 export async function getCompanies(
@@ -127,5 +127,5 @@ export async function getCompanies(
   const { data, error } = await query;
 
   if (error) throw error;
-  return data ?? CompanyRow[];
+  return (data ?? []) as CompanyRow[];
 }
