@@ -68,7 +68,7 @@ export type CompanyRow = {
 };
 
 export async function getJobFiles(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient, 
   jobId: string,
 ): Promise<JobFile[]> {
   const { data, error } = await supabase.rpc(
