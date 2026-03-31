@@ -274,7 +274,7 @@ const {
           })}
         </div>
       )}
-    </div>
       {tab==='files' && <FilesTab jobId={jobId} />}
+    </div>
   )
 }
