@@ -84,7 +84,7 @@ export async function getCompanyCompliance(
   supabase: SupabaseClient,
   companyId: string,
 ): Promise<CompanyCompliance> {
-  const { data, error } = await supabase.rpc<CompanyCompliance>(
+  const { data, error } = await supabase.rpc(
     'get_company_compliance',
     { p_company_id: companyId },
   );
