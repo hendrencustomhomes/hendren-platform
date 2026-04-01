@@ -12,6 +12,7 @@ export default function NewJobPage() {
   const [error, setError] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
   const [form, setForm] = useState({
+  job_name: '',
   client_name: '',
   project_address: '',
   sqft: '',
@@ -30,12 +31,10 @@ export default function NewJobPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.client_name || !form.project_address) {
-      setError('Client name and project address are required.')
-
-      setError('Client name and project_address are required.')
-      return
-    }
+    if (!form.job_name || !form.client_name || !form.project_address) {
+  setError('Job name, client name, and project address are required.')
+  return
+}
     setLoading(true)
     setError('')
     const supabase = createClient()
@@ -43,6 +42,7 @@ export default function NewJobPage() {
     const { data: job, error: err } = await supabase
       .from('jobs')
       .insert({
+  job_name: form.job_name.trim(),
   client_name: form.client_name.trim(),
   project_address: form.project_address.trim(),
   sqft: form.sqft ? parseInt(form.sqft) : null,
@@ -86,6 +86,16 @@ export default function NewJobPage() {
         <div style={{ background: '#fff', border: '1px solid #e2dfd8', borderRadius: '10px', padding: '20px' }}>
           <form onSubmit={handleSubmit}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+  <label style={labelStyle}>Job Name</label>
+  <input
+    style={inputStyle}
+    value={form.job_name}
+    onChange={e => set('job_name', e.target.value)}
+    placeholder="Lot 12 – Smith Residence"
+    required
+  />
+</div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={labelStyle}>Client Name</label>
                 <input style={inputStyle} value={form.client_name} onChange={e => set('client_name', e.target.value)} placeholder="Smith Family" required />
