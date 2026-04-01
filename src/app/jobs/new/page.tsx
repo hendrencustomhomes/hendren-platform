@@ -26,7 +26,7 @@ export default function NewJobPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.client_name || !form.address) {
+    if (!form.client_name || !form.project_address) {
       setError('Client name and project address are required.')
       return
     }
