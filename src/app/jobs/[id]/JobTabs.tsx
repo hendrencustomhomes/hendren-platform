@@ -633,10 +633,77 @@ export default function JobTabs(props: Props) {
               </div>
             )}
           </div>
-          <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', padding:'12px 14px' }}>
-            {!issues.length ? (
-  <div style={{ textAlign:'center', color:'var(--text-muted)', padding:'20px 0', fontSize:'12px' }}>
-    No issues ✓
-  </div>
-) : (
-              
+     <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', padding:'12px 14px' }}>
+  {!issues.length ? (
+    <div style={{ textAlign:'center', color:'var(--text-muted)', padding:'20px 0', fontSize:'12px' }}>
+      No issues ✓
+    </div>
+  ) : (
+    issues.map((iss: any) => (
+      <div
+        key={iss.id}
+        style={{
+          display:'flex',
+          alignItems:'flex-start',
+          gap:'8px',
+          padding:'8px 0',
+          borderBottom:'1px solid var(--border)',
+        }}
+      >
+        <span
+          style={{
+            fontSize:'10px',
+            fontWeight:'600',
+            padding:'2px 6px',
+            borderRadius:'3px',
+            flexShrink:0,
+            background:statusColors[iss.severity] + '22',
+            color:statusColors[iss.severity],
+            border:`1px solid ${statusColors[iss.severity]}44`,
+          }}
+        >
+          {iss.severity}
+        </span>
+
+        <div style={{ flex:1, minWidth:0 }}>
+          <div
+            style={{
+              fontSize:'12px',
+              fontWeight:'600',
+              textDecoration:iss.resolved ? 'line-through' : 'none',
+              color:iss.resolved ? 'var(--text-faint)' : 'var(--text)',
+            }}
+          >
+            {iss.title}
+          </div>
+
+          {iss.detail && (
+            <div style={{ fontSize:'11px', color:'var(--text-muted)', marginTop:'2px' }}>
+              {iss.detail}
+            </div>
+          )}
+        </div>
+
+        {!iss.resolved ? (
+          <button
+            onClick={() => resolveIssue(iss.id)}
+            style={{
+              fontSize:'10px',
+              padding:'2px 8px',
+              background:'var(--green-bg)',
+              color:'var(--green)',
+              border:'1px solid var(--green)',
+              borderRadius:'4px',
+              cursor:'pointer',
+              flexShrink:0,
+            }}
+          >
+            Resolve
+          </button>
+        ) : (
+          <span style={{ fontSize:'10px', color:'var(--green)', flexShrink:0 }}>✓</span>
+        )}
+      </div>
+    ))
+  )}
+</div>
