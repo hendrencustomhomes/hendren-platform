@@ -11,7 +11,7 @@ export default async function Home() {
 
   const { data: jobs } = await supabase
     .from('jobs')
-    .select(`id, client_name, address, color, current_stage, created_at, is_active, profiles!jobs_pm_id_fkey(full_name), issues(id, severity, resolved)`)
+    .select(`id, job_name, project_address, color, current_stage, created_at, is_active, profiles!jobs_pm_id_fkey(full_name), issues(id, severity, resolved)`)
     .eq('is_active', true)
     .order('created_at', { ascending: false })
 
@@ -56,8 +56,8 @@ export default async function Home() {
               <a key={job.id} href={`/jobs/${job.id}`} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 16px', borderBottom: '1px solid var(--border)', textDecoration: 'none', color: 'inherit' }}>
                 <div style={{ width: '3px', height: '36px', borderRadius: '2px', background: job.color || '#3B8BD4', flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '13px', fontWeight: '600' }}>{job.client_name}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'ui-monospace,monospace', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.address}</div>
+                  <div style={{ fontSize: '13px', fontWeight: '600' }}>{job.job_name}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'ui-monospace,monospace', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.project_address}</div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '10px', background: 'var(--blue-bg)', color: 'var(--blue)', border: '1px solid var(--blue)', fontFamily: 'ui-monospace,monospace' }}>
