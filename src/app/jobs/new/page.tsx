@@ -43,19 +43,17 @@ export default function NewJobPage() {
     const { data: job, error: err } = await supabase
       .from('jobs')
       .insert({
-        client_name: form.client_name.trim(),
-        project_address: form.project_address.trim(),
-
-        project_project_project_project_address: form.project_address.trim(),
-        sqft: form.sqft ? parseInt(form.sqft) : null,
-        lot_sqft: form.lot_sqft ? parseInt(form.lot_sqft) : null,
-        referral_source: form.referral_source,
-        scope_notes: form.scope_notes.trim() || null,
-        color,
-        current_stage: 'intake',
-        is_active: true,
-        pm_id: userId,
-      })
+  client_name: form.client_name.trim(),
+  project_address: form.project_address.trim(),
+  sqft: form.sqft ? parseInt(form.sqft) : null,
+  lot_sqft: form.lot_sqft ? parseInt(form.lot_sqft) : null,
+  referral_source: form.referral_source,
+  scope_notes: form.scope_notes.trim() || null,
+  color,
+  current_stage: 'intake',
+  is_active: true,
+  pm_id: userId,
+})
       .select()
       .single()
     setLoading(false)
