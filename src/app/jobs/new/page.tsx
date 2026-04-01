@@ -35,7 +35,6 @@ export default function NewJobPage() {
       setError('Client name and project address are required.')
 
       setError('Client name and project_address are required.')
- e26b27c (Fix new job validation for project_address)
       return
     }
     setLoading(true)
@@ -50,7 +49,6 @@ export default function NewJobPage() {
         project_address: form.project_address.trim(),
 
         project_project_project_project_address: form.project_address.trim(),
- e26b27c (Fix new job validation for project_address)
         sqft: form.sqft ? parseInt(form.sqft) : null,
         lot_sqft: form.lot_sqft ? parseInt(form.lot_sqft) : null,
         referral_source: form.referral_source,
@@ -101,7 +99,6 @@ export default function NewJobPage() {
                 <label style={labelStyle}>Project Address</label>
 
                 <label style={labelStyle}>Project Project Project Address</label>
- e26b27c (Fix new job validation for project_address)
                 <input style={inputStyle} value={form.project_address} onChange={e => set('project_address', e.target.value)} placeholder="1234 Maple St, Carmel IN 46032" required />
               </div>
               <div>
