@@ -102,8 +102,6 @@ export default function NewJobPage() {
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={labelStyle}>Project Address</label>
-
-                <label style={labelStyle}>Project Project Project Address</label>
                 <input style={inputStyle} value={form.project_address} onChange={e => set('project_address', e.target.value)} placeholder="1234 Maple St, Carmel IN 46032" required />
               </div>
               <div>
