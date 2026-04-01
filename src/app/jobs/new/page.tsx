@@ -31,7 +31,6 @@ export default function NewJobPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.client_name || !form.project_address) {
- HEAD
       setError('Client name and project address are required.')
 
       setError('Client name and project_address are required.')
@@ -45,7 +44,6 @@ export default function NewJobPage() {
       .from('jobs')
       .insert({
         client_name: form.client_name.trim(),
- HEAD
         project_address: form.project_address.trim(),
 
         project_project_project_project_address: form.project_address.trim(),
@@ -95,7 +93,6 @@ export default function NewJobPage() {
                 <input style={inputStyle} value={form.client_name} onChange={e => set('client_name', e.target.value)} placeholder="Smith Family" required />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
- HEAD
                 <label style={labelStyle}>Project Address</label>
 
                 <label style={labelStyle}>Project Project Project Address</label>
