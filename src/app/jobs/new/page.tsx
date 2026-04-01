@@ -12,9 +12,9 @@ export default function NewJobPage() {
   const [error, setError] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
   const [form, setForm] = useState({
-    client_name: '', address: '', sqft: '', lot_sqft: '',
-    referral_source: 'Referral', scope_notes: ''
-  })
+  client_name: '', project_address: '', sqft: '', lot_sqft: '',
+  referral_source: 'Referral', scope_notes: ''
+})
 
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => setUserId(data.user?.id || null))
