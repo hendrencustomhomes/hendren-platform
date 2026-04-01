@@ -635,4 +635,4 @@ export default function JobTabs(props: Props) {
           </div>
           <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', padding:'12px 14px' }}>
             {!issues.length ? (
-              <div style={{ textAlign:'center', color:'var(--text-muted)', padding:'20px 0', font
+              <div style={{ textAlign:'center', color:'var(--text-muted)', padding:'20px 0', fontSize:'12px' }}>
