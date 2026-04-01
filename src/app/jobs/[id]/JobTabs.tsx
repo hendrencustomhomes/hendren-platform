@@ -100,17 +100,17 @@ export default function JobTabs(props: Props) {
   const curIdx = stages.indexOf(job.current_stage)
 
   const inp = {
-    width: '100%',
-    padding: '8px 10px',
-    border: '1px solid var(--border)',
-    borderRadius: '7px',
-    fontSize: '12px',
-    fontFamily: 'ui-monospace,monospace',
-    boxSizing: 'border-box' as const,
-    outline: 'none',
-    background: 'var(--surface)',
-    color: 'var(--text)',
-  }
+  width: '100%',
+  padding: '10px 12px',
+  border: '1px solid var(--border)',
+  borderRadius: '7px',
+  fontSize: '16px',
+  fontFamily: 'ui-monospace,monospace',
+  boxSizing: 'border-box' as const,
+  outline: 'none',
+  background: 'var(--surface)',
+  color: 'var(--text)',
+}
 
   function startInfoEdit() {
     setInfoDraft({
