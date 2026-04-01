@@ -31,11 +31,14 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const { id } = await params
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+
+  const { data: myProfile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single()
 
   const { data: job } = await supabase
     .from('jobs')
@@ -56,6 +59,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     { data: takeoffItems },
     { data: estimates },
     { data: files },
+    { data: pmOptions },
   ] = await Promise.all([
     supabase.from('checklist_items').select('*').is('job_id', null).order('sort_order'),
     supabase.from('job_checklist_state').select('*').eq('job_id', id),
@@ -67,10 +71,10 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     supabase.from('takeoff_items').select('*').eq('job_id', id).order('sort_order'),
     supabase.from('estimates').select('*, estimate_line_items(*)').eq('job_id', id).order('created_at', { ascending: false }),
     supabase.from('file_attachments').select('*').eq('job_id', id).order('created_at', { ascending: false }),
+    supabase.from('profiles').select('id, full_name').eq('is_project_manager', true).order('full_name'),
   ])
 
   const curIdx = STAGES.indexOf(job.current_stage)
-
   const checkedMap: Record<string, boolean> = {}
   const stateMap: Record<string, string> = {}
 
@@ -106,86 +110,29 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     on_hold:'#dc2626',
   }
 
-  // TODO: replace with real internal-staff auth check.
-  // This is temporary so JobTabs can enforce the UI gate.
-  const canEditInfo = true
+  const canEditInfo = !!myProfile?.is_admin
 
   return (
-    <div
-      style={{
-        background:'var(--bg)',
-        minHeight:'100vh',
-        color:'var(--text)',
-        fontFamily:'system-ui,-apple-system,sans-serif',
-      }}
-    >
-      <Nav title={job.client_name} back="/jobs" jobId={id} />
+    <div style={{ background:'var(--bg)', minHeight:'100vh', color:'var(--text)', fontFamily:'system-ui,-apple-system,sans-serif' }}>
+      <Nav title={job.job_name || 'Untitled Job'} back="/jobs" jobId={id} />
 
       <div style={{ padding:'14px', maxWidth:'960px', margin:'0 auto' }}>
-        {/* Pipeline strip */}
-        <div
-          style={{
-            background:'var(--surface)',
-            border:'1px solid var(--border)',
-            borderRadius:'10px',
-            padding:'12px 14px',
-            marginBottom:'12px',
-            overflowX:'auto',
-          }}
-        >
+        <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', padding:'12px 14px', marginBottom:'12px', overflowX:'auto' }}>
           <div style={{ display:'flex', gap:'2px', minWidth:'fit-content' }}>
             {STAGES.map((stage, i) => {
               const done = i < curIdx
               const active = i === curIdx
               const pct = stagePct(stage)
-
               return (
-                <div
-                  key={stage}
-                  style={{ flex:'0 0 auto', textAlign:'center', padding:'5px 7px', minWidth:'68px' }}
-                >
-                  <div
-                    style={{
-                      width:'26px',
-                      height:'26px',
-                      borderRadius:'50%',
-                      margin:'0 auto 3px',
-                      display:'flex',
-                      alignItems:'center',
-                      justifyContent:'center',
-                      fontSize:'11px',
-                      fontWeight:'700',
-                      background: done ? 'var(--green)' : active ? 'var(--blue)' : 'var(--bg)',
-                      color: done || active ? '#fff' : 'var(--text-faint)',
-                      border:`2px solid ${done ? 'var(--green)' : active ? 'var(--blue)' : 'var(--border)'}`,
-                    }}
-                  >
+                <div key={stage} style={{ flex:'0 0 auto', textAlign:'center', padding:'5px 7px', minWidth:'68px' }}>
+                  <div style={{ width:'26px', height:'26px', borderRadius:'50%', margin:'0 auto 3px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:'700', background:done?'var(--green)':active?'var(--blue)':'var(--bg)', color:(done||active)?'#fff':'var(--text-faint)', border:`2px solid ${done?'var(--green)':active?'var(--blue)':'var(--border)'}` }}>
                     {done ? '✓' : i + 1}
                   </div>
-
-                  <div
-                    style={{
-                      fontSize:'8px',
-                      fontWeight:'600',
-                      textTransform:'uppercase',
-                      letterSpacing:'.03em',
-                      color: done ? 'var(--green)' : active ? 'var(--blue)' : 'var(--text-faint)',
-                      lineHeight:1.3,
-                    }}
-                  >
+                  <div style={{ fontSize:'8px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'.03em', color:done?'var(--green)':active?'var(--blue)':'var(--text-faint)', lineHeight:1.3 }}>
                     {STAGE_LABELS[stage]}
                   </div>
-
                   {active && pct > 0 && (
-                    <div
-                      style={{
-                        height:'2px',
-                        background:'var(--border)',
-                        borderRadius:'2px',
-                        marginTop:'2px',
-                        overflow:'hidden',
-                      }}
-                    >
+                    <div style={{ height:'2px', background:'var(--border)', borderRadius:'2px', marginTop:'2px', overflow:'hidden' }}>
                       <div style={{ height:'100%', width:`${pct}%`, background:'var(--blue)' }} />
                     </div>
                   )}
@@ -195,35 +142,13 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           </div>
         </div>
 
-        {/* Job meta bar */}
-        <div
-          style={{
-            background:'var(--surface)',
-            border:'1px solid var(--border)',
-            borderRadius:'10px',
-            padding:'12px 14px',
-            marginBottom:'12px',
-            display:'flex',
-            alignItems:'center',
-            justifyContent:'space-between',
-            gap:'10px',
-            flexWrap:'wrap',
-          }}
-        >
+        <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', padding:'12px 14px', marginBottom:'12px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'10px', flexWrap:'wrap' }}>
           <div>
             <div style={{ fontSize:'13px', fontWeight:'600' }}>
               Stage: <span style={{ color:'var(--blue)' }}>{STAGE_LABELS[job.current_stage]}</span>
             </div>
-
-            <div
-              style={{
-                fontSize:'11px',
-                color:'var(--text-muted)',
-                marginTop:'2px',
-                fontFamily:'ui-monospace,monospace',
-              }}
-            >
-              {(job.profiles as any)?.full_name || '—'}
+            <div style={{ fontSize:'11px', color:'var(--text-muted)', marginTop:'2px', fontFamily:'ui-monospace,monospace' }}>
+              {job.job_name || 'Untitled Job'}
               {job.sqft ? ` · ${job.sqft} sqft` : ''}
               {' · '}
               {job.contract_type === 'cost_plus' ? 'Cost Plus' : 'Fixed Price'}
@@ -231,52 +156,9 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           </div>
 
           <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
-            <a
-              href={`/schedule?job=${id}`}
-              style={{
-                fontSize:'12px',
-                fontWeight:'600',
-                padding:'6px 10px',
-                background:'var(--surface)',
-                border:'1px solid var(--border)',
-                borderRadius:'6px',
-                textDecoration:'none',
-                color:'var(--text)',
-              }}
-            >
-              📅 Schedule
-            </a>
-
-            <a
-              href={`/schedule/sub/new?job=${id}`}
-              style={{
-                fontSize:'12px',
-                fontWeight:'600',
-                padding:'6px 10px',
-                background:'var(--surface)',
-                border:'1px solid var(--border)',
-                borderRadius:'6px',
-                textDecoration:'none',
-                color:'var(--text)',
-              }}
-            >
-              + Sub
-            </a>
-
-            <a
-              href={`/schedule/order/new?job=${id}`}
-              style={{
-                fontSize:'12px',
-                fontWeight:'600',
-                padding:'6px 10px',
-                background:'var(--text)',
-                color:'var(--bg)',
-                borderRadius:'6px',
-                textDecoration:'none',
-              }}
-            >
-              + Order
-            </a>
+            <a href={`/schedule?job=${id}`} style={{ fontSize:'12px', fontWeight:'600', padding:'6px 10px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'6px', textDecoration:'none', color:'var(--text)' }}>📅 Schedule</a>
+            <a href={`/schedule/sub/new?job=${id}`} style={{ fontSize:'12px', fontWeight:'600', padding:'6px 10px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'6px', textDecoration:'none', color:'var(--text)' }}>+ Sub</a>
+            <a href={`/schedule/order/new?job=${id}`} style={{ fontSize:'12px', fontWeight:'600', padding:'6px 10px', background:'var(--text)', color:'var(--bg)', borderRadius:'6px', textDecoration:'none' }}>+ Order</a>
           </div>
         </div>
 
@@ -300,6 +182,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           statusColors={STATUS_COLORS}
           userId={user.id}
           canEditInfo={canEditInfo}
+          pmOptions={pmOptions || []}
         />
       </div>
     </div>
