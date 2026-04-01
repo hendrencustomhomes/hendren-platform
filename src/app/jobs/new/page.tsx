@@ -12,15 +12,13 @@ export default function NewJobPage() {
   const [error, setError] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
   const [form, setForm] = useState({
-<<<<<<< HEAD
-  client_name: '', project_address: '', sqft: '', lot_sqft: '',
-  referral_source: 'Referral', scope_notes: ''
+  client_name: '',
+  project_address: '',
+  sqft: '',
+  lot_sqft: '',
+  referral_source: 'Referral',
+  scope_notes: '',
 })
-=======
-    client_name: '', project_project_project_project_address: '', sqft: '', lot_sqft: '',
-    referral_source: 'Referral', scope_notes: ''
-  })
->>>>>>> e26b27c (Fix new job validation for project_address)
 
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => setUserId(data.user?.id || null))
@@ -33,11 +31,11 @@ export default function NewJobPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.client_name || !form.project_address) {
-<<<<<<< HEAD
+ HEAD
       setError('Client name and project address are required.')
-=======
+
       setError('Client name and project_address are required.')
->>>>>>> e26b27c (Fix new job validation for project_address)
+ e26b27c (Fix new job validation for project_address)
       return
     }
     setLoading(true)
@@ -48,11 +46,11 @@ export default function NewJobPage() {
       .from('jobs')
       .insert({
         client_name: form.client_name.trim(),
-<<<<<<< HEAD
+ HEAD
         project_address: form.project_address.trim(),
-=======
+
         project_project_project_project_address: form.project_address.trim(),
->>>>>>> e26b27c (Fix new job validation for project_address)
+ e26b27c (Fix new job validation for project_address)
         sqft: form.sqft ? parseInt(form.sqft) : null,
         lot_sqft: form.lot_sqft ? parseInt(form.lot_sqft) : null,
         referral_source: form.referral_source,
@@ -99,11 +97,11 @@ export default function NewJobPage() {
                 <input style={inputStyle} value={form.client_name} onChange={e => set('client_name', e.target.value)} placeholder="Smith Family" required />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-<<<<<<< HEAD
+ HEAD
                 <label style={labelStyle}>Project Address</label>
-=======
+
                 <label style={labelStyle}>Project Project Project Address</label>
->>>>>>> e26b27c (Fix new job validation for project_address)
+ e26b27c (Fix new job validation for project_address)
                 <input style={inputStyle} value={form.project_address} onChange={e => set('project_address', e.target.value)} placeholder="1234 Maple St, Carmel IN 46032" required />
               </div>
               <div>
