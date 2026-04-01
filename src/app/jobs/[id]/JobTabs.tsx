@@ -296,66 +296,8 @@ export default function JobTabs(props: Props) {
           </button>
         ))}
       </div>
-
       {tab === 'info' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {canEditInfo && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              {!isEditingInfo ? (
-                <button
-                  onClick={startInfoEdit}
-                  style={{
-                    padding: '7px 14px',
-                    background: 'var(--text)',
-                    color: 'var(--bg)',
-                    border: 'none',
-                    borderRadius: '7px',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Edit
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={cancelInfoEdit}
-                    disabled={infoSaving}
-                    style={{
-                      padding: '7px 14px',
-                      border: '1px solid var(--border)',
-                      background: 'none',
-                      color: 'var(--text-muted)',
-                      borderRadius: '7px',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      cursor: infoSaving ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={saveInfo}
-                    disabled={infoSaving}
-                    style={{
-                      padding: '7px 14px',
-                      background: infoSaving ? 'var(--border)' : 'var(--text)',
-                      color: 'var(--bg)',
-                      border: 'none',
-                      borderRadius: '7px',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      cursor: infoSaving ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    {infoSaving ? 'Saving...' : 'Save'}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-
           {isEditingInfo && infoError && (
             <div
               style={{
@@ -981,6 +923,62 @@ export default function JobTabs(props: Props) {
       )}
 
       {tab === 'files' && <FilesTab jobId={jobId} />}
-    </div>
+    {canEditInfo && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              {!isEditingInfo ? (
+                <button
+                  onClick={startInfoEdit}
+                  style={{
+                    padding: '7px 14px',
+                    background: 'var(--text)',
+                    color: 'var(--bg)',
+                    border: 'none',
+                    borderRadius: '7px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Edit
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={cancelInfoEdit}
+                    disabled={infoSaving}
+                    style={{
+                      padding: '7px 14px',
+                      border: '1px solid var(--border)',
+                      background: 'none',
+                      color: 'var(--text-muted)',
+                      borderRadius: '7px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      cursor: infoSaving ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveInfo}
+                    disabled={infoSaving}
+                    style={{
+                      padding: '7px 14px',
+                      background: infoSaving ? 'var(--border)' : 'var(--text)',
+                      color: 'var(--bg)',
+                      border: 'none',
+                      borderRadius: '7px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      cursor: infoSaving ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {infoSaving ? 'Saving...' : 'Save'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+</div>
   )
 }
