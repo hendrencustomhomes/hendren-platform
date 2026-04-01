@@ -27,7 +27,7 @@ export default function NewJobPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.client_name || !form.address) {
-      setError('Client name and address are required.')
+      setError('Client name and project address are required.')
       return
     }
     setLoading(true)
@@ -38,7 +38,7 @@ export default function NewJobPage() {
       .from('jobs')
       .insert({
         client_name: form.client_name.trim(),
-        address: form.address.trim(),
+        project_address: form.project_address.trim(),
         sqft: form.sqft ? parseInt(form.sqft) : null,
         lot_sqft: form.lot_sqft ? parseInt(form.lot_sqft) : null,
         referral_source: form.referral_source,
@@ -85,8 +85,8 @@ export default function NewJobPage() {
                 <input style={inputStyle} value={form.client_name} onChange={e => set('client_name', e.target.value)} placeholder="Smith Family" required />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={labelStyle}>Address</label>
-                <input style={inputStyle} value={form.address} onChange={e => set('address', e.target.value)} placeholder="1234 Maple St, Carmel IN 46032" required />
+                <label style={labelStyle}>Project Address</label>
+                <input style={inputStyle} value={form.project_address} onChange={e => set('project_address', e.target.value)} placeholder="1234 Maple St, Carmel IN 46032" required />
               </div>
               <div>
                 <label style={labelStyle}>Sq Ft</label>
