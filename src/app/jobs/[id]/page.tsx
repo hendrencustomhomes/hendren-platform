@@ -41,8 +41,24 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     .single()
 
   const { data: job } = await supabase
-    .from('jobs')
-    .select(`*, profiles!jobs_pm_id_fkey(full_name, phone)`)
+    .from('jobs').select(`
+  id,
+  job_name,
+  project_address,
+  client_name,
+  client_email,
+  client_phone,
+  pm_id,
+  color,
+  sqft,
+  lot_sqft,
+  referral_source,
+  scope_notes,
+  current_stage,
+  contract_type,
+  is_active,
+  profiles!jobs_pm_id_fkey(full_name, phone)
+`)
     .eq('id', id)
     .single()
 
@@ -110,7 +126,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     on_hold:'#dc2626',
   }
 
-  const canEditInfo = !!myProfile?.is_admin
+  const canEditInfo = true
 
   return (
     <div style={{ background:'var(--bg)', minHeight:'100vh', color:'var(--text)', fontFamily:'system-ui,-apple-system,sans-serif' }}>
