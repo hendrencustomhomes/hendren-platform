@@ -962,12 +962,25 @@ export default function JobTabs(props: Props) {
                   : 'none'
 
               return (
-                <div key={order.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 14px', borderBottom: '1px solid var(--border)' }}>
+                <a
+                  key={order.id}
+                  href={`/schedule/order/${order.id}/edit`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '9px 14px',
+                    borderBottom: '1px solid var(--border)',
+                    textDecoration: 'none',
+                    color: 'inherit',
+                  }}
+                >
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: '12px', fontWeight: '600' }}>{order.description}</div>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                       {order.trade}
                       {order.vendor ? ` · ${order.vendor}` : ''}
+                      {order.procurement_group ? ` · ${order.procurement_group}` : ''}
                     </div>
                   </div>
 
@@ -1005,7 +1018,7 @@ export default function JobTabs(props: Props) {
                       </div>
                     )}
                   </div>
-                </div>
+                </a>
               )
             })
           )}
