@@ -1,30 +1,42 @@
-import { createClient } from '@/utils/supabase/server'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
-function daysBetween(a: string, b: string) {
-  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000)
+import {
+  getOrderRiskLevel,
+  getScheduleRiskLevel,
+  type ProcurementItem,
+  type JobSubSchedule,
+} from '@/lib/db'
+import { createClient } from '@/utils/supabase/server'
+
+type JobRef = {
+  id: string
+  client_name: string | null
+  color: string | null
+}
+
+type ScheduleRow = JobSubSchedule & {
+  jobs?: JobRef | null
+}
+
+type OrderRow = ProcurementItem & {
+  jobs?: JobRef | null
+}
+
+type AlertRow = {
+  type: 'schedule' | 'procurement'
+  level: 'soon' | 'overdue'
+  message: string
+  date: string | null
+  jobName: string
 }
 
 function fmtDate(d: string | null) {
   if (!d) return '—'
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
-function orderByFlag(item: any): 'overdue' | 'soon' | 'ok' | 'none' {
-  if (!item.order_by_date || item.status !== 'Pending') return 'none'
-  const days = daysBetween(new Date().toISOString().slice(0,10), item.order_by_date)
-  if (days < 0) return 'overdue'
-  if (days <= 7) return 'soon'
-  return 'ok'
-}
-
-function subFlag(sub: any): 'overdue' | 'soon' | 'ok' | 'none' {
-  if (!sub.start_date || sub.status === 'complete' || sub.status === 'cancelled') return 'none'
-  if (sub.status === 'on_site') return 'ok'
-  const days = daysBetween(new Date().toISOString().slice(0,10), sub.start_date)
-  if (days < 0 && sub.status !== 'confirmed') return 'overdue'
-  if (days <= 14 && sub.status === 'tentative') return 'soon'
-  return 'ok'
+  return new Date(d).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  })
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -40,183 +52,504 @@ const STATUS_COLORS: Record<string, string> = {
   Issue: '#dc2626',
 }
 
-export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ job?: string }> }) {
+function badgeStyle(color?: string) {
+  return {
+    display: 'inline-block',
+    padding: '4px 8px',
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 600 as const,
+    color: '#fff',
+    background: color || '#666',
+    whiteSpace: 'nowrap' as const,
+  }
+}
+
+function cardStyle() {
+  return {
+    background: '#fff',
+    border: '1px solid #e5e7eb',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    overflowX: 'auto' as const,
+  }
+}
+
+function thStyle() {
+  return {
+    textAlign: 'left' as const,
+    fontSize: 12,
+    color: '#666',
+    padding: '10px 8px',
+    borderBottom: '1px solid #eee',
+    whiteSpace: 'nowrap' as const,
+  }
+}
+
+function tdStyle() {
+  return {
+    padding: '12px 8px',
+    borderBottom: '1px solid #f3f4f6',
+    verticalAlign: 'top' as const,
+  }
+}
+
+function alertCardStyle(level: 'soon' | 'overdue') {
+  return {
+    flex: '1 1 220px',
+    minWidth: 220,
+    borderRadius: 12,
+    padding: 14,
+    border: `1px solid ${level === 'overdue' ? '#fecaca' : '#fde68a'}`,
+    background: level === 'overdue' ? '#fef2f2' : '#fffbeb',
+  }
+}
+
+function buildScheduleAlert(sub: ScheduleRow): AlertRow | null {
+  const level = getScheduleRiskLevel(sub)
+  if (level === 'none') return null
+
+  const jobName = sub.jobs?.client_name || 'Unknown Job'
+  const companyName = sub.sub_name || 'Unassigned company'
+  const stateText = sub.is_released ? 'released but not confirmed' : 'still draft / not released'
+
+  return {
+    type: 'schedule',
+    level,
+    message: `${jobName} — ${sub.trade} (${companyName}) starts ${fmtDate(
+      sub.start_date
+    )} and is ${stateText}.`,
+    date: sub.start_date,
+    jobName,
+  }
+}
+
+function buildOrderAlert(order: OrderRow): AlertRow | null {
+  const level = getOrderRiskLevel(order)
+  if (level === 'none') return null
+
+  const jobName = order.jobs?.client_name || 'Unknown Job'
+  const statusText =
+    level === 'overdue' ? 'is past the order-by date' : 'needs ordering soon'
+
+  return {
+    type: 'procurement',
+    level,
+    message: `${jobName} — ${order.description} ${statusText}.`,
+    date: order.order_by_date,
+    jobName,
+  }
+}
+
+export default async function SchedulePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ job?: string }>
+}) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
   if (!user) redirect('/login')
 
   const { job: jobFilter } = await searchParams
-  const subsQ = supabase.from('sub_schedule').select('*, jobs(id, client_name, color)').order('start_date',{ascending:true,nullsFirst:false})
-  const ordersQ = supabase.from('procurement_items').select('*, jobs(id, client_name, color)').order('order_by_date',{ascending:true,nullsFirst:false})
-  if (jobFilter) { subsQ.eq('job_id',jobFilter); ordersQ.eq('job_id',jobFilter) }
-  const { data: subs } = await subsQ
-  const { data: orders } = await ordersQ
 
-  const subList = subs || []
-  const orderList = orders || []
+  const subsQ = supabase
+    .from('sub_schedule')
+    .select(
+      `
+      *,
+      jobs(id, client_name, color)
+    `
+    )
+    .order('start_date', { ascending: true, nullsFirst: false })
 
-  const today = new Date().toISOString().slice(0, 10)
+  const ordersQ = supabase
+    .from('procurement_items')
+    .select(
+      `
+      *,
+      jobs(id, client_name, color)
+    `
+    )
+    .order('order_by_date', { ascending: true, nullsFirst: false })
 
-  const overdueOrders = orderList.filter(o => orderByFlag(o) === 'overdue')
-  const soonOrders = orderList.filter(o => orderByFlag(o) === 'soon')
-  const unconfirmedSubs = subList.filter(s => subFlag(s) === 'soon' || subFlag(s) === 'overdue')
+  if (jobFilter) {
+    subsQ.eq('job_id', jobFilter)
+    ordersQ.eq('job_id', jobFilter)
+  }
+
+  const [{ data: subs }, { data: orders }] = await Promise.all([subsQ, ordersQ])
+
+  const subList: ScheduleRow[] = (subs || []) as ScheduleRow[]
+  const orderList: OrderRow[] = (orders || []) as OrderRow[]
+
+  const alerts = [
+    ...subList.map(buildScheduleAlert),
+    ...orderList.map(buildOrderAlert),
+  ]
+    .filter((a): a is AlertRow => Boolean(a))
+    .sort((a, b) => {
+      if (a.level !== b.level) {
+        return a.level === 'overdue' ? -1 : 1
+      }
+
+      const aTime = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER
+      const bTime = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER
+      return aTime - bTime
+    })
+
+  const overdueCount = alerts.filter((a) => a.level === 'overdue').length
+  const soonCount = alerts.filter((a) => a.level === 'soon').length
 
   return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', background: 'var(--bg)', minHeight: '100vh', color: 'var(--text)' }}>
-      {/* Topbar */}
-      <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', position: 'sticky', top: 0, zIndex: 100 }}>
-        <a href="/" style={{ fontSize: '13px', color: 'var(--blue)', textDecoration: 'none' }}>← Dashboard</a>
-        <div style={{ fontSize: '15px', fontWeight: '700', flex: 1 }}>Master Schedule{jobFilter ? ' — This Job' : ''}</div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <a href="/schedule/sub/new" style={{ fontSize: '12px', fontWeight: '600', padding: '6px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', textDecoration: 'none', color: 'var(--text)' }}>+ Sub</a>
-          <a href="/schedule/order/new" style={{ fontSize: '12px', fontWeight: '600', padding: '6px 12px', background: 'var(--text)', color: 'var(--bg)', borderRadius: '6px', textDecoration: 'none' }}>+ Order</a>
+    <main style={{ padding: 16, maxWidth: 1400, margin: '0 auto' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+          flexWrap: 'wrap',
+          marginBottom: 16,
+        }}
+      >
+        <div>
+          <Link
+            href="/"
+            style={{
+              color: '#2563eb',
+              textDecoration: 'none',
+              fontSize: 14,
+              display: 'inline-block',
+              marginBottom: 6,
+            }}
+          >
+            ← Dashboard
+          </Link>
+          <h1 style={{ margin: 0, fontSize: 28 }}>
+            Master Schedule{jobFilter ? ' — This Job' : ''}
+          </h1>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Link
+            href="/schedule/sub/new"
+            style={{
+              textDecoration: 'none',
+              background: '#111827',
+              color: '#fff',
+              padding: '10px 14px',
+              borderRadius: 10,
+              fontWeight: 600,
+            }}
+          >
+            + Sub
+          </Link>
+          <Link
+            href="/schedule/order/new"
+            style={{
+              textDecoration: 'none',
+              background: '#2563eb',
+              color: '#fff',
+              padding: '10px 14px',
+              borderRadius: 10,
+              fontWeight: 600,
+            }}
+          >
+            + Order
+          </Link>
         </div>
       </div>
 
-      <div style={{ padding: '14px', maxWidth: '1100px', margin: '0 auto' }}>
+      {alerts.length > 0 && (
+        <section style={{ marginBottom: 16 }}>
+          <div
+            style={{
+              display: 'flex',
+              gap: 12,
+              flexWrap: 'wrap',
+              marginBottom: 12,
+            }}
+          >
+            {overdueCount > 0 && (
+              <div style={alertCardStyle('overdue')}>
+                <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>
+                  Overdue Risks
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 700 }}>{overdueCount}</div>
+                <div style={{ fontSize: 13, color: '#7f1d1d' }}>
+                  Immediate attention needed
+                </div>
+              </div>
+            )}
 
-        {/* Alert row */}
-        {(overdueOrders.length > 0 || soonOrders.length > 0 || unconfirmedSubs.length > 0) && (
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
-            {overdueOrders.length > 0 && (
-              <div style={{ background: 'var(--red-bg)', border: '1px solid var(--red)', borderRadius: '8px', padding: '10px 14px', flex: 1, minWidth: '200px' }}>
-                <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--red)', textTransform: 'uppercase', letterSpacing: '.05em' }}>🔴 Overdue Orders</div>
-                <div style={{ fontSize: '20px', fontWeight: '700', color: 'var(--red)', margin: '2px 0' }}>{overdueOrders.length}</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Past order-by date, not placed</div>
-              </div>
-            )}
-            {soonOrders.length > 0 && (
-              <div style={{ background: 'var(--amber-bg)', border: '1px solid var(--amber)', borderRadius: '8px', padding: '10px 14px', flex: 1, minWidth: '200px' }}>
-                <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--amber)', textTransform: 'uppercase', letterSpacing: '.05em' }}>⚠️ Order Soon</div>
-                <div style={{ fontSize: '20px', fontWeight: '700', color: 'var(--amber)', margin: '2px 0' }}>{soonOrders.length}</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Due within 7 days</div>
-              </div>
-            )}
-            {unconfirmedSubs.length > 0 && (
-              <div style={{ background: 'var(--amber-bg)', border: '1px solid var(--amber)', borderRadius: '8px', padding: '10px 14px', flex: 1, minWidth: '200px' }}>
-                <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--amber)', textTransform: 'uppercase', letterSpacing: '.05em' }}>⚠️ Unconfirmed Subs</div>
-                <div style={{ fontSize: '20px', fontWeight: '700', color: 'var(--amber)', margin: '2px 0' }}>{unconfirmedSubs.length}</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Starting within 14 days</div>
+            {soonCount > 0 && (
+              <div style={alertCardStyle('soon')}>
+                <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 4 }}>
+                  Upcoming Risks
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 700 }}>{soonCount}</div>
+                <div style={{ fontSize: 13, color: '#92400e' }}>
+                  Action needed soon
+                </div>
               </div>
             )}
           </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>Risk List</div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {alerts.map((alert, idx) => (
+                <div
+                  key={`${alert.type}-${idx}`}
+                  style={{
+                    padding: 12,
+                    borderRadius: 10,
+                    border:
+                      alert.level === 'overdue'
+                        ? '1px solid #fecaca'
+                        : '1px solid #fde68a',
+                    background:
+                      alert.level === 'overdue' ? '#fef2f2' : '#fffbeb',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      marginBottom: 4,
+                      color:
+                        alert.level === 'overdue' ? '#991b1b' : '#92400e',
+                    }}
+                  >
+                    {alert.level === 'overdue' ? 'CRITICAL' : 'WARNING'} ·{' '}
+                    {alert.type === 'schedule' ? 'Schedule' : 'Procurement'}
+                  </div>
+                  <div style={{ fontSize: 14 }}>{alert.message}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section style={cardStyle()}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 12,
+            flexWrap: 'wrap',
+            marginBottom: 12,
+          }}
+        >
+          <div>
+            <h2 style={{ margin: 0, fontSize: 20 }}>Sub Schedule</h2>
+            <div style={{ color: '#666', fontSize: 14 }}>{subList.length} entries</div>
+          </div>
+        </div>
+
+        {subList.length === 0 ? (
+          <div style={{ color: '#666' }}>
+            <div style={{ marginBottom: 6 }}>No subs scheduled yet</div>
+            <div>Add sub schedule entries from a job or click + Sub above</div>
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                {[
+                  'Job',
+                  'Trade',
+                  'Company',
+                  'Status',
+                  'Released',
+                  'Start',
+                  'End',
+                  'Cost Code',
+                  'Notes',
+                  '',
+                ].map((h) => (
+                  <th key={h} style={thStyle()}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {subList.map((sub) => {
+                const risk = getScheduleRiskLevel(sub)
+                const jobColor = sub.jobs?.color || '#e5e7eb'
+
+                return (
+                  <tr key={sub.id}>
+                    <td style={tdStyle()}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span
+                          style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: 999,
+                            background: jobColor,
+                            display: 'inline-block',
+                          }}
+                        />
+                        <span>{sub.jobs?.client_name || '—'}</span>
+                      </div>
+                    </td>
+                    <td style={tdStyle()}>{sub.trade}</td>
+                    <td style={tdStyle()}>{sub.sub_name || '—'}</td>
+                    <td style={tdStyle()}>
+                      <span style={badgeStyle(STATUS_COLORS[sub.status])}>
+                        {sub.status}
+                      </span>
+                    </td>
+                    <td style={tdStyle()}>
+                      <span
+                        style={badgeStyle(sub.is_released ? '#2563eb' : '#6b7280')}
+                      >
+                        {sub.is_released ? 'Released' : 'Draft'}
+                      </span>
+                    </td>
+                    <td style={tdStyle()}>
+                      {risk === 'overdue' && (
+                        <span style={{ color: '#dc2626', marginRight: 6 }}>●</span>
+                      )}
+                      {risk === 'soon' && (
+                        <span style={{ color: '#d97706', marginRight: 6 }}>⚠️</span>
+                      )}
+                      {fmtDate(sub.start_date)}
+                    </td>
+                    <td style={tdStyle()}>{fmtDate(sub.end_date)}</td>
+                    <td style={tdStyle()}>{sub.cost_code || '—'}</td>
+                    <td style={tdStyle()}>{sub.notes || '—'}</td>
+                    <td style={tdStyle()}>
+                      <Link
+                        href={`/schedule/sub/${sub.id}/edit`}
+                        style={{ color: '#2563eb', textDecoration: 'none' }}
+                      >
+                        Edit
+                      </Link>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         )}
+      </section>
 
-        {/* Sub Schedule */}
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', marginBottom: '14px' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ fontSize: '13px', fontWeight: '700' }}>Sub Schedule</div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{subList.length} entries</div>
+      <section style={cardStyle()}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 12,
+            flexWrap: 'wrap',
+            marginBottom: 12,
+          }}
+        >
+          <div>
+            <h2 style={{ margin: 0, fontSize: 20 }}>Material Orders</h2>
+            <div style={{ color: '#666', fontSize: 14 }}>{orderList.length} items</div>
           </div>
-          {subList.length === 0 ? (
-            <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              <div style={{ fontSize: '24px', marginBottom: '8px' }}>👷</div>
-              <div style={{ fontSize: '13px', fontWeight: '600' }}>No subs scheduled yet</div>
-              <div style={{ fontSize: '12px', marginTop: '4px' }}>Add sub schedule entries from a job or click + Sub above</div>
-            </div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                <thead>
-                  <tr style={{ background: 'var(--bg)' }}>
-                    {['Job', 'Trade', 'Sub', 'Status', 'Start', 'End', 'Notes', ''].map(h => (
-                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {subList.map((sub: any) => {
-                    const flag = subFlag(sub)
-                    return (
-                      <tr key={sub.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: sub.jobs?.color || '#888', flexShrink: 0, display: 'inline-block' }} />
-                            <span style={{ fontSize: '12px' }}>{sub.jobs?.client_name || '—'}</span>
-                          </span>
-                        </td>
-                        <td style={{ padding: '8px 12px', fontWeight: '500' }}>{sub.trade}</td>
-                        <td style={{ padding: '8px 12px', color: 'var(--text-muted)' }}>{sub.sub_name || '—'}</td>
-                        <td style={{ padding: '8px 12px' }}>
-                          <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '10px', background: STATUS_COLORS[sub.status] + '22', color: STATUS_COLORS[sub.status], border: `1px solid ${STATUS_COLORS[sub.status]}44` }}>
-                            {sub.status}
-                          </span>
-                        </td>
-                        <td style={{ padding: '8px 12px', fontFamily: 'ui-monospace,monospace', whiteSpace: 'nowrap', color: flag === 'overdue' ? 'var(--red)' : flag === 'soon' ? 'var(--amber)' : 'var(--text)' }}>
-                          {flag === 'overdue' && '🔴 '}{flag === 'soon' && '⚠️ '}{fmtDate(sub.start_date)}
-                        </td>
-                        <td style={{ padding: '8px 12px', fontFamily: 'ui-monospace,monospace', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>{fmtDate(sub.end_date)}</td>
-                        <td style={{ padding: '8px 12px', color: 'var(--text-muted)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub.notes || '—'}</td>
-                        <td style={{ padding: '8px 12px' }}>
-                          <a href={`/schedule/sub/${sub.id}/edit`} style={{ fontSize: '11px', color: 'var(--blue)', textDecoration: 'none' }}>Edit</a>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
 
-        {/* Procurement Orders */}
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ fontSize: '13px', fontWeight: '700' }}>Material Orders</div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{orderList.length} items</div>
+        {orderList.length === 0 ? (
+          <div style={{ color: '#666' }}>
+            <div style={{ marginBottom: 6 }}>No orders yet</div>
+            <div>Add procurement items from a job&apos;s estimate or click + Order above</div>
           </div>
-          {orderList.length === 0 ? (
-            <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              <div style={{ fontSize: '24px', marginBottom: '8px' }}>📦</div>
-              <div style={{ fontSize: '13px', fontWeight: '600' }}>No orders yet</div>
-              <div style={{ fontSize: '12px', marginTop: '4px' }}>Add procurement items from a job's estimate or click + Order above</div>
-            </div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                <thead>
-                  <tr style={{ background: 'var(--bg)' }}>
-                    {['Job', 'Trade', 'Item', 'Vendor', 'Need By', 'Order By', 'Lead', 'Status', ''].map(h => (
-                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
-                    ))}
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                {[
+                  'Job',
+                  'Trade',
+                  'Item',
+                  'Group',
+                  'Vendor',
+                  'Need By',
+                  'Order By',
+                  'Lead',
+                  'Status',
+                  'Source',
+                  '',
+                ].map((h) => (
+                  <th key={h} style={thStyle()}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {orderList.map((order) => {
+                const risk = getOrderRiskLevel(order)
+                const jobColor = order.jobs?.color || '#e5e7eb'
+
+                let source = 'Internal'
+                if (order.is_client_supplied) source = 'Client'
+                else if (order.is_sub_supplied) source = 'Company'
+                else if (order.requires_tracking === false) source = 'No Tracking'
+
+                return (
+                  <tr key={order.id}>
+                    <td style={tdStyle()}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span
+                          style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: 999,
+                            background: jobColor,
+                            display: 'inline-block',
+                          }}
+                        />
+                        <span>{order.jobs?.client_name || '—'}</span>
+                      </div>
+                    </td>
+                    <td style={tdStyle()}>{order.trade}</td>
+                    <td style={tdStyle()}>{order.description}</td>
+                    <td style={tdStyle()}>{order.procurement_group || '—'}</td>
+                    <td style={tdStyle()}>{order.vendor || '—'}</td>
+                    <td style={tdStyle()}>{fmtDate(order.required_on_site_date)}</td>
+                    <td style={tdStyle()}>
+                      {risk === 'overdue' && (
+                        <span style={{ color: '#dc2626', marginRight: 6 }}>●</span>
+                      )}
+                      {risk === 'soon' && (
+                        <span style={{ color: '#d97706', marginRight: 6 }}>⚠️</span>
+                      )}
+                      {fmtDate(order.order_by_date)}
+                    </td>
+                    <td style={tdStyle()}>{order.lead_days ?? 0}d</td>
+                    <td style={tdStyle()}>
+                      <span style={badgeStyle(STATUS_COLORS[order.status])}>
+                        {order.status}
+                      </span>
+                    </td>
+                    <td style={tdStyle()}>{source}</td>
+                    <td style={tdStyle()}>
+                      <Link
+                        href={`/schedule/order/${order.id}/edit`}
+                        style={{ color: '#2563eb', textDecoration: 'none' }}
+                      >
+                        Edit
+                      </Link>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {orderList.map((order: any) => {
-                    const flag = orderByFlag(order)
-                    return (
-                      <tr key={order.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: order.jobs?.color || '#888', flexShrink: 0, display: 'inline-block' }} />
-                            <span>{order.jobs?.client_name || '—'}</span>
-                          </span>
-                        </td>
-                        <td style={{ padding: '8px 12px', fontWeight: '500' }}>{order.trade}</td>
-                        <td style={{ padding: '8px 12px', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.description}</td>
-                        <td style={{ padding: '8px 12px', color: 'var(--text-muted)' }}>{order.vendor || '—'}</td>
-                        <td style={{ padding: '8px 12px', fontFamily: 'ui-monospace,monospace', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>{fmtDate(order.required_on_site_date)}</td>
-                        <td style={{ padding: '8px 12px', fontFamily: 'ui-monospace,monospace', whiteSpace: 'nowrap', color: flag === 'overdue' ? 'var(--red)' : flag === 'soon' ? 'var(--amber)' : 'var(--text)' }}>
-                          {flag === 'overdue' && '🔴 '}{flag === 'soon' && '⚠️ '}{fmtDate(order.order_by_date)}
-                        </td>
-                        <td style={{ padding: '8px 12px', fontFamily: 'ui-monospace,monospace', color: 'var(--text-muted)' }}>{order.lead_days}d</td>
-                        <td style={{ padding: '8px 12px' }}>
-                          <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '10px', background: STATUS_COLORS[order.status] + '22', color: STATUS_COLORS[order.status], border: `1px solid ${STATUS_COLORS[order.status]}44` }}>
-                            {order.status}
-                          </span>
-                        </td>
-                        <td style={{ padding: '8px 12px' }}>
-                          <a href={`/schedule/order/${order.id}/edit`} style={{ fontSize: '11px', color: 'var(--blue)', textDecoration: 'none' }}>Edit</a>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </section>
+    </main>
   )
 }
