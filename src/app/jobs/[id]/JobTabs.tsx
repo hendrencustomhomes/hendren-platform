@@ -51,7 +51,6 @@ export default function JobTabs(props: Props) {
     logs: initLogs,
     subs,
     orders,
-    files,
     stages,
     stageLabels,
     stageIcons,
@@ -100,17 +99,17 @@ export default function JobTabs(props: Props) {
   const curIdx = stages.indexOf(job.current_stage)
 
   const inp = {
-  width: '100%',
-  padding: '10px 12px',
-  border: '1px solid var(--border)',
-  borderRadius: '7px',
-  fontSize: '16px',
-  fontFamily: 'ui-monospace,monospace',
-  boxSizing: 'border-box' as const,
-  outline: 'none',
-  background: 'var(--surface)',
-  color: 'var(--text)',
-}
+    width: '100%',
+    padding: '10px 12px',
+    border: '1px solid var(--border)',
+    borderRadius: '7px',
+    fontSize: '16px',
+    fontFamily: 'ui-monospace,monospace',
+    boxSizing: 'border-box' as const,
+    outline: 'none',
+    background: 'var(--surface)',
+    color: 'var(--text)',
+  }
 
   function startInfoEdit() {
     setInfoDraft({
@@ -188,6 +187,7 @@ export default function JobTabs(props: Props) {
   async function toggleCheck(itemId: string, val: boolean) {
     setChecked((c) => ({ ...c, [itemId]: val }))
     const existingId = stateMap[itemId]
+
     if (existingId) {
       await supabase.from('job_checklist_state').update({ is_checked: val }).eq('id', existingId)
     } else {
@@ -204,11 +204,13 @@ export default function JobTabs(props: Props) {
   async function addLog() {
     if (!logText.trim()) return
     setLogSaving(true)
+
     const { data } = await supabase
       .from('job_logs')
       .insert({ job_id: jobId, body: logText.trim(), author_id: userId })
       .select('*, profiles(full_name)')
       .single()
+
     setLogSaving(false)
 
     if (data) {
@@ -220,6 +222,7 @@ export default function JobTabs(props: Props) {
   async function addIssue() {
     if (!issueTitle.trim()) return
     setIssueSaving(true)
+
     const { data } = await supabase
       .from('issues')
       .insert({
@@ -231,6 +234,7 @@ export default function JobTabs(props: Props) {
       })
       .select()
       .single()
+
     setIssueSaving(false)
 
     if (data) {
@@ -296,6 +300,7 @@ export default function JobTabs(props: Props) {
           </button>
         ))}
       </div>
+
       {tab === 'info' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {isEditingInfo && infoError && (
@@ -503,9 +508,11 @@ export default function JobTabs(props: Props) {
             <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: '8px' }}>
               Operational
             </div>
+
             <div style={{ fontSize: '12px', marginBottom: '10px' }}>
               <strong>Stage:</strong> {job.current_stage}
             </div>
+
             <div style={{ fontSize: '12px' }}>
               <strong>Scope:</strong>{' '}
               {!isEditingInfo ? (
@@ -521,6 +528,63 @@ export default function JobTabs(props: Props) {
               )}
             </div>
           </div>
+
+          {canEditInfo && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              {!isEditingInfo ? (
+                <button
+                  onClick={startInfoEdit}
+                  style={{
+                    padding: '7px 14px',
+                    background: 'var(--text)',
+                    color: 'var(--bg)',
+                    border: 'none',
+                    borderRadius: '7px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Edit
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={cancelInfoEdit}
+                    disabled={infoSaving}
+                    style={{
+                      padding: '7px 14px',
+                      border: '1px solid var(--border)',
+                      background: 'none',
+                      color: 'var(--text-muted)',
+                      borderRadius: '7px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      cursor: infoSaving ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveInfo}
+                    disabled={infoSaving}
+                    style={{
+                      padding: '7px 14px',
+                      background: infoSaving ? 'var(--border)' : 'var(--text)',
+                      color: 'var(--bg)',
+                      border: 'none',
+                      borderRadius: '7px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      cursor: infoSaving ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {infoSaving ? 'Saving...' : 'Save'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -529,6 +593,7 @@ export default function JobTabs(props: Props) {
           {stages.map((stage) => {
             const items = stageItems[stage] || []
             if (!items.length) return null
+
             const i = stages.indexOf(stage)
             const done = i < curIdx
             const active = i === curIdx
@@ -545,9 +610,18 @@ export default function JobTabs(props: Props) {
                     {checkedCount}/{items.length}
                   </span>
                 </div>
+
                 <div style={{ height: '3px', background: 'var(--border)', borderRadius: '2px', marginBottom: '8px', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${pct}%`, background: done ? 'var(--green)' : active ? 'var(--blue)' : 'var(--border)', borderRadius: '2px' }} />
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${pct}%`,
+                      background: done ? 'var(--green)' : active ? 'var(--blue)' : 'var(--border)',
+                      borderRadius: '2px',
+                    }}
+                  />
                 </div>
+
                 {items.map((item: any) => (
                   <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '4px 5px', borderRadius: '5px' }}>
                     <input
@@ -569,7 +643,11 @@ export default function JobTabs(props: Props) {
                     >
                       {item.label}
                     </label>
-                    {item.is_required && <span style={{ fontSize: '9px', color: 'var(--red)', fontFamily: 'ui-monospace,monospace', flexShrink: 0, marginTop: '3px' }}>req</span>}
+                    {item.is_required && (
+                      <span style={{ fontSize: '9px', color: 'var(--red)', fontFamily: 'ui-monospace,monospace', flexShrink: 0, marginTop: '3px' }}>
+                        req
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -799,7 +877,7 @@ export default function JobTabs(props: Props) {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px' }}>
           <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '12px', fontWeight: '700' }}>Sub Schedule</span>
-            <a href={`/schedule/sub/new?job=${jobId}`} style={{ fontSize: '11px', fontWeight: '600', padding: '4px 10px', background: 'var(--text)', color: 'var(--bg)', borderRadius: '5px', textDecoration: 'none' }}>
+            <a href={`/schedule/sub/new?jobId=${jobId}`} style={{ fontSize: '11px', fontWeight: '600', padding: '4px 10px', background: 'var(--text)', color: 'var(--bg)', borderRadius: '5px', textDecoration: 'none' }}>
               + Sub
             </a>
           </div>
@@ -810,47 +888,50 @@ export default function JobTabs(props: Props) {
             </div>
           ) : (
             subs.map((sub: any) => (
-  <a
-    key={sub.id}
-    href={`/schedule/sub/${sub.id}/edit`}
-    style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '10px',
-      padding: '9px 14px',
-      borderBottom: '1px solid var(--border)',
-      textDecoration: 'none',
-      color: 'inherit',
-    }}
-  >
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ fontSize: '12px', fontWeight: '600' }}>{sub.trade}</div>
-      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-        {sub.sub_name || 'TBD'}
-        {sub.trade_contact ? ` · ${sub.trade_contact}` : ''}
-      </div>
-    </div>
+              <a
+                key={sub.id}
+                href={`/schedule/sub/${sub.id}/edit`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '9px 14px',
+                  borderBottom: '1px solid var(--border)',
+                  textDecoration: 'none',
+                  color: 'inherit',
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600' }}>{sub.trade}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    {sub.sub_name || 'TBD'}
+                    {sub.trade_contact ? ` · ${sub.trade_contact}` : ''}
+                  </div>
+                </div>
 
-    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-      <span
-        style={{
-          fontSize: '10px',
-          fontWeight: '600',
-          padding: '2px 7px',
-          borderRadius: '10px',
-          background: statusColors[sub.status] + '22',
-          color: statusColors[sub.status],
-          border: `1px solid ${statusColors[sub.status]}44`,
-        }}
-      >
-        {sub.status}
-      </span>
-      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'ui-monospace,monospace' }}>
-        {fmtDate(sub.start_date)} → {fmtDate(sub.end_date)}
-      </div>
-    </div>
-  </a>
-))
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: '600',
+                      padding: '2px 7px',
+                      borderRadius: '10px',
+                      background: statusColors[sub.status] + '22',
+                      color: statusColors[sub.status],
+                      border: `1px solid ${statusColors[sub.status]}44`,
+                    }}
+                  >
+                    {sub.status}
+                  </span>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'ui-monospace,monospace' }}>
+                    {fmtDate(sub.start_date)} → {fmtDate(sub.end_date)}
+                  </div>
+                </div>
+              </a>
+            ))
+          )}
+        </div>
+      )}
 
       {tab === 'orders' && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px' }}>
@@ -932,62 +1013,6 @@ export default function JobTabs(props: Props) {
       )}
 
       {tab === 'files' && <FilesTab jobId={jobId} />}
-    {canEditInfo && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              {!isEditingInfo ? (
-                <button
-                  onClick={startInfoEdit}
-                  style={{
-                    padding: '7px 14px',
-                    background: 'var(--text)',
-                    color: 'var(--bg)',
-                    border: 'none',
-                    borderRadius: '7px',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Edit
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={cancelInfoEdit}
-                    disabled={infoSaving}
-                    style={{
-                      padding: '7px 14px',
-                      border: '1px solid var(--border)',
-                      background: 'none',
-                      color: 'var(--text-muted)',
-                      borderRadius: '7px',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      cursor: infoSaving ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={saveInfo}
-                    disabled={infoSaving}
-                    style={{
-                      padding: '7px 14px',
-                      background: infoSaving ? 'var(--border)' : 'var(--text)',
-                      color: 'var(--bg)',
-                      border: 'none',
-                      borderRadius: '7px',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      cursor: infoSaving ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    {infoSaving ? 'Saving...' : 'Save'}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-</div>
+    </div>
   )
 }
