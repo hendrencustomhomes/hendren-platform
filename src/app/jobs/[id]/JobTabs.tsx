@@ -810,44 +810,53 @@ export default function JobTabs(props: Props) {
             </div>
           ) : (
             subs.map((sub: any) => (
-              <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 14px', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600' }}>{sub.trade}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    {sub.sub_name || 'TBD'}
-                    {sub.trade_contact ? ` · ${sub.trade_contact}` : ''}
-                  </div>
-                </div>
+  <a
+    key={sub.id}
+    href={`/schedule/sub/${sub.id}/edit`}
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      padding: '9px 14px',
+      borderBottom: '1px solid var(--border)',
+      textDecoration: 'none',
+      color: 'inherit',
+    }}
+  >
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ fontSize: '12px', fontWeight: '600' }}>{sub.trade}</div>
+      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+        {sub.sub_name || 'TBD'}
+        {sub.trade_contact ? ` · ${sub.trade_contact}` : ''}
+      </div>
+    </div>
 
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <span
-                    style={{
-                      fontSize: '10px',
-                      fontWeight: '600',
-                      padding: '2px 7px',
-                      borderRadius: '10px',
-                      background: statusColors[sub.status] + '22',
-                      color: statusColors[sub.status],
-                      border: `1px solid ${statusColors[sub.status]}44`,
-                    }}
-                  >
-                    {sub.status}
-                  </span>
-                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'ui-monospace,monospace' }}>
-                    {fmtDate(sub.start_date)} → {fmtDate(sub.end_date)}
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+      <span
+        style={{
+          fontSize: '10px',
+          fontWeight: '600',
+          padding: '2px 7px',
+          borderRadius: '10px',
+          background: statusColors[sub.status] + '22',
+          color: statusColors[sub.status],
+          border: `1px solid ${statusColors[sub.status]}44`,
+        }}
+      >
+        {sub.status}
+      </span>
+      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'ui-monospace,monospace' }}>
+        {fmtDate(sub.start_date)} → {fmtDate(sub.end_date)}
+      </div>
+    </div>
+  </a>
+))
 
       {tab === 'orders' && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px' }}>
           <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '12px', fontWeight: '700' }}>Material Orders</span>
-            <a href={`/schedule/order/new?job=${jobId}`} style={{ fontSize: '11px', fontWeight: '600', padding: '4px 10px', background: 'var(--text)', color: 'var(--bg)', borderRadius: '5px', textDecoration: 'none' }}>
+            <a href={`/schedule/order/new?jobId=${jobId}`} style={{ fontSize: '11px', fontWeight: '600', padding: '4px 10px', background: 'var(--text)', color: 'var(--bg)', borderRadius: '5px', textDecoration: 'none' }}>
               + Order
             </a>
           </div>
