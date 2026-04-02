@@ -173,8 +173,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
           <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
             <a href={`/schedule?job=${id}`} style={{ fontSize:'12px', fontWeight:'600', padding:'6px 10px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'6px', textDecoration:'none', color:'var(--text)' }}>📅 Schedule</a>
-            <a href={`/schedule/sub/new?job=${id}`} style={{ fontSize:'12px', fontWeight:'600', padding:'6px 10px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'6px', textDecoration:'none', color:'var(--text)' }}>+ Sub</a>
-            <a href={`/schedule/order/new?job=${id}`} style={{ fontSize:'12px', fontWeight:'600', padding:'6px 10px', background:'var(--text)', color:'var(--bg)', borderRadius:'6px', textDecoration:'none' }}>+ Order</a>
+<a href={`/schedule/sub/new?jobId=${id}`} style={{ fontSize:'12px', fontWeight:'600', padding:'6px 10px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'6px', textDecoration:'none', color:'var(--text)' }}>+ Sub</a>
+<a href={`/schedule/order/new?jobId=${id}`} style={{ fontSize:'12px', fontWeight:'600', padding:'6px 10px', background:'var(--text)', color:'var(--bg)', borderRadius:'6px', textDecoration:'none' }}>+ Order</a>
           </div>
         </div>
 
