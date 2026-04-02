@@ -7,11 +7,8 @@ import { createClient } from '@/utils/supabase/client'
 
 const REFERRAL_OPTIONS = [
   'Past Client',
-  'Realtor',
-  'Architect',
-  'Designer',
   'Website',
-  'Yard Sign',
+  'Signage',
   'Social Media',
   'Walk-in',
   'Other',
@@ -79,7 +76,7 @@ export default function JobTabs(props: Props) {
   const fmtDate = (d: string | null) =>
     d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'
 
-  const [tab, setTab] = useState('checklist')
+  const [tab, setTab] = useState('info')
   const [checked, setChecked] = useState<Record<string, boolean>>(initChecked)
   const [stateMap, setStateMap] = useState<Record<string, string>>(initState)
   const [issues, setIssues] = useState<any[]>(initIssues)
@@ -328,14 +325,14 @@ export default function JobTabs(props: Props) {
     })
   }
 
-  const TABS = ['info', 'checklist', 'log', 'issues', 'subs', 'orders', 'files']
+  const TABS = ['info', 'pipeline', 'log', 'issues', 'schedule', 'procurement', 'files']
   const TAB_LABELS: Record<string, string> = {
     info: 'Info',
-    checklist: 'Checklist',
+    pipeline: 'Pipeline',
     log: 'Log',
     issues: `Issues${issues.filter((i) => !i.resolved).length ? ' (' + issues.filter((i) => !i.resolved).length + ')' : ''}`,
-    subs: 'Subs',
-    orders: 'Orders',
+    schedule: 'Schedule',
+    procurement: 'Procurement',
     files: 'Files',
   }
 
@@ -662,8 +659,25 @@ export default function JobTabs(props: Props) {
         </div>
       )}
 
-      {tab === 'checklist' && (
+      {tab === 'pipeline' && (
         <div>
+          <div
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: '10px',
+              padding: '12px 14px',
+              marginBottom: '10px',
+            }}
+          >
+            <div style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px' }}>
+              Pipeline
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              This is the job pipeline. For now it uses the existing checklist engine underneath, but this tab represents process progress across the life of the job.
+            </div>
+          </div>
+
           {stages.map((stage) => {
             const items = stageItems[stage] || []
             if (!items.length) return null
@@ -675,9 +689,26 @@ export default function JobTabs(props: Props) {
             const pct = items.length ? Math.round((checkedCount / items.length) * 100) : 0
 
             return (
-              <div key={stage} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '12px 14px', marginBottom: '8px' }}>
+              <div
+                key={stage}
+                style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  marginBottom: '8px',
+                }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '.05em', color: done ? 'var(--green)' : active ? 'var(--blue)' : 'var(--text-faint)' }}>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      textTransform: 'uppercase',
+                      letterSpacing: '.05em',
+                      color: done ? 'var(--green)' : active ? 'var(--blue)' : 'var(--text-faint)',
+                    }}
+                  >
                     {stageIcons[stage]} {stageLabels[stage]}
                   </span>
                   <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'ui-monospace,monospace' }}>
@@ -685,7 +716,15 @@ export default function JobTabs(props: Props) {
                   </span>
                 </div>
 
-                <div style={{ height: '3px', background: 'var(--border)', borderRadius: '2px', marginBottom: '8px', overflow: 'hidden' }}>
+                <div
+                  style={{
+                    height: '3px',
+                    background: 'var(--border)',
+                    borderRadius: '2px',
+                    marginBottom: '8px',
+                    overflow: 'hidden',
+                  }}
+                >
                   <div
                     style={{
                       height: '100%',
@@ -697,12 +736,28 @@ export default function JobTabs(props: Props) {
                 </div>
 
                 {items.map((item: any) => (
-                  <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '4px 5px', borderRadius: '5px' }}>
+                  <div
+                    key={item.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '8px',
+                      padding: '4px 5px',
+                      borderRadius: '5px',
+                    }}
+                  >
                     <input
                       type="checkbox"
                       checked={!!checked[item.id]}
                       onChange={(e) => toggleCheck(item.id, e.target.checked)}
-                      style={{ width: '14px', height: '14px', flexShrink: 0, marginTop: '2px', accentColor: 'var(--blue)', cursor: 'pointer' }}
+                      style={{
+                        width: '14px',
+                        height: '14px',
+                        flexShrink: 0,
+                        marginTop: '2px',
+                        accentColor: 'var(--blue)',
+                        cursor: 'pointer',
+                      }}
                     />
                     <label
                       style={{
@@ -718,7 +773,15 @@ export default function JobTabs(props: Props) {
                       {item.label}
                     </label>
                     {item.is_required && (
-                      <span style={{ fontSize: '9px', color: 'var(--red)', fontFamily: 'ui-monospace,monospace', flexShrink: 0, marginTop: '3px' }}>
+                      <span
+                        style={{
+                          fontSize: '9px',
+                          color: 'var(--red)',
+                          fontFamily: 'ui-monospace,monospace',
+                          flexShrink: 0,
+                          marginTop: '3px',
+                        }}
+                      >
                         req
                       </span>
                     )}
@@ -947,18 +1010,18 @@ export default function JobTabs(props: Props) {
         </div>
       )}
 
-      {tab === 'subs' && (
+      {tab === 'schedule' && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px' }}>
           <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '12px', fontWeight: '700' }}>Sub Schedule</span>
+            <span style={{ fontSize: '12px', fontWeight: '700' }}>Schedule</span>
             <a href={`/schedule/sub/new?jobId=${jobId}`} style={{ fontSize: '11px', fontWeight: '600', padding: '4px 10px', background: 'var(--text)', color: 'var(--bg)', borderRadius: '5px', textDecoration: 'none' }}>
-              + Sub
+              + Schedule Item
             </a>
           </div>
 
           {!subs.length ? (
             <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
-              No subs scheduled yet
+              No schedule items yet
             </div>
           ) : (
             subs.map((sub: any) => {
@@ -1100,18 +1163,18 @@ export default function JobTabs(props: Props) {
         </div>
       )}
 
-      {tab === 'orders' && (
+      {tab === 'procurement' && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px' }}>
           <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '12px', fontWeight: '700' }}>Material Orders</span>
+            <span style={{ fontSize: '12px', fontWeight: '700' }}>Procurement</span>
             <a href={`/schedule/order/new?jobId=${jobId}`} style={{ fontSize: '11px', fontWeight: '600', padding: '4px 10px', background: 'var(--text)', color: 'var(--bg)', borderRadius: '5px', textDecoration: 'none' }}>
-              + Order
+              + Procurement Item
             </a>
           </div>
 
           {!orders.length ? (
             <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
-              No orders yet
+              No procurement items yet
             </div>
           ) : (
             orders.map((order: any) => {
