@@ -1,16 +1,14 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 
 export default function NewSubSchedulePage() {
   const supabase = createClient()
   const router = useRouter()
-  const params = useSearchParams()
 
-  const jobId = params.get('jobId')
-
+  const [jobId, setJobId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   const [form, setForm] = useState({
@@ -25,6 +23,12 @@ export default function NewSubSchedulePage() {
     cost_code: '',
     status: 'tentative',
   })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    setJobId(params.get('jobId'))
+  }, [])
 
   const handleChange = (key: string, value: string | number | boolean) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -71,6 +75,21 @@ export default function NewSubSchedulePage() {
   return (
     <main style={{ padding: 20, maxWidth: 720, margin: '0 auto' }}>
       <h1 style={{ marginBottom: 16 }}>Create Schedule Item</h1>
+
+      {!jobId && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 12,
+            borderRadius: 10,
+            background: '#fef3c7',
+            border: '1px solid #f59e0b',
+            color: '#92400e',
+          }}
+        >
+          Missing <code>jobId</code> in URL.
+        </div>
+      )}
 
       <form
         onSubmit={handleSubmit}
@@ -160,7 +179,7 @@ export default function NewSubSchedulePage() {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !jobId}
           style={{
             padding: '12px 16px',
             borderRadius: 10,
@@ -169,6 +188,7 @@ export default function NewSubSchedulePage() {
             color: '#fff',
             fontWeight: 600,
             cursor: 'pointer',
+            opacity: loading || !jobId ? 0.6 : 1,
           }}
         >
           {loading ? 'Saving...' : 'Create Schedule Item'}
