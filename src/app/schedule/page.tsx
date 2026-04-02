@@ -41,6 +41,7 @@ function fmtDate(d: string | null) {
 
 const STATUS_COLORS: Record<string, string> = {
   tentative: '#b45309',
+  scheduled: '#2563eb',
   confirmed: '#16a34a',
   on_site: '#2563eb',
   complete: '#888',
@@ -49,6 +50,7 @@ const STATUS_COLORS: Record<string, string> = {
   Ordered: '#2563eb',
   Confirmed: '#16a34a',
   Delivered: '#888',
+  'Will Call': '#7c3aed',
   Issue: '#dc2626',
 }
 
@@ -236,7 +238,7 @@ export default async function SchedulePage({
 
         <div style={{ display: 'flex', gap: 10 }}>
           <Link
-            href="/schedule/sub/new"
+            href={`/schedule/sub/new${jobFilter ? `?jobId=${jobFilter}` : ''}`}
             style={{
               textDecoration: 'none',
               background: '#111827',
@@ -249,7 +251,7 @@ export default async function SchedulePage({
             + Sub
           </Link>
           <Link
-            href="/schedule/order/new"
+            href={`/schedule/order/new${jobFilter ? `?jobId=${jobFilter}` : ''}`}
             style={{
               textDecoration: 'none',
               background: '#2563eb',
@@ -499,7 +501,13 @@ export default async function SchedulePage({
                 else if (order.requires_tracking === false) source = 'No Tracking'
 
                 return (
-                  <tr key={order.id}>
+                  <tr
+                    key={order.id}
+                    onClick={() => {
+                      window.location.href = `/schedule/order/${order.id}/edit`
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <td style={tdStyle()}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span
@@ -536,12 +544,7 @@ export default async function SchedulePage({
                     </td>
                     <td style={tdStyle()}>{source}</td>
                     <td style={tdStyle()}>
-                      <Link
-                        href={`/schedule/order/${order.id}/edit`}
-                        style={{ color: '#2563eb', textDecoration: 'none' }}
-                      >
-                        Edit
-                      </Link>
+                      <span style={{ color: '#2563eb' }}>Edit</span>
                     </td>
                   </tr>
                 )
