@@ -19,7 +19,7 @@ type ScheduleRow = JobSubSchedule & {
   jobs?: JobRef | null
 }
 
-type OrderRow = ProcurementItem & {
+type ProcurementRow = ProcurementItem & {
   jobs?: JobRef | null
 }
 
@@ -31,9 +31,9 @@ type AlertRow = {
   jobName: string
 }
 
-function fmtDate(d: string | null) {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('en-US', {
+function fmtDate(value: string | null) {
+  if (!value) return '—'
+  return new Date(value).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
   })
@@ -54,94 +54,114 @@ const STATUS_COLORS: Record<string, string> = {
   Issue: '#dc2626',
 }
 
-function badgeStyle(color?: string) {
+function pageCardStyle() {
   return {
-    display: 'inline-block',
-    padding: '4px 8px',
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 600 as const,
-    color: '#fff',
-    background: color || '#666',
-    whiteSpace: 'nowrap' as const,
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '12px',
+    padding: '16px',
+    marginBottom: '16px',
+    overflowX: 'auto' as const,
   }
 }
 
-function cardStyle() {
+function summaryCardStyle(level: 'soon' | 'overdue') {
   return {
-    background: '#fff',
-    border: '1px solid #e5e7eb',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    overflowX: 'auto' as const,
+    flex: '1 1 220px',
+    minWidth: '220px',
+    borderRadius: '12px',
+    padding: '14px',
+    border:
+      level === 'overdue'
+        ? '1px solid rgba(220, 38, 38, 0.25)'
+        : '1px solid rgba(217, 119, 6, 0.25)',
+    background:
+      level === 'overdue'
+        ? 'rgba(220, 38, 38, 0.08)'
+        : 'rgba(217, 119, 6, 0.08)',
   }
 }
 
 function thStyle() {
   return {
     textAlign: 'left' as const,
-    fontSize: 12,
-    color: '#666',
+    fontSize: '12px',
+    color: 'var(--text-muted)',
     padding: '10px 8px',
-    borderBottom: '1px solid #eee',
+    borderBottom: '1px solid var(--border)',
     whiteSpace: 'nowrap' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '.04em',
+    fontFamily: 'ui-monospace,monospace',
   }
 }
 
 function tdStyle() {
   return {
     padding: '12px 8px',
-    borderBottom: '1px solid #f3f4f6',
+    borderBottom: '1px solid var(--border)',
     verticalAlign: 'top' as const,
+    fontSize: '14px',
   }
 }
 
-function alertCardStyle(level: 'soon' | 'overdue') {
+function badgeStyle(color?: string, muted = false) {
   return {
-    flex: '1 1 220px',
-    minWidth: 220,
-    borderRadius: 12,
-    padding: 14,
-    border: `1px solid ${level === 'overdue' ? '#fecaca' : '#fde68a'}`,
-    background: level === 'overdue' ? '#fef2f2' : '#fffbeb',
+    display: 'inline-block',
+    padding: '4px 8px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    fontWeight: 600 as const,
+    whiteSpace: 'nowrap' as const,
+    color: muted ? 'var(--text-muted)' : '#fff',
+    background: muted ? 'var(--bg)' : color || '#666',
+    border: muted ? '1px solid var(--border)' : 'none',
   }
 }
 
-function buildScheduleAlert(sub: ScheduleRow): AlertRow | null {
-  const level = getScheduleRiskLevel(sub)
+function buildScheduleAlert(item: ScheduleRow): AlertRow | null {
+  const level = getScheduleRiskLevel(item)
   if (level === 'none') return null
 
-  const jobName = sub.jobs?.client_name || 'Unknown Job'
-  const companyName = sub.sub_name || 'Unassigned company'
-  const stateText = sub.is_released ? 'released but not confirmed' : 'still draft / not released'
+  const jobName = item.jobs?.client_name || 'Unknown Job'
+  const companyName = item.sub_name || 'Unassigned company'
+  const stateText = item.is_released
+    ? 'released but not confirmed'
+    : 'still draft and not released'
 
   return {
     type: 'schedule',
     level,
-    message: `${jobName} — ${sub.trade} (${companyName}) starts ${fmtDate(
-      sub.start_date
+    message: `${jobName} — ${item.trade} (${companyName}) starts ${fmtDate(
+      item.start_date
     )} and is ${stateText}.`,
-    date: sub.start_date,
+    date: item.start_date,
     jobName,
   }
 }
 
-function buildOrderAlert(order: OrderRow): AlertRow | null {
-  const level = getOrderRiskLevel(order)
+function buildProcurementAlert(item: ProcurementRow): AlertRow | null {
+  const level = getOrderRiskLevel(item)
   if (level === 'none') return null
 
-  const jobName = order.jobs?.client_name || 'Unknown Job'
+  const jobName = item.jobs?.client_name || 'Unknown Job'
   const statusText =
     level === 'overdue' ? 'is past the order-by date' : 'needs ordering soon'
 
   return {
     type: 'procurement',
     level,
-    message: `${jobName} — ${order.description} ${statusText}.`,
-    date: order.order_by_date,
+    message: `${jobName} — ${item.description} ${statusText}.`,
+    date: item.order_by_date,
     jobName,
   }
+}
+
+function getProcurementSource(item: ProcurementRow) {
+  if (item.is_client_supplied) return 'Client'
+  if (item.is_sub_supplied) return 'Company'
+  if (item.requires_tracking === false) return 'No Tracking'
+  return 'Internal'
 }
 
 export default async function SchedulePage({
@@ -158,7 +178,7 @@ export default async function SchedulePage({
 
   const { job: jobFilter } = await searchParams
 
-  const subsQ = supabase
+  const scheduleQuery = supabase
     .from('sub_schedule')
     .select(
       `
@@ -168,7 +188,7 @@ export default async function SchedulePage({
     )
     .order('start_date', { ascending: true, nullsFirst: false })
 
-  const ordersQ = supabase
+  const procurementQuery = supabase
     .from('procurement_items')
     .select(
       `
@@ -179,20 +199,23 @@ export default async function SchedulePage({
     .order('order_by_date', { ascending: true, nullsFirst: false })
 
   if (jobFilter) {
-    subsQ.eq('job_id', jobFilter)
-    ordersQ.eq('job_id', jobFilter)
+    scheduleQuery.eq('job_id', jobFilter)
+    procurementQuery.eq('job_id', jobFilter)
   }
 
-  const [{ data: subs }, { data: orders }] = await Promise.all([subsQ, ordersQ])
+  const [{ data: scheduleItems }, { data: procurementItems }] = await Promise.all([
+    scheduleQuery,
+    procurementQuery,
+  ])
 
-  const subList: ScheduleRow[] = (subs || []) as ScheduleRow[]
-  const orderList: OrderRow[] = (orders || []) as OrderRow[]
+  const scheduleList: ScheduleRow[] = (scheduleItems || []) as ScheduleRow[]
+  const procurementList: ProcurementRow[] = (procurementItems || []) as ProcurementRow[]
 
   const alerts = [
-    ...subList.map(buildScheduleAlert),
-    ...orderList.map(buildOrderAlert),
+    ...scheduleList.map(buildScheduleAlert),
+    ...procurementList.map(buildProcurementAlert),
   ]
-    .filter((a): a is AlertRow => Boolean(a))
+    .filter((alert): alert is AlertRow => Boolean(alert))
     .sort((a, b) => {
       if (a.level !== b.level) {
         return a.level === 'overdue' ? -1 : 1
@@ -203,134 +226,160 @@ export default async function SchedulePage({
       return aTime - bTime
     })
 
-  const overdueCount = alerts.filter((a) => a.level === 'overdue').length
-  const soonCount = alerts.filter((a) => a.level === 'soon').length
+  const overdueCount = alerts.filter((alert) => alert.level === 'overdue').length
+  const soonCount = alerts.filter((alert) => alert.level === 'soon').length
 
   return (
-    <main style={{ padding: 16, maxWidth: 1400, margin: '0 auto' }}>
+    <main
+      style={{
+        padding: '16px',
+        maxWidth: '1400px',
+        margin: '0 auto',
+        background: 'var(--bg)',
+        minHeight: '100vh',
+        color: 'var(--text)',
+      }}
+    >
       <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          gap: 12,
+          gap: '12px',
           flexWrap: 'wrap',
-          marginBottom: 16,
+          marginBottom: '16px',
         }}
       >
         <div>
           <Link
             href="/"
             style={{
-              color: '#2563eb',
+              color: 'var(--blue)',
               textDecoration: 'none',
-              fontSize: 14,
+              fontSize: '14px',
               display: 'inline-block',
-              marginBottom: 6,
+              marginBottom: '6px',
             }}
           >
             ← Dashboard
           </Link>
-          <h1 style={{ margin: 0, fontSize: 28 }}>
+
+          <h1 style={{ margin: 0, fontSize: '28px' }}>
             Master Schedule{jobFilter ? ' — This Job' : ''}
           </h1>
+
+          <div
+            style={{
+              marginTop: '4px',
+              fontSize: '14px',
+              color: 'var(--text-muted)',
+            }}
+          >
+            Schedule coordination and procurement timing in one view
+          </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <Link
             href={`/schedule/sub/new${jobFilter ? `?jobId=${jobFilter}` : ''}`}
             style={{
               textDecoration: 'none',
-              background: '#111827',
-              color: '#fff',
+              background: 'var(--text)',
+              color: 'var(--bg)',
               padding: '10px 14px',
-              borderRadius: 10,
+              borderRadius: '10px',
               fontWeight: 600,
+              fontSize: '14px',
             }}
           >
-            + Sub
+            + Schedule Item
           </Link>
+
           <Link
             href={`/schedule/order/new${jobFilter ? `?jobId=${jobFilter}` : ''}`}
             style={{
               textDecoration: 'none',
-              background: '#2563eb',
+              background: 'var(--blue)',
               color: '#fff',
               padding: '10px 14px',
-              borderRadius: 10,
+              borderRadius: '10px',
               fontWeight: 600,
+              fontSize: '14px',
             }}
           >
-            + Order
+            + Procurement Item
           </Link>
         </div>
       </div>
 
       {alerts.length > 0 && (
-        <section style={{ marginBottom: 16 }}>
+        <section style={{ marginBottom: '16px' }}>
           <div
             style={{
               display: 'flex',
-              gap: 12,
+              gap: '12px',
               flexWrap: 'wrap',
-              marginBottom: 12,
+              marginBottom: '12px',
             }}
           >
             {overdueCount > 0 && (
-              <div style={alertCardStyle('overdue')}>
-                <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>
+              <div style={summaryCardStyle('overdue')}>
+                <div style={{ fontWeight: 700, color: 'var(--red)', marginBottom: '4px' }}>
                   Overdue Risks
                 </div>
-                <div style={{ fontSize: 24, fontWeight: 700 }}>{overdueCount}</div>
-                <div style={{ fontSize: 13, color: '#7f1d1d' }}>
+                <div style={{ fontSize: '24px', fontWeight: 700 }}>{overdueCount}</div>
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
                   Immediate attention needed
                 </div>
               </div>
             )}
 
             {soonCount > 0 && (
-              <div style={alertCardStyle('soon')}>
-                <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 4 }}>
+              <div style={summaryCardStyle('soon')}>
+                <div style={{ fontWeight: 700, color: 'var(--amber)', marginBottom: '4px' }}>
                   Upcoming Risks
                 </div>
-                <div style={{ fontSize: 24, fontWeight: 700 }}>{soonCount}</div>
-                <div style={{ fontSize: 13, color: '#92400e' }}>
+                <div style={{ fontSize: '24px', fontWeight: 700 }}>{soonCount}</div>
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
                   Action needed soon
                 </div>
               </div>
             )}
           </div>
 
-          <div style={cardStyle()}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>Risk List</div>
-            <div style={{ display: 'grid', gap: 10 }}>
+          <div style={pageCardStyle()}>
+            <div style={{ fontWeight: 700, marginBottom: '10px', fontSize: '16px' }}>Risk List</div>
+
+            <div style={{ display: 'grid', gap: '10px' }}>
               {alerts.map((alert, idx) => (
                 <div
                   key={`${alert.type}-${idx}`}
                   style={{
-                    padding: 12,
-                    borderRadius: 10,
+                    padding: '12px',
+                    borderRadius: '10px',
                     border:
                       alert.level === 'overdue'
-                        ? '1px solid #fecaca'
-                        : '1px solid #fde68a',
+                        ? '1px solid rgba(220, 38, 38, 0.25)'
+                        : '1px solid rgba(217, 119, 6, 0.25)',
                     background:
-                      alert.level === 'overdue' ? '#fef2f2' : '#fffbeb',
+                      alert.level === 'overdue'
+                        ? 'rgba(220, 38, 38, 0.08)'
+                        : 'rgba(217, 119, 6, 0.08)',
                   }}
                 >
                   <div
                     style={{
-                      fontSize: 12,
+                      fontSize: '12px',
                       fontWeight: 700,
-                      marginBottom: 4,
-                      color:
-                        alert.level === 'overdue' ? '#991b1b' : '#92400e',
+                      marginBottom: '4px',
+                      color: alert.level === 'overdue' ? 'var(--red)' : 'var(--amber)',
                     }}
                   >
                     {alert.level === 'overdue' ? 'CRITICAL' : 'WARNING'} ·{' '}
                     {alert.type === 'schedule' ? 'Schedule' : 'Procurement'}
                   </div>
-                  <div style={{ fontSize: 14 }}>{alert.message}</div>
+
+                  <div style={{ fontSize: '14px', lineHeight: 1.5 }}>{alert.message}</div>
                 </div>
               ))}
             </div>
@@ -338,27 +387,29 @@ export default async function SchedulePage({
         </section>
       )}
 
-      <section style={cardStyle()}>
+      <section style={pageCardStyle()}>
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            gap: 12,
+            gap: '12px',
             flexWrap: 'wrap',
-            marginBottom: 12,
+            marginBottom: '12px',
           }}
         >
           <div>
-            <h2 style={{ margin: 0, fontSize: 20 }}>Sub Schedule</h2>
-            <div style={{ color: '#666', fontSize: 14 }}>{subList.length} entries</div>
+            <h2 style={{ margin: 0, fontSize: '20px' }}>Schedule</h2>
+            <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+              {scheduleList.length} entries
+            </div>
           </div>
         </div>
 
-        {subList.length === 0 ? (
-          <div style={{ color: '#666' }}>
-            <div style={{ marginBottom: 6 }}>No subs scheduled yet</div>
-            <div>Add sub schedule entries from a job or click + Sub above</div>
+        {scheduleList.length === 0 ? (
+          <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+            <div style={{ marginBottom: '6px' }}>No schedule items yet</div>
+            <div>Add schedule items from a job or click + Schedule Item above</div>
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -369,70 +420,73 @@ export default async function SchedulePage({
                   'Trade',
                   'Company',
                   'Status',
-                  'Released',
+                  'Release',
                   'Start',
                   'End',
                   'Cost Code',
                   'Notes',
                   '',
-                ].map((h) => (
-                  <th key={h} style={thStyle()}>
-                    {h}
+                ].map((heading) => (
+                  <th key={heading} style={thStyle()}>
+                    {heading}
                   </th>
                 ))}
               </tr>
             </thead>
+
             <tbody>
-              {subList.map((sub) => {
-                const risk = getScheduleRiskLevel(sub)
-                const jobColor = sub.jobs?.color || '#e5e7eb'
+              {scheduleList.map((item) => {
+                const risk = getScheduleRiskLevel(item)
+                const jobColor = item.jobs?.color || '#e5e7eb'
 
                 return (
-                  <tr key={sub.id}>
+                  <tr key={item.id}>
                     <td style={tdStyle()}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span
                           style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: 999,
+                            width: '10px',
+                            height: '10px',
+                            borderRadius: '999px',
                             background: jobColor,
                             display: 'inline-block',
                           }}
                         />
-                        <span>{sub.jobs?.client_name || '—'}</span>
+                        <span>{item.jobs?.client_name || '—'}</span>
                       </div>
                     </td>
-                    <td style={tdStyle()}>{sub.trade}</td>
-                    <td style={tdStyle()}>{sub.sub_name || '—'}</td>
+
+                    <td style={tdStyle()}>{item.trade}</td>
+                    <td style={tdStyle()}>{item.sub_name || '—'}</td>
+
                     <td style={tdStyle()}>
-                      <span style={badgeStyle(STATUS_COLORS[sub.status])}>
-                        {sub.status}
+                      <span style={badgeStyle(STATUS_COLORS[item.status])}>{item.status}</span>
+                    </td>
+
+                    <td style={tdStyle()}>
+                      <span style={badgeStyle(undefined, !item.is_released)}>
+                        {item.is_released ? 'Released' : 'Draft'}
                       </span>
                     </td>
-                    <td style={tdStyle()}>
-                      <span
-                        style={badgeStyle(sub.is_released ? '#2563eb' : '#6b7280')}
-                      >
-                        {sub.is_released ? 'Released' : 'Draft'}
-                      </span>
-                    </td>
+
                     <td style={tdStyle()}>
                       {risk === 'overdue' && (
-                        <span style={{ color: '#dc2626', marginRight: 6 }}>●</span>
+                        <span style={{ color: 'var(--red)', marginRight: '6px' }}>●</span>
                       )}
                       {risk === 'soon' && (
-                        <span style={{ color: '#d97706', marginRight: 6 }}>⚠️</span>
+                        <span style={{ color: 'var(--amber)', marginRight: '6px' }}>⚠️</span>
                       )}
-                      {fmtDate(sub.start_date)}
+                      {fmtDate(item.start_date)}
                     </td>
-                    <td style={tdStyle()}>{fmtDate(sub.end_date)}</td>
-                    <td style={tdStyle()}>{sub.cost_code || '—'}</td>
-                    <td style={tdStyle()}>{sub.notes || '—'}</td>
+
+                    <td style={tdStyle()}>{fmtDate(item.end_date)}</td>
+                    <td style={tdStyle()}>{item.cost_code || '—'}</td>
+                    <td style={tdStyle()}>{item.notes || '—'}</td>
+
                     <td style={tdStyle()}>
                       <Link
-                        href={`/schedule/sub/${sub.id}/edit`}
-                        style={{ color: '#2563eb', textDecoration: 'none' }}
+                        href={`/schedule/sub/${item.id}/edit`}
+                        style={{ color: 'var(--blue)', textDecoration: 'none', fontWeight: 600 }}
                       >
                         Edit
                       </Link>
@@ -445,27 +499,29 @@ export default async function SchedulePage({
         )}
       </section>
 
-      <section style={cardStyle()}>
+      <section style={pageCardStyle()}>
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            gap: 12,
+            gap: '12px',
             flexWrap: 'wrap',
-            marginBottom: 12,
+            marginBottom: '12px',
           }}
         >
           <div>
-            <h2 style={{ margin: 0, fontSize: 20 }}>Material Orders</h2>
-            <div style={{ color: '#666', fontSize: 14 }}>{orderList.length} items</div>
+            <h2 style={{ margin: 0, fontSize: '20px' }}>Procurement</h2>
+            <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+              {procurementList.length} items
+            </div>
           </div>
         </div>
 
-        {orderList.length === 0 ? (
-          <div style={{ color: '#666' }}>
-            <div style={{ marginBottom: 6 }}>No orders yet</div>
-            <div>Add procurement items from a job&apos;s estimate or click + Order above</div>
+        {procurementList.length === 0 ? (
+          <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+            <div style={{ marginBottom: '6px' }}>No procurement items yet</div>
+            <div>Add procurement items from a job or click + Procurement Item above</div>
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -476,75 +532,75 @@ export default async function SchedulePage({
                   'Trade',
                   'Item',
                   'Group',
-                  'Vendor',
+                  'Company',
                   'Need By',
                   'Order By',
                   'Lead',
                   'Status',
                   'Source',
                   '',
-                ].map((h) => (
-                  <th key={h} style={thStyle()}>
-                    {h}
+                ].map((heading) => (
+                  <th key={heading} style={thStyle()}>
+                    {heading}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody>
-              {orderList.map((order) => {
-                const risk = getOrderRiskLevel(order)
-                const jobColor = order.jobs?.color || '#e5e7eb'
 
-                let source = 'Internal'
-                if (order.is_client_supplied) source = 'Client'
-                else if (order.is_sub_supplied) source = 'Company'
-                else if (order.requires_tracking === false) source = 'No Tracking'
+            <tbody>
+              {procurementList.map((item) => {
+                const risk = getOrderRiskLevel(item)
+                const jobColor = item.jobs?.color || '#e5e7eb'
+                const source = getProcurementSource(item)
 
                 return (
-                  <tr
-                    key={order.id}
-                    onClick={() => {
-                      window.location.href = `/schedule/order/${order.id}/edit`
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  >
+                  <tr key={item.id}>
                     <td style={tdStyle()}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span
                           style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: 999,
+                            width: '10px',
+                            height: '10px',
+                            borderRadius: '999px',
                             background: jobColor,
                             display: 'inline-block',
                           }}
                         />
-                        <span>{order.jobs?.client_name || '—'}</span>
+                        <span>{item.jobs?.client_name || '—'}</span>
                       </div>
                     </td>
-                    <td style={tdStyle()}>{order.trade}</td>
-                    <td style={tdStyle()}>{order.description}</td>
-                    <td style={tdStyle()}>{order.procurement_group || '—'}</td>
-                    <td style={tdStyle()}>{order.vendor || '—'}</td>
-                    <td style={tdStyle()}>{fmtDate(order.required_on_site_date)}</td>
+
+                    <td style={tdStyle()}>{item.trade}</td>
+                    <td style={tdStyle()}>{item.description}</td>
+                    <td style={tdStyle()}>{item.procurement_group || '—'}</td>
+                    <td style={tdStyle()}>{item.vendor || '—'}</td>
+                    <td style={tdStyle()}>{fmtDate(item.required_on_site_date)}</td>
+
                     <td style={tdStyle()}>
                       {risk === 'overdue' && (
-                        <span style={{ color: '#dc2626', marginRight: 6 }}>●</span>
+                        <span style={{ color: 'var(--red)', marginRight: '6px' }}>●</span>
                       )}
                       {risk === 'soon' && (
-                        <span style={{ color: '#d97706', marginRight: 6 }}>⚠️</span>
+                        <span style={{ color: 'var(--amber)', marginRight: '6px' }}>⚠️</span>
                       )}
-                      {fmtDate(order.order_by_date)}
+                      {fmtDate(item.order_by_date)}
                     </td>
-                    <td style={tdStyle()}>{order.lead_days ?? 0}d</td>
+
+                    <td style={tdStyle()}>{item.lead_days ?? 0}d</td>
+
                     <td style={tdStyle()}>
-                      <span style={badgeStyle(STATUS_COLORS[order.status])}>
-                        {order.status}
-                      </span>
+                      <span style={badgeStyle(STATUS_COLORS[item.status])}>{item.status}</span>
                     </td>
+
                     <td style={tdStyle()}>{source}</td>
+
                     <td style={tdStyle()}>
-                      <span style={{ color: '#2563eb' }}>Edit</span>
+                      <Link
+                        href={`/schedule/order/${item.id}/edit`}
+                        style={{ color: 'var(--blue)', textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        Edit
+                      </Link>
                     </td>
                   </tr>
                 )
