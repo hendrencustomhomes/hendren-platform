@@ -69,6 +69,11 @@ function labelStyle() {
   }
 }
 
+function getPmProfileValue(profiles: any) {
+  if (!profiles) return null
+  return Array.isArray(profiles) ? profiles[0] || null : profiles
+}
+
 export default async function JobDetailPage({
   params,
 }: {
@@ -147,22 +152,22 @@ export default async function JobDetailPage({
   const checkedMap: Record<string, boolean> = {}
   const stateMap: Record<string, string> = {}
 
-  ;(checklistState || []).forEach((s: any) => {
-    checkedMap[s.checklist_item_id] = s.is_checked
-    stateMap[s.checklist_item_id] = s.id
+  ;(checklistState || []).forEach((state: any) => {
+    checkedMap[state.checklist_item_id] = state.is_checked
+    stateMap[state.checklist_item_id] = state.id
   })
 
   const masterItems = checklistItems || []
 
-  const stageItems = (stage: string) =>
+  const getStageItems = (stage: string) =>
     masterItems
-      .filter((i: any) => i.stage === stage)
+      .filter((item: any) => item.stage === stage)
       .sort((a: any, b: any) => a.sort_order - b.sort_order)
 
-  const stagePct = (stage: string) => {
-    const items = stageItems(stage)
+  const getStagePct = (stage: string) => {
+    const items = getStageItems(stage)
     return items.length
-      ? Math.round((items.filter((i: any) => checkedMap[i.id]).length / items.length) * 100)
+      ? Math.round((items.filter((item: any) => checkedMap[item.id]).length / items.length) * 100)
       : 0
   }
 
@@ -189,15 +194,19 @@ export default async function JobDetailPage({
     on_hold: '#dc2626',
   }
 
-  const openIssues = (issues || []).filter((i: any) => !i.resolved)
-  const activeScheduleItems = (scheduleItems || []).filter((s: any) => s.status !== 'cancelled')
-  const releasedScheduleItems = activeScheduleItems.filter((s: any) => s.is_released)
+  const openIssues = (issues || []).filter((issue: any) => !issue.resolved)
+  const activeScheduleItems = (scheduleItems || []).filter((item: any) => item.status !== 'cancelled')
+  const releasedScheduleItems = activeScheduleItems.filter((item: any) => item.is_released)
+  const confirmedScheduleItems = activeScheduleItems.filter(
+    (item: any) => item.status === 'confirmed'
+  )
   const openProcurementItems = (procurementItems || []).filter(
-    (o: any) => !['Delivered', 'Confirmed'].includes(o.status)
+    (item: any) => !['Delivered', 'Confirmed'].includes(item.status)
   )
 
   const nextStage = STAGES[curIdx + 1] || null
   const canEditInfo = true
+  const pmProfile = getPmProfileValue(job.profiles)
 
   return (
     <div
@@ -219,10 +228,10 @@ export default async function JobDetailPage({
           }}
         >
           <div style={{ display: 'flex', gap: '2px', minWidth: 'fit-content' }}>
-            {STAGES.map((stage, i) => {
-              const done = i < curIdx
-              const active = i === curIdx
-              const pct = stagePct(stage)
+            {STAGES.map((stage, index) => {
+              const done = index < curIdx
+              const active = index === curIdx
+              const pct = getStagePct(stage)
 
               return (
                 <div
@@ -250,7 +259,7 @@ export default async function JobDetailPage({
                       border: `2px solid ${done ? 'var(--green)' : active ? 'var(--blue)' : 'var(--border)'}`,
                     }}
                   >
-                    {done ? '✓' : i + 1}
+                    {done ? '✓' : index + 1}
                   </div>
 
                   <div
@@ -427,8 +436,7 @@ export default async function JobDetailPage({
               <strong style={{ color: 'var(--text)' }}>Client:</strong> {job.client_name || '—'}
             </span>
             <span>
-              <strong style={{ color: 'var(--text)' }}>PM:</strong>{' '}
-              {(job.profiles as any)?.full_name || 'Unassigned'}
+              <strong style={{ color: 'var(--text)' }}>PM:</strong> {pmProfile?.full_name || 'Unassigned'}
             </span>
             <span>
               <strong style={{ color: 'var(--text)' }}>Open Issues:</strong> {openIssues.length}
@@ -437,6 +445,10 @@ export default async function JobDetailPage({
               <strong style={{ color: 'var(--text)' }}>Released Schedule:</strong>{' '}
               {releasedScheduleItems.length}
             </span>
+            <span>
+              <strong style={{ color: 'var(--text)' }}>Confirmed Schedule:</strong>{' '}
+              {confirmedScheduleItems.length}
+            </span>
           </div>
         </div>
 
@@ -444,7 +456,7 @@ export default async function JobDetailPage({
           jobId={id}
           job={job}
           stageItems={STAGES.reduce(
-            (acc, stage) => ({ ...acc, [stage]: stageItems(stage) }),
+            (acc, stage) => ({ ...acc, [stage]: getStageItems(stage) }),
             {} as Record<string, any[]>
           )}
           checkedMap={checkedMap}
