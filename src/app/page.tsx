@@ -15,12 +15,29 @@ const STAGE_LABELS: Record<string, string> = {
   construction: 'Build',
 }
 
-function fmtDate(d: string | null) {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('en-US', {
+function fmtDate(value: string | null) {
+  if (!value) return '—'
+  return new Date(value).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
   })
+}
+
+function cardStyle() {
+  return {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '12px',
+  }
+}
+
+function statCardStyle() {
+  return {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '12px',
+    padding: '14px',
+  }
 }
 
 type DashboardRisk = {
@@ -41,7 +58,7 @@ export default async function Home() {
 
   if (!user) redirect('/login')
 
-  const [{ data: jobs }, { data: subs }, { data: orders }] = await Promise.all([
+  const [{ data: jobs }, { data: scheduleItems }, { data: procurementItems }] = await Promise.all([
     supabase
       .from('jobs')
       .select(
@@ -103,51 +120,53 @@ export default async function Home() {
   ])
 
   const jobList = jobs || []
-  const subList = subs || []
-  const orderList = orders || []
+  const scheduleList = scheduleItems || []
+  const procurementList = procurementItems || []
 
-  const criticalJobs = jobList.filter((j: any) =>
-    (j.issues || []).some((i: any) => i.severity === 'Critical' && !i.resolved)
+  const criticalJobs = jobList.filter((job: any) =>
+    (job.issues || []).some((issue: any) => issue.severity === 'Critical' && !issue.resolved)
   )
 
-  const scheduleRisks: DashboardRisk[] = subList
-    .map((sub: any) => {
-      const level = getScheduleRiskLevel(sub)
+  const scheduleRisks: DashboardRisk[] = scheduleList
+    .map((item: any) => {
+      const level = getScheduleRiskLevel(item)
       if (level === 'none') return null
 
-      const jobName = sub.jobs?.job_name || 'Untitled Job'
-      const companyName = sub.sub_name || 'Unassigned company'
-      const stateText = sub.is_released ? 'released but not confirmed' : 'still draft / not released'
+      const jobName = item.jobs?.job_name || 'Untitled Job'
+      const companyName = item.sub_name || 'Unassigned company'
+      const stateText = item.is_released
+        ? 'released but not confirmed'
+        : 'still draft and not released'
 
       return {
-        id: `schedule-${sub.id}`,
+        id: `schedule-${item.id}`,
         kind: 'schedule',
         level,
-        jobId: sub.job_id,
+        jobId: item.job_id,
         jobName,
-        date: sub.start_date,
-        message: `${sub.trade} (${companyName}) starts ${fmtDate(sub.start_date)} and is ${stateText}.`,
+        date: item.start_date,
+        message: `${item.trade} (${companyName}) starts ${fmtDate(item.start_date)} and is ${stateText}.`,
       } satisfies DashboardRisk
     })
     .filter(Boolean) as DashboardRisk[]
 
-  const procurementRisks: DashboardRisk[] = orderList
-    .map((order: any) => {
-      const level = getOrderRiskLevel(order)
+  const procurementRisks: DashboardRisk[] = procurementList
+    .map((item: any) => {
+      const level = getOrderRiskLevel(item)
       if (level === 'none') return null
 
-      const jobName = order.jobs?.job_name || 'Untitled Job'
+      const jobName = item.jobs?.job_name || 'Untitled Job'
       const suffix =
         level === 'overdue' ? 'is past the order-by date.' : 'needs ordering soon.'
 
       return {
-        id: `procurement-${order.id}`,
+        id: `procurement-${item.id}`,
         kind: 'procurement',
         level,
-        jobId: order.job_id,
+        jobId: item.job_id,
         jobName,
-        date: order.order_by_date,
-        message: `${order.description} ${suffix}`,
+        date: item.order_by_date,
+        message: `${item.description} ${suffix}`,
       } satisfies DashboardRisk
     })
     .filter(Boolean) as DashboardRisk[]
@@ -159,8 +178,8 @@ export default async function Home() {
     return aTime - bTime
   })
 
-  const overdueRisks = risks.filter((r) => r.level === 'overdue').length
-  const soonRisks = risks.filter((r) => r.level === 'soon').length
+  const overdueRisks = risks.filter((risk) => risk.level === 'overdue').length
+  const soonRisks = risks.filter((risk) => risk.level === 'soon').length
 
   return (
     <div
@@ -173,11 +192,26 @@ export default async function Home() {
     >
       <Nav title="Dashboard" />
 
-      <div style={{ padding: '14px', maxWidth: '900px', margin: '0 auto' }}>
+      <div style={{ padding: '14px', maxWidth: '980px', margin: '0 auto' }}>
+        <div style={{ marginBottom: '14px' }}>
+          <div style={{ fontSize: '22px', fontWeight: 700, marginBottom: '4px' }}>
+            Operations Dashboard
+          </div>
+          <div
+            style={{
+              fontSize: '14px',
+              color: 'var(--text-muted)',
+              lineHeight: 1.5,
+            }}
+          >
+            Active jobs, critical issues, and coordination risks across schedule and procurement.
+          </div>
+        </div>
+
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(4,1fr)',
+            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
             gap: '10px',
             marginBottom: '14px',
           }}
@@ -195,16 +229,8 @@ export default async function Home() {
               value: soonRisks,
               color: soonRisks ? 'var(--amber)' : 'var(--text)',
             },
-          ].map((s) => (
-            <div
-              key={s.label}
-              style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: '10px',
-                padding: '13px 14px',
-              }}
-            >
+          ].map((stat) => (
+            <div key={stat.label} style={statCardStyle()}>
               <div
                 style={{
                   fontSize: '10px',
@@ -215,23 +241,16 @@ export default async function Home() {
                   marginBottom: '4px',
                 }}
               >
-                {s.label}
+                {stat.label}
               </div>
-              <div style={{ fontSize: '24px', fontWeight: '700', color: s.color }}>
-                {s.value}
+              <div style={{ fontSize: '24px', fontWeight: 700, color: stat.color }}>
+                {stat.value}
               </div>
             </div>
           ))}
         </div>
 
-        <div
-          style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: '10px',
-            marginBottom: '14px',
-          }}
-        >
+        <div style={{ ...cardStyle(), marginBottom: '14px' }}>
           <div
             style={{
               padding: '12px 16px',
@@ -239,14 +258,28 @@ export default async function Home() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap',
             }}
           >
-            <div style={{ fontSize: '13px', fontWeight: '700' }}>Risk List</div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 700 }}>Risk List</div>
+              <div
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  marginTop: '2px',
+                }}
+              >
+                Items needing schedule or procurement attention
+              </div>
+            </div>
+
             <a
               href="/schedule"
               style={{
                 fontSize: '12px',
-                fontWeight: '600',
+                fontWeight: 600,
                 color: 'var(--blue)',
                 textDecoration: 'none',
               }}
@@ -256,11 +289,26 @@ export default async function Home() {
           </div>
 
           {risks.length === 0 ? (
-            <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text)', marginBottom: '4px' }}>
+            <div
+              style={{
+                padding: '24px 16px',
+                textAlign: 'center',
+                color: 'var(--text-muted)',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: 'var(--text)',
+                  marginBottom: '4px',
+                }}
+              >
                 No active risks
               </div>
-              <div style={{ fontSize: '12px' }}>Schedule and procurement look clean right now.</div>
+              <div style={{ fontSize: '13px' }}>
+                Schedule and procurement look clean right now.
+              </div>
             </div>
           ) : (
             risks.map((risk) => (
@@ -282,7 +330,7 @@ export default async function Home() {
                   <div
                     style={{
                       fontSize: '10px',
-                      fontWeight: '700',
+                      fontWeight: 700,
                       textTransform: 'uppercase',
                       letterSpacing: '.04em',
                       marginBottom: '4px',
@@ -292,10 +340,18 @@ export default async function Home() {
                     {risk.level === 'overdue' ? 'Critical' : 'Warning'} ·{' '}
                     {risk.kind === 'schedule' ? 'Schedule' : 'Procurement'}
                   </div>
-                  <div style={{ fontSize: '13px', fontWeight: '600', marginBottom: '2px' }}>
+
+                  <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '2px' }}>
                     {risk.jobName}
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.45' }}>
+
+                  <div
+                    style={{
+                      fontSize: '13px',
+                      color: 'var(--text-muted)',
+                      lineHeight: 1.45,
+                    }}
+                  >
                     {risk.message}
                   </div>
                 </div>
@@ -303,7 +359,7 @@ export default async function Home() {
                 <div
                   style={{
                     flexShrink: 0,
-                    fontSize: '10px',
+                    fontSize: '11px',
                     color: 'var(--text-muted)',
                     fontFamily: 'ui-monospace,monospace',
                     marginTop: '2px',
@@ -316,13 +372,7 @@ export default async function Home() {
           )}
         </div>
 
-        <div
-          style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: '10px',
-          }}
-        >
+        <div style={cardStyle()}>
           <div
             style={{
               padding: '12px 16px',
@@ -330,18 +380,32 @@ export default async function Home() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap',
             }}
           >
-            <div style={{ fontSize: '13px', fontWeight: '700' }}>Jobs</div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 700 }}>Jobs</div>
+              <div
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  marginTop: '2px',
+                }}
+              >
+                Active jobs across the pipeline
+              </div>
+            </div>
+
             <a
               href="/jobs/new"
               style={{
                 fontSize: '12px',
-                fontWeight: '600',
+                fontWeight: 600,
                 background: 'var(--text)',
                 color: 'var(--bg)',
-                padding: '6px 12px',
-                borderRadius: '6px',
+                padding: '7px 12px',
+                borderRadius: '8px',
                 textDecoration: 'none',
               }}
             >
@@ -350,27 +414,35 @@ export default async function Home() {
           </div>
 
           {jobList.length === 0 ? (
-            <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
+            <div
+              style={{
+                padding: '40px 16px',
+                textAlign: 'center',
+                color: 'var(--text-muted)',
+              }}
+            >
               <div style={{ fontSize: '28px', marginBottom: '8px' }}>🏠</div>
               <div
                 style={{
-                  fontSize: '13px',
-                  fontWeight: '600',
+                  fontSize: '14px',
+                  fontWeight: 600,
                   color: 'var(--text)',
                   marginBottom: '4px',
                 }}
               >
                 No jobs yet
               </div>
-              <div style={{ fontSize: '12px' }}>Click &quot;+ New Job&quot; to get started</div>
+              <div style={{ fontSize: '13px' }}>Click “+ New Job” to get started.</div>
             </div>
           ) : (
             jobList.map((job: any) => {
-              const openIssues = (job.issues || []).filter((i: any) => !i.resolved)
-              const hasCritical = openIssues.some((i: any) => i.severity === 'Critical')
+              const openIssues = (job.issues || []).filter((issue: any) => !issue.resolved)
+              const hasCritical = openIssues.some((issue: any) => issue.severity === 'Critical')
 
-              const jobRiskCount = risks.filter((r) => r.jobId === job.id).length
-              const hasOverdueRisk = risks.some((r) => r.jobId === job.id && r.level === 'overdue')
+              const jobRiskCount = risks.filter((risk) => risk.jobId === job.id).length
+              const hasOverdueRisk = risks.some(
+                (risk) => risk.jobId === job.id && risk.level === 'overdue'
+              )
 
               return (
                 <a
@@ -380,7 +452,7 @@ export default async function Home() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '10px',
-                    padding: '11px 16px',
+                    padding: '12px 16px',
                     borderBottom: '1px solid var(--border)',
                     textDecoration: 'none',
                     color: 'inherit',
@@ -388,27 +460,31 @@ export default async function Home() {
                 >
                   <div
                     style={{
-                      width: '3px',
-                      height: '36px',
-                      borderRadius: '2px',
+                      width: '4px',
+                      height: '40px',
+                      borderRadius: '4px',
                       background: job.color || '#3B8BD4',
                       flexShrink: 0,
                     }}
                   />
+
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '13px', fontWeight: '600' }}>{job.job_name}</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600 }}>
+                      {job.job_name || 'Untitled Job'}
+                    </div>
+
                     <div
                       style={{
-                        fontSize: '11px',
+                        fontSize: '12px',
                         color: 'var(--text-muted)',
                         fontFamily: 'ui-monospace,monospace',
-                        marginTop: '1px',
+                        marginTop: '2px',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {job.project_address}
+                      {job.project_address || 'No project address'}
                     </div>
                   </div>
 
@@ -416,9 +492,9 @@ export default async function Home() {
                     <span
                       style={{
                         fontSize: '10px',
-                        fontWeight: '600',
-                        padding: '2px 7px',
-                        borderRadius: '10px',
+                        fontWeight: 600,
+                        padding: '3px 7px',
+                        borderRadius: '999px',
                         background: 'var(--blue-bg)',
                         color: 'var(--blue)',
                         border: '1px solid var(--blue)',
@@ -433,8 +509,8 @@ export default async function Home() {
                         style={{
                           fontSize: '10px',
                           color: 'var(--red)',
-                          marginTop: '2px',
-                          fontWeight: '600',
+                          marginTop: '3px',
+                          fontWeight: 600,
                         }}
                       >
                         ⚠ Critical
@@ -446,11 +522,12 @@ export default async function Home() {
                         style={{
                           fontSize: '10px',
                           color: hasOverdueRisk ? 'var(--red)' : 'var(--amber)',
-                          marginTop: '2px',
-                          fontWeight: '600',
+                          marginTop: '3px',
+                          fontWeight: 600,
                         }}
                       >
-                        {hasOverdueRisk ? '⚠' : '•'} {jobRiskCount} risk{jobRiskCount > 1 ? 's' : ''}
+                        {hasOverdueRisk ? '⚠' : '•'} {jobRiskCount} risk
+                        {jobRiskCount > 1 ? 's' : ''}
                       </div>
                     )}
                   </div>
