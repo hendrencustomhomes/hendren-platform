@@ -39,12 +39,33 @@ const STAGE_ICONS: Record<string, string> = {
   construction: '🏗️',
 }
 
-function infoCardStyle() {
+function panelStyle() {
+  return {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '12px',
+    padding: '14px',
+  }
+}
+
+function statCardStyle() {
   return {
     background: 'var(--surface)',
     border: '1px solid var(--border)',
     borderRadius: '10px',
     padding: '12px 14px',
+    minWidth: 0,
+  }
+}
+
+function labelStyle() {
+  return {
+    fontSize: '10px',
+    color: 'var(--text-muted)',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '.04em',
+    marginBottom: '4px',
+    fontFamily: 'ui-monospace,monospace',
   }
 }
 
@@ -92,12 +113,8 @@ export default async function JobDetailPage({
     { data: checklistState },
     { data: issues },
     { data: logs },
-    { data: subs },
-    { data: orders },
-    { data: selections },
-    { data: takeoffItems },
-    { data: estimates },
-    { data: files },
+    { data: scheduleItems },
+    { data: procurementItems },
     { data: pmOptions },
   ] = await Promise.all([
     supabase.from('checklist_items').select('*').is('job_id', null).order('sort_order'),
@@ -118,18 +135,6 @@ export default async function JobDetailPage({
       .select('*')
       .eq('job_id', id)
       .order('order_by_date', { ascending: true, nullsFirst: false }),
-    supabase.from('selections').select('*').eq('job_id', id).order('sort_order'),
-    supabase.from('takeoff_items').select('*').eq('job_id', id).order('sort_order'),
-    supabase
-      .from('estimates')
-      .select('*, estimate_line_items(*)')
-      .eq('job_id', id)
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('file_attachments')
-      .select('*')
-      .eq('job_id', id)
-      .order('created_at', { ascending: false }),
     supabase
       .from('profiles')
       .select('id, full_name')
@@ -155,9 +160,9 @@ export default async function JobDetailPage({
       .sort((a: any, b: any) => a.sort_order - b.sort_order)
 
   const stagePct = (stage: string) => {
-    const its = stageItems(stage)
-    return its.length
-      ? Math.round((its.filter((i: any) => checkedMap[i.id]).length / its.length) * 100)
+    const items = stageItems(stage)
+    return items.length
+      ? Math.round((items.filter((i: any) => checkedMap[i.id]).length / items.length) * 100)
       : 0
   }
 
@@ -174,6 +179,9 @@ export default async function JobDetailPage({
     Delivered: '#888',
     'Will Call': '#7c3aed',
     Issue: '#dc2626',
+    Critical: '#dc2626',
+    Warning: '#b45309',
+    Info: '#2563eb',
     not_started: '#888',
     in_progress: '#b45309',
     selected: '#2563eb',
@@ -181,13 +189,15 @@ export default async function JobDetailPage({
     on_hold: '#dc2626',
   }
 
-  const canEditInfo = true
   const openIssues = (issues || []).filter((i: any) => !i.resolved)
-  const activeSubs = (subs || []).filter((s: any) => s.status !== 'cancelled')
-  const pendingOrders = (orders || []).filter(
+  const activeScheduleItems = (scheduleItems || []).filter((s: any) => s.status !== 'cancelled')
+  const releasedScheduleItems = activeScheduleItems.filter((s: any) => s.is_released)
+  const openProcurementItems = (procurementItems || []).filter(
     (o: any) => !['Delivered', 'Confirmed'].includes(o.status)
   )
+
   const nextStage = STAGES[curIdx + 1] || null
+  const canEditInfo = true
 
   return (
     <div
@@ -200,13 +210,10 @@ export default async function JobDetailPage({
     >
       <Nav title={job.job_name || 'Untitled Job'} back="/jobs" jobId={id} />
 
-      <div style={{ padding: '14px', maxWidth: '960px', margin: '0 auto' }}>
+      <div style={{ padding: '14px', maxWidth: '1080px', margin: '0 auto' }}>
         <div
           style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: '10px',
-            padding: '12px 14px',
+            ...panelStyle(),
             marginBottom: '12px',
             overflowX: 'auto',
           }}
@@ -224,15 +231,15 @@ export default async function JobDetailPage({
                     flex: '0 0 auto',
                     textAlign: 'center',
                     padding: '5px 7px',
-                    minWidth: '68px',
+                    minWidth: '72px',
                   }}
                 >
                   <div
                     style={{
-                      width: '26px',
-                      height: '26px',
+                      width: '28px',
+                      height: '28px',
                       borderRadius: '50%',
-                      margin: '0 auto 3px',
+                      margin: '0 auto 4px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -249,9 +256,9 @@ export default async function JobDetailPage({
                   <div
                     style={{
                       fontSize: '8px',
-                      fontWeight: '600',
+                      fontWeight: '700',
                       textTransform: 'uppercase',
-                      letterSpacing: '.03em',
+                      letterSpacing: '.04em',
                       color: done ? 'var(--green)' : active ? 'var(--blue)' : 'var(--text-faint)',
                       lineHeight: 1.3,
                     }}
@@ -262,10 +269,10 @@ export default async function JobDetailPage({
                   {active && pct > 0 && (
                     <div
                       style={{
-                        height: '2px',
+                        height: '3px',
                         background: 'var(--border)',
-                        borderRadius: '2px',
-                        marginTop: '2px',
+                        borderRadius: '999px',
+                        marginTop: '4px',
                         overflow: 'hidden',
                       }}
                     >
@@ -286,7 +293,7 @@ export default async function JobDetailPage({
 
         <div
           style={{
-            ...infoCardStyle(),
+            ...panelStyle(),
             marginBottom: '12px',
           }}
         >
@@ -295,21 +302,22 @@ export default async function JobDetailPage({
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'flex-start',
-              gap: '12px',
+              gap: '14px',
               flexWrap: 'wrap',
-              marginBottom: '10px',
+              marginBottom: '12px',
             }}
           >
-            <div>
-              <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '4px' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '18px', fontWeight: '700', marginBottom: '4px' }}>
                 {job.job_name || 'Untitled Job'}
               </div>
+
               <div
                 style={{
-                  fontSize: '11px',
+                  fontSize: '12px',
                   color: 'var(--text-muted)',
                   fontFamily: 'ui-monospace,monospace',
-                  lineHeight: 1.5,
+                  lineHeight: 1.6,
                 }}
               >
                 {job.project_address || 'No project address'}
@@ -325,40 +333,42 @@ export default async function JobDetailPage({
                 style={{
                   fontSize: '12px',
                   fontWeight: '600',
-                  padding: '6px 10px',
+                  padding: '7px 10px',
                   background: 'var(--surface)',
                   border: '1px solid var(--border)',
-                  borderRadius: '6px',
+                  borderRadius: '7px',
                   textDecoration: 'none',
                   color: 'var(--text)',
                 }}
               >
                 📅 Master Schedule
               </a>
+
               <a
                 href={`/schedule/sub/new?jobId=${id}`}
                 style={{
                   fontSize: '12px',
                   fontWeight: '600',
-                  padding: '6px 10px',
+                  padding: '7px 10px',
                   background: 'var(--surface)',
                   border: '1px solid var(--border)',
-                  borderRadius: '6px',
+                  borderRadius: '7px',
                   textDecoration: 'none',
                   color: 'var(--text)',
                 }}
               >
                 + Schedule Item
               </a>
+
               <a
                 href={`/schedule/order/new?jobId=${id}`}
                 style={{
                   fontSize: '12px',
                   fontWeight: '600',
-                  padding: '6px 10px',
+                  padding: '7px 10px',
                   background: 'var(--text)',
                   color: 'var(--bg)',
-                  borderRadius: '6px',
+                  borderRadius: '7px',
                   textDecoration: 'none',
                 }}
               >
@@ -372,77 +382,34 @@ export default async function JobDetailPage({
               display: 'grid',
               gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
               gap: '8px',
+              marginBottom: '10px',
             }}
           >
-            <div style={infoCardStyle()}>
-              <div
-                style={{
-                  fontSize: '10px',
-                  color: 'var(--text-muted)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '.04em',
-                  marginBottom: '4px',
-                  fontFamily: 'ui-monospace,monospace',
-                }}
-              >
-                Current Stage
-              </div>
-              <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--blue)' }}>
-                {STAGE_LABELS[job.current_stage]}
+            <div style={statCardStyle()}>
+              <div style={labelStyle()}>Current Stage</div>
+              <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--blue)' }}>
+                {STAGE_LABELS[job.current_stage] || job.current_stage || '—'}
               </div>
             </div>
 
-            <div style={infoCardStyle()}>
-              <div
-                style={{
-                  fontSize: '10px',
-                  color: 'var(--text-muted)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '.04em',
-                  marginBottom: '4px',
-                  fontFamily: 'ui-monospace,monospace',
-                }}
-              >
-                Next Stage
-              </div>
-              <div style={{ fontSize: '13px', fontWeight: '700' }}>
+            <div style={statCardStyle()}>
+              <div style={labelStyle()}>Next Stage</div>
+              <div style={{ fontSize: '14px', fontWeight: '700' }}>
                 {nextStage ? STAGE_LABELS[nextStage] : 'Complete'}
               </div>
             </div>
 
-            <div style={infoCardStyle()}>
-              <div
-                style={{
-                  fontSize: '10px',
-                  color: 'var(--text-muted)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '.04em',
-                  marginBottom: '4px',
-                  fontFamily: 'ui-monospace,monospace',
-                }}
-              >
-                Schedule
-              </div>
-              <div style={{ fontSize: '13px', fontWeight: '700' }}>
-                {activeSubs.length} active items
+            <div style={statCardStyle()}>
+              <div style={labelStyle()}>Schedule</div>
+              <div style={{ fontSize: '14px', fontWeight: '700' }}>
+                {activeScheduleItems.length} active items
               </div>
             </div>
 
-            <div style={infoCardStyle()}>
-              <div
-                style={{
-                  fontSize: '10px',
-                  color: 'var(--text-muted)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '.04em',
-                  marginBottom: '4px',
-                  fontFamily: 'ui-monospace,monospace',
-                }}
-              >
-                Procurement
-              </div>
-              <div style={{ fontSize: '13px', fontWeight: '700' }}>
-                {pendingOrders.length} open items
+            <div style={statCardStyle()}>
+              <div style={labelStyle()}>Procurement</div>
+              <div style={{ fontSize: '14px', fontWeight: '700' }}>
+                {openProcurementItems.length} open items
               </div>
             </div>
           </div>
@@ -452,22 +419,23 @@ export default async function JobDetailPage({
               display: 'flex',
               gap: '14px',
               flexWrap: 'wrap',
-              marginTop: '10px',
-              fontSize: '11px',
+              fontSize: '12px',
               color: 'var(--text-muted)',
             }}
           >
             <span>
-              <strong style={{ color: 'var(--text)' }}>Client:</strong>{' '}
-              {job.client_name || '—'}
+              <strong style={{ color: 'var(--text)' }}>Client:</strong> {job.client_name || '—'}
             </span>
             <span>
               <strong style={{ color: 'var(--text)' }}>PM:</strong>{' '}
               {(job.profiles as any)?.full_name || 'Unassigned'}
             </span>
             <span>
-              <strong style={{ color: 'var(--text)' }}>Open Issues:</strong>{' '}
-              {openIssues.length}
+              <strong style={{ color: 'var(--text)' }}>Open Issues:</strong> {openIssues.length}
+            </span>
+            <span>
+              <strong style={{ color: 'var(--text)' }}>Released Schedule:</strong>{' '}
+              {releasedScheduleItems.length}
             </span>
           </div>
         </div>
@@ -476,19 +444,15 @@ export default async function JobDetailPage({
           jobId={id}
           job={job}
           stageItems={STAGES.reduce(
-            (acc, s) => ({ ...acc, [s]: stageItems(s) }),
-            {}
+            (acc, stage) => ({ ...acc, [stage]: stageItems(stage) }),
+            {} as Record<string, any[]>
           )}
           checkedMap={checkedMap}
           stateMap={stateMap}
           issues={issues || []}
           logs={logs || []}
-          subs={subs || []}
-          orders={orders || []}
-          selections={selections || []}
-          takeoffItems={takeoffItems || []}
-          estimates={estimates || []}
-          files={files || []}
+          scheduleItems={scheduleItems || []}
+          procurementItems={procurementItems || []}
           stages={STAGES}
           stageLabels={STAGE_LABELS}
           stageIcons={STAGE_ICONS}
