@@ -7,10 +7,11 @@ import { createClient } from '@/utils/supabase/client'
 
 const REFERRAL_OPTIONS = [
   'Past Client',
+  'Realtor',
+  'Architect',
+  'Designer',
   'Website',
-  'Signage',
-  'Social Media',
-  'Walk-in',
+  'Yard Sign',
   'Other',
 ]
 
@@ -48,6 +49,12 @@ function getOrderSourceBadge(order: any) {
   if (order.is_sub_supplied) return { label: 'Company', color: 'var(--blue)' }
   if (order.requires_tracking === false) return { label: 'No Track', color: 'var(--text-muted)' }
   return { label: 'Internal', color: 'var(--green)' }
+}
+
+function getStageState(idx: number, curIdx: number) {
+  if (idx < curIdx) return { label: 'Complete', color: 'var(--green)' }
+  if (idx === curIdx) return { label: 'Active', color: 'var(--blue)' }
+  return { label: 'Upcoming', color: 'var(--text-muted)' }
 }
 
 export default function JobTabs(props: Props) {
@@ -335,6 +342,11 @@ export default function JobTabs(props: Props) {
     procurement: 'Procurement',
     files: 'Files',
   }
+
+  const openIssues = issues.filter((i) => !i.resolved).length
+  const releasedSubs = subs.filter((s) => s.is_released).length
+  const confirmedSubs = subs.filter((s) => s.status === 'confirmed').length
+  const pendingOrders = orders.filter((o) => !['Delivered', 'Confirmed'].includes(o.status)).length
 
   return (
     <div>
@@ -663,6 +675,48 @@ export default function JobTabs(props: Props) {
         <div>
           <div
             style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gap: '8px',
+              marginBottom: '10px',
+            }}
+          >
+            {[
+              { label: 'Open Issues', value: openIssues, color: openIssues ? 'var(--red)' : 'var(--text)' },
+              { label: 'Released Schedule', value: releasedSubs, color: 'var(--blue)' },
+              { label: 'Confirmed Schedule', value: confirmedSubs, color: 'var(--green)' },
+              { label: 'Open Procurement', value: pendingOrders, color: pendingOrders ? 'var(--amber)' : 'var(--text)' },
+            ].map((s) => (
+              <div
+                key={s.label}
+                style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '10px',
+                    color: 'var(--text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '.04em',
+                    marginBottom: '4px',
+                    fontFamily: 'ui-monospace,monospace',
+                  }}
+                >
+                  {s.label}
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: '700', color: s.color }}>
+                  {s.value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div
+            style={{
               background: 'var(--surface)',
               border: '1px solid var(--border)',
               borderRadius: '10px',
@@ -673,18 +727,16 @@ export default function JobTabs(props: Props) {
             <div style={{ fontSize: '12px', fontWeight: '700', marginBottom: '4px' }}>
               Pipeline
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              This is the job pipeline. For now it uses the existing checklist engine underneath, but this tab represents process progress across the life of the job.
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              The pipeline tracks job progression from intake through build. These are stage requirements and process checkpoints, not just generic tasks. For beta, this still uses the existing checklist engine underneath, but the meaning is now process progression.
             </div>
           </div>
 
-          {stages.map((stage) => {
+          {stages.map((stage, idx) => {
             const items = stageItems[stage] || []
             if (!items.length) return null
 
-            const i = stages.indexOf(stage)
-            const done = i < curIdx
-            const active = i === curIdx
+            const state = getStageState(idx, curIdx)
             const checkedCount = items.filter((it: any) => checked[it.id]).length
             const pct = items.length ? Math.round((checkedCount / items.length) * 100) : 0
 
@@ -699,29 +751,44 @@ export default function JobTabs(props: Props) {
                   marginBottom: '8px',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: '700',
-                      textTransform: 'uppercase',
-                      letterSpacing: '.05em',
-                      color: done ? 'var(--green)' : active ? 'var(--blue)' : 'var(--text-faint)',
-                    }}
-                  >
-                    {stageIcons[stage]} {stageLabels[stage]}
-                  </span>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'ui-monospace,monospace' }}>
-                    {checkedCount}/{items.length}
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        textTransform: 'uppercase',
+                        letterSpacing: '.05em',
+                        color: state.color,
+                      }}
+                    >
+                      {stageIcons[stage]} {stageLabels[stage]}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        fontWeight: '600',
+                        padding: '2px 7px',
+                        borderRadius: '10px',
+                        border: `1px solid ${state.color}`,
+                        color: state.color,
+                      }}
+                    >
+                      {state.label}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'ui-monospace,monospace' }}>
+                    {checkedCount}/{items.length} · {pct}%
+                  </div>
                 </div>
 
                 <div
                   style={{
-                    height: '3px',
+                    height: '4px',
                     background: 'var(--border)',
-                    borderRadius: '2px',
-                    marginBottom: '8px',
+                    borderRadius: '999px',
+                    marginBottom: '10px',
                     overflow: 'hidden',
                   }}
                 >
@@ -729,8 +796,8 @@ export default function JobTabs(props: Props) {
                     style={{
                       height: '100%',
                       width: `${pct}%`,
-                      background: done ? 'var(--green)' : active ? 'var(--blue)' : 'var(--border)',
-                      borderRadius: '2px',
+                      background: state.color,
+                      borderRadius: '999px',
                     }}
                   />
                 </div>
@@ -742,7 +809,7 @@ export default function JobTabs(props: Props) {
                       display: 'flex',
                       alignItems: 'flex-start',
                       gap: '8px',
-                      padding: '4px 5px',
+                      padding: '5px 4px',
                       borderRadius: '5px',
                     }}
                   >
@@ -763,7 +830,7 @@ export default function JobTabs(props: Props) {
                       style={{
                         fontSize: '12px',
                         flex: 1,
-                        lineHeight: '1.4',
+                        lineHeight: '1.45',
                         cursor: 'pointer',
                         color: checked[item.id] ? 'var(--text-faint)' : 'var(--text)',
                         textDecoration: checked[item.id] ? 'line-through' : 'none',
