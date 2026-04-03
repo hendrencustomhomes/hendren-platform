@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 
@@ -25,6 +25,13 @@ const TRADES = [
   'Other',
 ]
 
+const STATUS_OPTIONS = ['Pending', 'Ordered', 'Confirmed', 'Will Call', 'Delivered', 'Issue']
+const DEPENDENCY_OPTIONS = [
+  { value: 'contract_signed', label: 'Contract Signed' },
+  { value: 'selection_locked', label: 'Selection Locked' },
+  { value: 'none', label: 'None' },
+]
+
 type OrderFormState = {
   job_id: string | null
   trade: string
@@ -39,7 +46,6 @@ type OrderFormState = {
   depends_on: string
   selection_reference: string
   notes: string
-
   cost_code: string
   procurement_group: string
   linked_schedule_id: string
@@ -70,6 +76,42 @@ const EMPTY_FORM: OrderFormState = {
   requires_tracking: true,
 }
 
+function pageCardStyle() {
+  return {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '12px',
+    padding: '16px',
+  }
+}
+
+function labelStyle() {
+  return {
+    display: 'block',
+    fontSize: '11px',
+    fontWeight: 700,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '.04em',
+    color: 'var(--text-muted)',
+    marginBottom: '6px',
+    fontFamily: 'ui-monospace,monospace',
+  }
+}
+
+function inputStyle() {
+  return {
+    width: '100%',
+    padding: '12px',
+    border: '1px solid var(--border)',
+    borderRadius: '10px',
+    fontSize: '16px',
+    background: 'var(--surface)',
+    color: 'var(--text)',
+    boxSizing: 'border-box' as const,
+    outline: 'none',
+  }
+}
+
 export default function EditOrderPage() {
   const supabase = createClient()
   const router = useRouter()
@@ -83,10 +125,12 @@ export default function EditOrderPage() {
   const [form, setForm] = useState<OrderFormState>(EMPTY_FORM)
   const [scheduleOptions, setScheduleOptions] = useState<any[]>([])
 
+  const inp = useMemo(() => inputStyle(), [])
+
   useEffect(() => {
     if (!id) return
 
-    const load = async () => {
+    async function load() {
       setLoading(true)
       setErrorMessage('')
 
@@ -118,7 +162,7 @@ export default function EditOrderPage() {
         .single()
 
       if (error || !data) {
-        setErrorMessage(error?.message || 'Order not found')
+        setErrorMessage(error?.message || 'Procurement item not found')
         setLoading(false)
         return
       }
@@ -146,13 +190,13 @@ export default function EditOrderPage() {
       })
 
       if (data.job_id) {
-        const { data: subs } = await supabase
+        const { data: scheduleItems } = await supabase
           .from('sub_schedule')
           .select('id, trade, sub_name, start_date')
           .eq('job_id', data.job_id)
           .order('start_date', { ascending: true, nullsFirst: false })
 
-        setScheduleOptions(subs || [])
+        setScheduleOptions(scheduleItems || [])
       }
 
       setLoading(false)
@@ -161,11 +205,11 @@ export default function EditOrderPage() {
     load()
   }, [id, supabase])
 
-  const setField = (key: keyof OrderFormState, value: string | boolean) => {
+  function setField(key: keyof OrderFormState, value: string | boolean) {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  const handleMaterialSourceChange = (source: 'internal' | 'client' | 'company' | 'none') => {
+  function handleMaterialSourceChange(source: 'internal' | 'client' | 'company' | 'no_tracking') {
     if (source === 'client') {
       setForm((prev) => ({
         ...prev,
@@ -186,7 +230,7 @@ export default function EditOrderPage() {
       return
     }
 
-    if (source === 'none') {
+    if (source === 'no_tracking') {
       setForm((prev) => ({
         ...prev,
         is_client_supplied: false,
@@ -208,23 +252,30 @@ export default function EditOrderPage() {
     ? 'client'
     : form.is_sub_supplied
       ? 'company'
-      : form.requires_tracking
-        ? 'internal'
-        : 'none'
+      : form.requires_tracking === false
+        ? 'no_tracking'
+        : 'internal'
 
-  const orderByDate =
-    form.required_on_site_date && form.lead_days
-      ? new Date(
-          new Date(form.required_on_site_date).getTime() -
-            parseInt(form.lead_days || '0', 10) * 86400000
-        ).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-      : null
+  const orderByDate = useMemo(() => {
+    if (!form.required_on_site_date || !form.lead_days) return null
+
+    const leadDays = parseInt(form.lead_days || '0', 10)
+    if (!Number.isFinite(leadDays)) return null
+
+    const requiredDate = new Date(form.required_on_site_date)
+    requiredDate.setDate(requiredDate.getDate() - leadDays)
+
+    return requiredDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    })
+  }, [form.required_on_site_date, form.lead_days])
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
 
     if (!id) {
-      alert('Missing order id')
+      alert('Missing procurement item id')
       return
     }
 
@@ -235,23 +286,33 @@ export default function EditOrderPage() {
 
     setSaving(true)
 
+    const leadDays = parseInt(form.lead_days || '0', 10) || 0
+    let orderByDateValue: string | null = null
+
+    if (form.required_on_site_date) {
+      const requiredDate = new Date(form.required_on_site_date)
+      requiredDate.setDate(requiredDate.getDate() - leadDays)
+      orderByDateValue = requiredDate.toISOString().slice(0, 10)
+    }
+
     const { error } = await supabase
       .from('procurement_items')
       .update({
         trade: form.trade,
         description: form.description.trim(),
-        vendor: form.vendor || null,
+        vendor: form.vendor.trim() || null,
         qty: form.qty ? parseFloat(form.qty) : null,
-        unit: form.unit || null,
+        unit: form.unit.trim() || null,
         unit_cost: form.unit_cost ? parseFloat(form.unit_cost) : null,
-        lead_days: parseInt(form.lead_days || '0', 10) || 0,
+        lead_days: leadDays,
         required_on_site_date: form.required_on_site_date || null,
+        order_by_date: orderByDateValue,
         status: form.status,
         depends_on: form.depends_on,
-        selection_reference: form.selection_reference || null,
-        notes: form.notes || null,
-        cost_code: form.cost_code || null,
-        procurement_group: form.procurement_group || null,
+        selection_reference: form.selection_reference.trim() || null,
+        notes: form.notes.trim() || null,
+        cost_code: form.cost_code.trim() || null,
+        procurement_group: form.procurement_group.trim() || null,
         linked_schedule_id: form.linked_schedule_id || null,
         is_client_supplied: form.is_client_supplied,
         is_sub_supplied: form.is_sub_supplied,
@@ -271,20 +332,41 @@ export default function EditOrderPage() {
   }
 
   if (loading) {
-    return <main style={{ padding: 20 }}>Loading order...</main>
+    return (
+      <main
+        style={{
+          padding: '16px',
+          maxWidth: '860px',
+          margin: '0 auto',
+          background: 'var(--bg)',
+          minHeight: '100vh',
+          color: 'var(--text)',
+        }}
+      >
+        Loading procurement item...
+      </main>
+    )
   }
 
   if (errorMessage) {
     return (
-      <main style={{ padding: 20, maxWidth: 860, margin: '0 auto' }}>
-        <h1 style={{ marginBottom: 16 }}>Edit Material Order</h1>
+      <main
+        style={{
+          padding: '16px',
+          maxWidth: '860px',
+          margin: '0 auto',
+          background: 'var(--bg)',
+          minHeight: '100vh',
+          color: 'var(--text)',
+        }}
+      >
+        <h1 style={{ marginBottom: '16px', fontSize: '28px' }}>Edit Procurement Item</h1>
         <div
           style={{
-            padding: 12,
-            borderRadius: 10,
-            background: '#fef2f2',
-            border: '1px solid #fecaca',
-            color: '#991b1b',
+            ...pageCardStyle(),
+            border: '1px solid rgba(220, 38, 38, 0.35)',
+            background: 'rgba(220, 38, 38, 0.08)',
+            color: 'var(--red)',
           }}
         >
           {errorMessage}
@@ -293,74 +375,91 @@ export default function EditOrderPage() {
     )
   }
 
-  const inp = {
-    width: '100%',
-    padding: '10px 12px',
-    border: '1px solid #d1d5db',
-    borderRadius: '8px',
-    fontSize: '14px',
-    boxSizing: 'border-box' as const,
-  }
-
-  const lbl = {
-    display: 'block' as const,
-    fontSize: '11px',
-    fontWeight: 700,
-    color: '#6b7280',
-    marginBottom: '6px',
-    textTransform: 'uppercase' as const,
-    letterSpacing: '.04em',
-  }
-
   return (
-    <main style={{ padding: 20, maxWidth: 860, margin: '0 auto' }}>
-      <h1 style={{ marginBottom: 16 }}>Edit Material Order</h1>
-
-      <form onSubmit={handleSave}>
-        <div
+    <main
+      style={{
+        padding: '16px',
+        maxWidth: '860px',
+        margin: '0 auto',
+        background: 'var(--bg)',
+        minHeight: '100vh',
+        color: 'var(--text)',
+      }}
+    >
+      <div style={{ marginBottom: '14px' }}>
+        <button
+          type="button"
+          onClick={() => router.push(form.job_id ? `/jobs/${form.job_id}` : '/schedule')}
           style={{
-            background: '#fff',
-            border: '1px solid #e5e7eb',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 16,
+            border: 'none',
+            background: 'none',
+            padding: 0,
+            color: 'var(--blue)',
+            fontSize: '14px',
+            cursor: 'pointer',
+            marginBottom: '8px',
           }}
         >
+          ← Back
+        </button>
+
+        <h1 style={{ margin: 0, fontSize: '28px' }}>Edit Procurement Item</h1>
+        <div
+          style={{
+            marginTop: '4px',
+            fontSize: '14px',
+            color: 'var(--text-muted)',
+          }}
+        >
+          Update material timing, source, grouping, and company coordination details
+        </div>
+      </div>
+
+      <form onSubmit={handleSave} style={{ display: 'grid', gap: '12px' }}>
+        <div style={pageCardStyle()}>
+          <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>
+            Procurement Details
+          </div>
+
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: 12,
+              gap: '12px',
             }}
           >
             <div>
-              <label style={lbl}>Trade *</label>
+              <label style={labelStyle()}>Trade</label>
               <select
                 value={form.trade}
                 onChange={(e) => setField('trade', e.target.value)}
                 style={inp}
               >
-                {TRADES.map((t) => (
-                  <option key={t}>{t}</option>
+                {TRADES.map((trade) => (
+                  <option key={trade} value={trade}>
+                    {trade}
+                  </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label style={lbl}>Status</label>
+              <label style={labelStyle()}>Status</label>
               <select
                 value={form.status}
                 onChange={(e) => setField('status', e.target.value)}
                 style={inp}
               >
-                {['Pending', 'Ordered', 'Confirmed', 'Will Call', 'Delivered', 'Issue'].map((s) => (
-                  <option key={s}>{s}</option>
+                {STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
                 ))}
               </select>
             </div>
 
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={lbl}>Description *</label>
+              <label style={labelStyle()}>Description</label>
               <input
                 value={form.description}
                 onChange={(e) => setField('description', e.target.value)}
@@ -371,7 +470,7 @@ export default function EditOrderPage() {
             </div>
 
             <div>
-              <label style={lbl}>Vendor / Supplier</label>
+              <label style={labelStyle()}>Company</label>
               <input
                 value={form.vendor}
                 onChange={(e) => setField('vendor', e.target.value)}
@@ -381,17 +480,17 @@ export default function EditOrderPage() {
             </div>
 
             <div>
-              <label style={lbl}>Procurement Group</label>
+              <label style={labelStyle()}>Procurement Group</label>
               <input
                 value={form.procurement_group}
                 onChange={(e) => setField('procurement_group', e.target.value)}
-                placeholder="Wall Package / Trim Package / Rough-In"
+                placeholder="Wall package / trim package / rough-in"
                 style={inp}
               />
             </div>
 
             <div>
-              <label style={lbl}>Cost Code</label>
+              <label style={labelStyle()}>Cost Code</label>
               <input
                 value={form.cost_code}
                 onChange={(e) => setField('cost_code', e.target.value)}
@@ -401,19 +500,19 @@ export default function EditOrderPage() {
             </div>
 
             <div>
-              <label style={lbl}>Linked Schedule Item</label>
+              <label style={labelStyle()}>Linked Schedule Item</label>
               <select
                 value={form.linked_schedule_id}
                 onChange={(e) => setField('linked_schedule_id', e.target.value)}
                 style={inp}
               >
                 <option value="">None</option>
-                {scheduleOptions.map((sub) => (
-                  <option key={sub.id} value={sub.id}>
-                    {sub.trade}
-                    {sub.sub_name ? ` · ${sub.sub_name}` : ''}
-                    {sub.start_date
-                      ? ` · ${new Date(sub.start_date).toLocaleDateString('en-US', {
+                {scheduleOptions.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.trade}
+                    {item.sub_name ? ` · ${item.sub_name}` : ''}
+                    {item.start_date
+                      ? ` · ${new Date(item.start_date).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
                         })}`
@@ -424,7 +523,7 @@ export default function EditOrderPage() {
             </div>
 
             <div>
-              <label style={lbl}>Unit</label>
+              <label style={labelStyle()}>Unit</label>
               <input
                 value={form.unit}
                 onChange={(e) => setField('unit', e.target.value)}
@@ -434,7 +533,7 @@ export default function EditOrderPage() {
             </div>
 
             <div>
-              <label style={lbl}>Qty</label>
+              <label style={labelStyle()}>Qty</label>
               <input
                 value={form.qty}
                 onChange={(e) => setField('qty', e.target.value)}
@@ -444,7 +543,7 @@ export default function EditOrderPage() {
             </div>
 
             <div>
-              <label style={lbl}>Unit Cost ($)</label>
+              <label style={labelStyle()}>Unit Cost</label>
               <input
                 value={form.unit_cost}
                 onChange={(e) => setField('unit_cost', e.target.value)}
@@ -452,9 +551,23 @@ export default function EditOrderPage() {
                 style={inp}
               />
             </div>
+          </div>
+        </div>
 
+        <div style={pageCardStyle()}>
+          <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>
+            Timing and Coordination
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: '12px',
+            }}
+          >
             <div>
-              <label style={lbl}>Need On Site</label>
+              <label style={labelStyle()}>Need On Site</label>
               <input
                 type="date"
                 value={form.required_on_site_date}
@@ -464,7 +577,7 @@ export default function EditOrderPage() {
             </div>
 
             <div>
-              <label style={lbl}>Lead Days</label>
+              <label style={labelStyle()}>Lead Days</label>
               <input
                 value={form.lead_days}
                 onChange={(e) => setField('lead_days', e.target.value)}
@@ -474,20 +587,22 @@ export default function EditOrderPage() {
             </div>
 
             <div>
-              <label style={lbl}>Depends On</label>
+              <label style={labelStyle()}>Depends On</label>
               <select
                 value={form.depends_on}
                 onChange={(e) => setField('depends_on', e.target.value)}
                 style={inp}
               >
-                <option value="contract_signed">Contract Signed</option>
-                <option value="selection_locked">Selection Locked</option>
-                <option value="none">None</option>
+                {DEPENDENCY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
 
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={lbl}>Selection Reference</label>
+            <div>
+              <label style={labelStyle()}>Selection Reference</label>
               <input
                 value={form.selection_reference}
                 onChange={(e) => setField('selection_reference', e.target.value)}
@@ -496,66 +611,101 @@ export default function EditOrderPage() {
               />
             </div>
 
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={lbl}>Material Source / Tracking</label>
-              <select
-                value={materialSource}
-                onChange={(e) =>
-                  handleMaterialSourceChange(
-                    e.target.value as 'internal' | 'client' | 'company' | 'none'
-                  )
-                }
-                style={inp}
-              >
-                <option value="internal">Internal Procurement</option>
-                <option value="company">Company Supplied / Track Readiness</option>
-                <option value="client">Client Supplied / Track Readiness</option>
-                <option value="none">No Tracking Required</option>
-              </select>
-            </div>
-
             {orderByDate && (
               <div
                 style={{
                   gridColumn: '1 / -1',
-                  padding: 12,
-                  borderRadius: 10,
-                  background: '#eff6ff',
-                  border: '1px solid #bfdbfe',
-                  color: '#1d4ed8',
-                  fontSize: 14,
+                  padding: '12px',
+                  borderRadius: '10px',
+                  background: 'var(--blue-bg)',
+                  border: '1px solid var(--blue)',
+                  color: 'var(--blue)',
+                  fontSize: '14px',
                   fontWeight: 600,
                 }}
               >
                 Order by date: {orderByDate}
               </div>
             )}
+          </div>
+        </div>
 
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={lbl}>Notes</label>
-              <textarea
-                value={form.notes}
-                onChange={(e) => setField('notes', e.target.value)}
-                placeholder="Delivery instructions, special requirements..."
-                rows={4}
-                style={{ ...inp, resize: 'vertical' as const }}
-              />
+        <div style={pageCardStyle()}>
+          <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>
+            Material Responsibility
+          </div>
+
+          <div style={{ display: 'grid', gap: '12px' }}>
+            <div>
+              <label style={labelStyle()}>Source</label>
+              <select
+                value={materialSource}
+                onChange={(e) =>
+                  handleMaterialSourceChange(
+                    e.target.value as 'internal' | 'client' | 'company' | 'no_tracking'
+                  )
+                }
+                style={inp}
+              >
+                <option value="internal">Internal Procurement</option>
+                <option value="company">Company Supplied</option>
+                <option value="client">Client Supplied</option>
+                <option value="no_tracking">No Tracking Required</option>
+              </select>
+            </div>
+
+            <div
+              style={{
+                fontSize: '13px',
+                color: 'var(--text-muted)',
+                lineHeight: 1.5,
+              }}
+            >
+              Use internal procurement when Hendren is ordering. Use company supplied
+              when the assigned company is bringing materials. Use client supplied when
+              the owner is responsible. Use no tracking only when material timing does
+              not need active coordination.
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={pageCardStyle()}>
+          <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>
+            Notes
+          </div>
+
+          <div>
+            <label style={labelStyle()}>Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => setField('notes', e.target.value)}
+              placeholder="Delivery instructions, special requirements, coordination notes..."
+              rows={4}
+              style={{ ...inp, minHeight: '110px', resize: 'vertical' }}
+            />
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            gap: '10px',
+            justifyContent: 'flex-end',
+            flexWrap: 'wrap',
+          }}
+        >
           <button
             type="button"
             onClick={() => router.push(form.job_id ? `/jobs/${form.job_id}` : '/schedule')}
             style={{
               padding: '12px 16px',
-              borderRadius: 10,
-              border: '1px solid #d1d5db',
-              background: '#fff',
-              color: '#111827',
+              borderRadius: '10px',
+              border: '1px solid var(--border)',
+              background: 'var(--surface)',
+              color: 'var(--text)',
               fontWeight: 600,
               cursor: 'pointer',
+              fontSize: '14px',
             }}
           >
             Cancel
@@ -566,16 +716,17 @@ export default function EditOrderPage() {
             disabled={saving}
             style={{
               padding: '12px 16px',
-              borderRadius: 10,
+              borderRadius: '10px',
               border: 'none',
-              background: '#111827',
-              color: '#fff',
+              background: 'var(--text)',
+              color: 'var(--bg)',
               fontWeight: 600,
               cursor: 'pointer',
               opacity: saving ? 0.6 : 1,
+              fontSize: '14px',
             }}
           >
-            {saving ? 'Saving...' : 'Save Order'}
+            {saving ? 'Saving...' : 'Save Procurement Item'}
           </button>
         </div>
       </form>
