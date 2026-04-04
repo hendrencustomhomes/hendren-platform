@@ -88,7 +88,6 @@ export default async function JobDetailPage({
 
   if (!user) redirect('/login')
 
-  // ===== MAIN JOB QUERY WITH ERROR HANDLING =====
   const { data: job, error: jobError } = await supabase
     .from('jobs')
     .select(`
@@ -119,15 +118,14 @@ export default async function JobDetailPage({
 
   if (!job) notFound()
 
-  // ===== PARALLEL DATA FETCH =====
   const [
-    { data: checklistItems },
-    { data: checklistState },
-    { data: issues },
-    { data: logs },
-    { data: scheduleItems },
-    { data: procurementItems },
-    { data: pmOptions },
+    { data: checklistItems, error: checklistItemsError },
+    { data: checklistState, error: checklistStateError },
+    { data: issues, error: issuesError },
+    { data: logs, error: logsError },
+    { data: scheduleItems, error: scheduleItemsError },
+    { data: procurementItems, error: procurementItemsError },
+    { data: pmOptions, error: pmOptionsError },
     { data: jobClients, error: jobClientsError },
   ] = await Promise.all([
     supabase.from('checklist_items').select('*').is('job_id', null).order('sort_order'),
@@ -177,6 +175,27 @@ export default async function JobDetailPage({
       .order('created_at', { ascending: true }),
   ])
 
+  if (checklistItemsError) {
+    console.error('Checklist items query failed:', checklistItemsError)
+  }
+  if (checklistStateError) {
+    console.error('Checklist state query failed:', checklistStateError)
+  }
+  if (issuesError) {
+    console.error('Issues query failed:', issuesError)
+  }
+  if (logsError) {
+    console.error('Logs query failed:', logsError)
+  }
+  if (scheduleItemsError) {
+    console.error('Schedule items query failed:', scheduleItemsError)
+  }
+  if (procurementItemsError) {
+    console.error('Procurement items query failed:', procurementItemsError)
+  }
+  if (pmOptionsError) {
+    console.error('PM options query failed:', pmOptionsError)
+  }
   if (jobClientsError) {
     console.error('Job clients query failed:', jobClientsError)
   }
@@ -215,68 +234,334 @@ export default async function JobDetailPage({
       : 0
   }
 
-  const openIssues = (issues || []).filter((i: any) => !i.resolved)
+  const STATUS_COLORS: Record<string, string> = {
+    tentative: '#b45309',
+    scheduled: '#2563eb',
+    confirmed: '#16a34a',
+    on_site: '#2563eb',
+    complete: '#888',
+    cancelled: '#dc2626',
+    Pending: '#b45309',
+    Ordered: '#2563eb',
+    Confirmed: '#16a34a',
+    Delivered: '#888',
+    'Will Call': '#7c3aed',
+    Issue: '#dc2626',
+    Critical: '#dc2626',
+    Warning: '#b45309',
+    Info: '#2563eb',
+    not_started: '#888',
+    in_progress: '#b45309',
+    selected: '#2563eb',
+    locked: '#16a34a',
+    on_hold: '#dc2626',
+  }
 
+  const openIssues = (issues || []).filter((i: any) => !i.resolved)
+  const activeScheduleItems = (scheduleItems || []).filter((item: any) => item.status !== 'cancelled')
+  const releasedScheduleItems = activeScheduleItems.filter((item: any) => item.is_released)
+  const confirmedScheduleItems = activeScheduleItems.filter(
+    (item: any) => item.status === 'confirmed'
+  )
+  const openProcurementItems = (procurementItems || []).filter(
+    (item: any) => !['Delivered', 'Confirmed'].includes(item.status)
+  )
+
+  const nextStage = STAGES[curIdx + 1] || null
+  const canEditInfo = true
   const pmProfile = getPmProfileValue(job.profiles)
 
   return (
-    <div style={{ padding: 16 }}>
-      <Nav title={job.job_name} back="/jobs" jobId={id} />
+    <div
+      style={{
+        background: 'var(--bg)',
+        minHeight: '100vh',
+        color: 'var(--text)',
+        fontFamily: 'system-ui,-apple-system,sans-serif',
+      }}
+    >
+      <Nav title={job.job_name || 'Untitled Job'} back="/jobs" jobId={id} />
 
-      <div style={{ ...panelStyle(), marginBottom: 12 }}>
-        <h1>{job.job_name}</h1>
+      <div style={{ padding: '14px', maxWidth: '1080px', margin: '0 auto' }}>
+        <div
+          style={{
+            ...panelStyle(),
+            marginBottom: '12px',
+            overflowX: 'auto',
+          }}
+        >
+          <div style={{ display: 'flex', gap: '2px', minWidth: 'fit-content' }}>
+            {STAGES.map((stage, index) => {
+              const done = index < curIdx
+              const active = index === curIdx
+              const pct = getStagePct(stage)
 
-        <div style={{ fontSize: 12, marginBottom: 10 }}>
-          {job.project_address}
+              return (
+                <div
+                  key={stage}
+                  style={{
+                    flex: '0 0 auto',
+                    textAlign: 'center',
+                    padding: '5px 7px',
+                    minWidth: '72px',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '50%',
+                      margin: '0 auto 4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      background: done ? 'var(--green)' : active ? 'var(--blue)' : 'var(--bg)',
+                      color: done || active ? '#fff' : 'var(--text-faint)',
+                      border: `2px solid ${done ? 'var(--green)' : active ? 'var(--blue)' : 'var(--border)'}`,
+                    }}
+                  >
+                    {done ? '✓' : index + 1}
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: '8px',
+                      fontWeight: '700',
+                      textTransform: 'uppercase',
+                      letterSpacing: '.04em',
+                      color: done ? 'var(--green)' : active ? 'var(--blue)' : 'var(--text-faint)',
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {STAGE_LABELS[stage]}
+                  </div>
+
+                  {active && pct > 0 && (
+                    <div
+                      style={{
+                        height: '3px',
+                        background: 'var(--border)',
+                        borderRadius: '999px',
+                        marginTop: '4px',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${pct}%`,
+                          background: 'var(--blue)',
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12 }}>
-          <span>
-            <strong>Client:</strong>{' '}
-            {primaryJobClient?.name || job.client_name || '—'}
-          </span>
+        <div
+          style={{
+            ...panelStyle(),
+            marginBottom: '12px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              gap: '14px',
+              flexWrap: 'wrap',
+              marginBottom: '12px',
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '18px', fontWeight: '700', marginBottom: '4px' }}>
+                {job.job_name || 'Untitled Job'}
+              </div>
 
-          <span>
-            <strong>Primary Contact:</strong>{' '}
-            {primaryContact?.name || '—'}
-          </span>
+              <div
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  fontFamily: 'ui-monospace,monospace',
+                  lineHeight: 1.6,
+                }}
+              >
+                {job.project_address || 'No project address'}
+                {job.sqft ? ` · ${job.sqft} sqft` : ''}
+                {' · '}
+                {job.contract_type === 'cost_plus' ? 'Cost Plus' : 'Fixed Price'}
+              </div>
+            </div>
 
-          <span>
-            <strong>Contact Info:</strong>{' '}
-            {primaryContact?.email || primaryContact?.phone || '—'}
-          </span>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <a
+                href={`/jobs/${id}/edit`}
+                style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  padding: '7px 10px',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '7px',
+                  textDecoration: 'none',
+                  color: 'var(--text)',
+                }}
+              >
+                ✏️ Edit Job
+              </a>
 
-          <span>
-            <strong>PM:</strong> {pmProfile?.full_name || '—'}
-          </span>
+              <a
+                href={`/schedule?job=${id}`}
+                style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  padding: '7px 10px',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '7px',
+                  textDecoration: 'none',
+                  color: 'var(--text)',
+                }}
+              >
+                📅 Master Schedule
+              </a>
 
-          <span>
-            <strong>Open Issues:</strong> {openIssues.length}
-          </span>
+              <a
+                href={`/schedule/sub/new?jobId=${id}`}
+                style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  padding: '7px 10px',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '7px',
+                  textDecoration: 'none',
+                  color: 'var(--text)',
+                }}
+              >
+                + Schedule Item
+              </a>
+
+              <a
+                href={`/schedule/order/new?jobId=${id}`}
+                style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  padding: '7px 10px',
+                  background: 'var(--text)',
+                  color: 'var(--bg)',
+                  borderRadius: '7px',
+                  textDecoration: 'none',
+                }}
+              >
+                + Procurement Item
+              </a>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gap: '8px',
+              marginBottom: '10px',
+            }}
+          >
+            <div style={statCardStyle()}>
+              <div style={labelStyle()}>Current Stage</div>
+              <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--blue)' }}>
+                {STAGE_LABELS[job.current_stage] || job.current_stage || '—'}
+              </div>
+            </div>
+
+            <div style={statCardStyle()}>
+              <div style={labelStyle()}>Next Stage</div>
+              <div style={{ fontSize: '14px', fontWeight: '700' }}>
+                {nextStage ? STAGE_LABELS[nextStage] : 'Complete'}
+              </div>
+            </div>
+
+            <div style={statCardStyle()}>
+              <div style={labelStyle()}>Schedule</div>
+              <div style={{ fontSize: '14px', fontWeight: '700' }}>
+                {activeScheduleItems.length} active items
+              </div>
+            </div>
+
+            <div style={statCardStyle()}>
+              <div style={labelStyle()}>Procurement</div>
+              <div style={{ fontSize: '14px', fontWeight: '700' }}>
+                {openProcurementItems.length} open items
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              gap: '14px',
+              flexWrap: 'wrap',
+              fontSize: '12px',
+              color: 'var(--text-muted)',
+            }}
+          >
+            <span>
+              <strong style={{ color: 'var(--text)' }}>Client:</strong>{' '}
+              {primaryJobClient?.name || job.client_name || '—'}
+            </span>
+            <span>
+              <strong style={{ color: 'var(--text)' }}>Primary Contact:</strong>{' '}
+              {primaryContact?.name || '—'}
+            </span>
+            <span>
+              <strong style={{ color: 'var(--text)' }}>Contact Info:</strong>{' '}
+              {primaryContact?.email || primaryContact?.phone || '—'}
+            </span>
+            <span>
+              <strong style={{ color: 'var(--text)' }}>PM:</strong> {pmProfile?.full_name || 'Unassigned'}
+            </span>
+            <span>
+              <strong style={{ color: 'var(--text)' }}>Open Issues:</strong> {openIssues.length}
+            </span>
+            <span>
+              <strong style={{ color: 'var(--text)' }}>Released Schedule:</strong>{' '}
+              {releasedScheduleItems.length}
+            </span>
+            <span>
+              <strong style={{ color: 'var(--text)' }}>Confirmed Schedule:</strong>{' '}
+              {confirmedScheduleItems.length}
+            </span>
+          </div>
         </div>
+
+        <JobTabs
+          jobId={id}
+          job={job}
+          stageItems={STAGES.reduce(
+            (acc, stage) => ({ ...acc, [stage]: getStageItems(stage) }),
+            {} as Record<string, any[]>
+          )}
+          checkedMap={checkedMap}
+          stateMap={stateMap}
+          issues={issues || []}
+          logs={logs || []}
+          scheduleItems={scheduleItems || []}
+          procurementItems={procurementItems || []}
+          stages={STAGES}
+          stageLabels={STAGE_LABELS}
+          stageIcons={STAGE_ICONS}
+          statusColors={STATUS_COLORS}
+          userId={user.id}
+          canEditInfo={canEditInfo}
+          pmOptions={pmOptions || []}
+        />
       </div>
-
-      <JobTabs
-        jobId={id}
-        job={job}
-        stageItems={STAGES.reduce(
-          (acc, stage) => ({ ...acc, [stage]: getStageItems(stage) }),
-          {} as Record<string, any[]>
-        )}
-        checkedMap={checkedMap}
-        stateMap={stateMap}
-        issues={issues || []}
-        logs={logs || []}
-        scheduleItems={scheduleItems || []}
-        procurementItems={procurementItems || []}
-        stages={STAGES}
-        stageLabels={STAGE_LABELS}
-        stageIcons={STAGE_ICONS}
-        statusColors={{}}
-        userId={user.id}
-        canEditInfo={true}
-        pmOptions={pmOptions || []}
-      />
     </div>
   )
 }
