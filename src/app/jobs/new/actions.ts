@@ -22,7 +22,6 @@ type CreateJobInput = {
   referral_source?: string;
   scope_notes?: string;
   color?: string;
-
   client: {
     name: string;
     client_kind: 'individual' | 'company';
@@ -38,7 +37,7 @@ function normalizeOptionalString(value?: string | null): string | null {
   return trimmed ? trimmed : null;
 }
 
-function normalizeRequiredString(value?: string | null, fieldName: string): string {
+function normalizeRequiredString(value: string | null | undefined, fieldName: string): string {
   const trimmed = value?.trim();
   if (!trimmed) {
     throw new Error(`${fieldName} is required.`);
