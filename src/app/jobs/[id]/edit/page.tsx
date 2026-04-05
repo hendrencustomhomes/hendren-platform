@@ -43,9 +43,14 @@ export default async function Page({
     throw new Error(jobClientsError.message);
   }
 
-  const primaryClient = jobClients?.find((c) => c.is_primary) ?? jobClients?.[0] ?? null;
+  const primaryClient =
+    jobClients?.find((c) => c.is_primary) ??
+    jobClients?.[0] ??
+    null;
 
-  if (!primaryClient) notFound();
+  if (!primaryClient) {
+    throw new Error(`No job_clients row found for job ${id}.`);
+  }
 
   return (
     <div className="mx-auto max-w-3xl p-4">
