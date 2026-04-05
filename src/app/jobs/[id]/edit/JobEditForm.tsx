@@ -131,11 +131,9 @@ export default function JobEditForm({ job, client }: JobEditFormProps) {
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
-
       <section className="space-y-4 rounded-xl border p-4">
         <h2 className="text-lg font-semibold">Job Details</h2>
         <div className="grid gap-4 md:grid-cols-2">
-
           <label className="space-y-1">
             <span className="text-sm font-medium">Job Name</span>
             <input
@@ -205,14 +203,12 @@ export default function JobEditForm({ job, client }: JobEditFormProps) {
               className="min-h-[120px] w-full rounded-md border px-3 py-2"
             />
           </label>
-
         </div>
       </section>
 
       <section className="space-y-4 rounded-xl border p-4">
         <h2 className="text-lg font-semibold">Client</h2>
         <div className="grid gap-4 md:grid-cols-2">
-
           <label className="space-y-1">
             <span className="text-sm font-medium">Client Name</span>
             <input
@@ -254,7 +250,6 @@ export default function JobEditForm({ job, client }: JobEditFormProps) {
               className="min-h-[100px] w-full rounded-md border px-3 py-2"
             />
           </label>
-
         </div>
       </section>
 
@@ -366,7 +361,6 @@ export default function JobEditForm({ job, client }: JobEditFormProps) {
           {isPending ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
-
     </form>
   );
 }
