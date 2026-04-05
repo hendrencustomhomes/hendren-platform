@@ -23,7 +23,7 @@ type UpdateJobInput = {
   scope_notes?: string;
   color?: string;
   client: {
-    id: string;
+    id: string | null;
     name: string;
     client_kind: 'individual' | 'company';
     company_name?: string;
@@ -68,29 +68,52 @@ export async function updateJobWithClient(input: UpdateJobInput) {
 
   if (jobError) throw new Error(jobError.message);
 
-  const { error: clientError } = await supabase
-    .from('job_clients')
-    .update({
-      name: clientName,
-      client_kind: input.client.client_kind,
-      company_name: normalizeOptionalString(input.client.company_name),
-      notes: normalizeOptionalString(input.client.notes),
-    })
-    .eq('id', input.client.id);
+  let clientId = input.client.id;
 
-  if (clientError) throw new Error(clientError.message);
+  if (clientId) {
+    const { error: clientError } = await supabase
+      .from('job_clients')
+      .update({
+        name: clientName,
+        client_kind: input.client.client_kind,
+        company_name: normalizeOptionalString(input.client.company_name),
+        notes: normalizeOptionalString(input.client.notes),
+      })
+      .eq('id', clientId);
 
-  const { error: deleteError } = await supabase
-    .from('job_client_contacts')
-    .delete()
-    .eq('job_client_id', input.client.id);
+    if (clientError) throw new Error(clientError.message);
 
-  if (deleteError) throw new Error(deleteError.message);
+    const { error: deleteError } = await supabase
+      .from('job_client_contacts')
+      .delete()
+      .eq('job_client_id', clientId);
+
+    if (deleteError) throw new Error(deleteError.message);
+  } else {
+    const { data: newClient, error: newClientError } = await supabase
+      .from('job_clients')
+      .insert({
+        job_id: input.job_id,
+        name: clientName,
+        client_kind: input.client.client_kind,
+        company_name: normalizeOptionalString(input.client.company_name),
+        is_primary: true,
+        notes: normalizeOptionalString(input.client.notes),
+      })
+      .select('id')
+      .single();
+
+    if (newClientError || !newClient) {
+      throw new Error(newClientError?.message || 'Failed to create job client.');
+    }
+
+    clientId = newClient.id;
+  }
 
   const cleanedContacts = input.client.contacts
     .filter((c) => c.name?.trim())
     .map((c, index) => ({
-      job_client_id: input.client.id,
+      job_client_id: clientId!,
       name: normalizeRequiredString(c.name, 'Contact name'),
       label: normalizeOptionalString(c.label),
       email: normalizeOptionalString(c.email),
@@ -111,5 +134,6 @@ export async function updateJobWithClient(input: UpdateJobInput) {
 
   revalidatePath('/jobs');
   revalidatePath(`/jobs/${input.job_id}`);
+  revalidatePath(`/jobs/${input.job_id}/edit`);
   redirect(`/jobs/${input.job_id}`);
 }
