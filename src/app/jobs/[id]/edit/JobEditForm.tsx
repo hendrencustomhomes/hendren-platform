@@ -21,14 +21,15 @@ type JobEditFormProps = {
     lot_sqft: number | null;
     referral_source: string | null;
     scope_notes: string | null;
-    color: string;
+    color: string | null;
   };
   client: {
-    id: string;
+    id: string | null;
     name: string;
     client_kind: 'individual' | 'company';
     company_name: string | null;
     notes: string | null;
+    isLegacyClient: boolean;
     job_client_contacts: ContactRow[];
   };
 };
