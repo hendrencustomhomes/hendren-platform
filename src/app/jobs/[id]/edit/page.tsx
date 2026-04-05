@@ -2,6 +2,25 @@ import { createClient } from '@/utils/supabase/server';
 import { redirect, notFound } from 'next/navigation';
 import JobEditForm from './JobEditForm';
 
+type ContactSeed = {
+  name: string;
+  label: string;
+  email: string;
+  phone: string;
+  is_primary: boolean;
+  receives_notifications: boolean;
+};
+
+type ClientSeed = {
+  id: string | null;
+  name: string;
+  client_kind: 'individual' | 'company';
+  company_name: string | null;
+  notes: string | null;
+  isLegacyClient: boolean;
+  job_client_contacts: ContactSeed[];
+};
+
 export default async function Page({
   params,
 }: {
@@ -48,14 +67,60 @@ export default async function Page({
     jobClients?.[0] ??
     null;
 
-  if (!primaryClient) {
-    throw new Error(`No job_clients row found for job ${id}.`);
-  }
+  const fallbackClient: ClientSeed = {
+    id: null,
+    name: job.client_name ?? '',
+    client_kind: 'individual',
+    company_name: null,
+    notes: null,
+    isLegacyClient: true,
+    job_client_contacts: [
+      {
+        name: job.client_name ?? '',
+        label: 'Primary',
+        email: job.client_email ?? '',
+        phone: job.client_phone ?? '',
+        is_primary: true,
+        receives_notifications: true,
+      },
+    ],
+  };
+
+  const clientForForm: ClientSeed = primaryClient
+    ? {
+        id: primaryClient.id,
+        name: primaryClient.name ?? '',
+        client_kind: primaryClient.client_kind ?? 'individual',
+        company_name: primaryClient.company_name ?? null,
+        notes: primaryClient.notes ?? null,
+        isLegacyClient: false,
+        job_client_contacts:
+          primaryClient.job_client_contacts?.length > 0
+            ? primaryClient.job_client_contacts.map((c: any) => ({
+                name: c.name ?? '',
+                label: c.label ?? '',
+                email: c.email ?? '',
+                phone: c.phone ?? '',
+                is_primary: c.is_primary ?? false,
+                receives_notifications: c.receives_notifications ?? true,
+              }))
+            : [
+                {
+                  name: primaryClient.name ?? '',
+                  label: 'Primary',
+                  email: '',
+                  phone: '',
+                  is_primary: true,
+                  receives_notifications: true,
+                },
+              ],
+      }
+    : fallbackClient;
 
   return (
     <div className="mx-auto max-w-3xl p-4">
       <h1 className="mb-6 text-xl font-semibold">Edit Job</h1>
-      <JobEditForm job={job} client={primaryClient} />
+      <JobEditForm job={job} client={clientForForm} />
     </div>
   );
 }
