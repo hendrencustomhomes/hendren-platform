@@ -125,8 +125,9 @@ export default async function JobDetailPage({
     { data: logs, error: logsError },
     { data: scheduleItems, error: scheduleItemsError },
     { data: procurementItems, error: procurementItemsError },
-    { data: pmOptions, error: pmOptionsError },
     { data: jobClients, error: jobClientsError },
+    { data: activeInternalUsers, error: activeInternalUsersError },
+    { data: pmRoleAssignments, error: pmRoleAssignmentsError },
   ] = await Promise.all([
     supabase.from('checklist_items').select('*').is('job_id', null).order('sort_order'),
     supabase.from('job_checklist_state').select('*').eq('job_id', id),
@@ -146,11 +147,6 @@ export default async function JobDetailPage({
       .select('*')
       .eq('job_id', id)
       .order('order_by_date', { ascending: true, nullsFirst: false }),
-    supabase
-      .from('profiles')
-      .select('id, full_name')
-      .eq('is_project_manager', true)
-      .order('full_name'),
     supabase
       .from('job_clients')
       .select(`
@@ -173,6 +169,23 @@ export default async function JobDetailPage({
       `)
       .eq('job_id', id)
       .order('created_at', { ascending: true }),
+    supabase
+      .from('internal_access')
+      .select('profile_id')
+      .eq('is_active', true),
+    supabase
+      .from('internal_role_assignments')
+      .select(`
+        profile_id,
+        profiles!inner (
+          id,
+          full_name
+        ),
+        internal_roles!inner (
+          key
+        )
+      `)
+      .eq('internal_roles.key', 'project_manager'),
   ])
 
   if (checklistItemsError) {
@@ -193,12 +206,32 @@ export default async function JobDetailPage({
   if (procurementItemsError) {
     console.error('Procurement items query failed:', procurementItemsError)
   }
-  if (pmOptionsError) {
-    console.error('PM options query failed:', pmOptionsError)
-  }
   if (jobClientsError) {
     console.error('Job clients query failed:', jobClientsError)
   }
+  if (activeInternalUsersError) {
+    console.error('Active internal users query failed:', activeInternalUsersError)
+  }
+  if (pmRoleAssignmentsError) {
+    console.error('PM role assignments query failed:', pmRoleAssignmentsError)
+  }
+
+  const activeProfileIds = new Set(
+    (activeInternalUsers || []).map((row: any) => row.profile_id)
+  )
+
+  const pmOptions =
+    (pmRoleAssignments || [])
+      .map((row: any) => {
+        const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+        return {
+          id: profile?.id,
+          full_name: profile?.full_name,
+          profile_id: row.profile_id,
+        }
+      })
+      .filter((row: any) => row.id && row.full_name && activeProfileIds.has(row.profile_id))
+      .sort((a: any, b: any) => a.full_name.localeCompare(b.full_name))
 
   const primaryJobClient =
     (jobClients || []).find((c: any) => c.is_primary) ||
@@ -401,22 +434,6 @@ export default async function JobDetailPage({
 
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               <a
-                href={`/jobs/${id}/edit`}
-                style={{
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  padding: '7px 10px',
-                  background: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '7px',
-                  textDecoration: 'none',
-                  color: 'var(--text)',
-                }}
-              >
-                ✏️ Edit Job
-              </a>
-
-              <a
                 href={`/schedule?job=${id}`}
                 style={{
                   fontSize: '12px',
@@ -513,7 +530,7 @@ export default async function JobDetailPage({
           >
             <span>
               <strong style={{ color: 'var(--text)' }}>Client:</strong>{' '}
-              {primaryJobClient?.name || job.client_name || '—'}
+              {primaryJobClient?.name ?? job.client_name ?? '—'}
             </span>
             <span>
               <strong style={{ color: 'var(--text)' }}>Primary Contact:</strong>{' '}
@@ -559,7 +576,7 @@ export default async function JobDetailPage({
           statusColors={STATUS_COLORS}
           userId={user.id}
           canEditInfo={canEditInfo}
-          pmOptions={pmOptions || []}
+          pmOptions={pmOptions}
         />
       </div>
     </div>
