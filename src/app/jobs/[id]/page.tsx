@@ -74,6 +74,23 @@ function getPmProfileValue(profiles: any) {
   return Array.isArray(profiles) ? profiles[0] || null : profiles
 }
 
+function normalizeRoleOptions(
+  assignments: any[] | null,
+  activeProfileIds: Set<string>
+): { id: string; full_name: string }[] {
+  return (assignments || [])
+    .map((row: any) => {
+      const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+      return {
+        id: profile?.id,
+        full_name: profile?.full_name,
+        profile_id: row.profile_id,
+      }
+    })
+    .filter((row: any) => row.id && row.full_name && activeProfileIds.has(row.profile_id))
+    .sort((a: any, b: any) => a.full_name.localeCompare(b.full_name))
+}
+
 export default async function JobDetailPage({
   params,
 }: {
@@ -98,6 +115,8 @@ export default async function JobDetailPage({
       client_email,
       client_phone,
       pm_id,
+      estimator_profile_id,
+      bookkeeper_profile_id,
       color,
       sqft,
       lot_sqft,
@@ -106,7 +125,14 @@ export default async function JobDetailPage({
       current_stage,
       contract_type,
       is_active,
-      profiles!jobs_pm_id_fkey(full_name, phone)
+      garage_code,
+      lockbox_code,
+      gate_code,
+      parking_notes,
+      neighborhood_requirements,
+      profiles!jobs_pm_id_fkey(full_name, phone),
+      estimator:profiles!jobs_estimator_profile_id_fkey(full_name),
+      bookkeeper:profiles!jobs_bookkeeper_profile_id_fkey(full_name)
     `)
     .eq('id', id)
     .single()
@@ -118,6 +144,17 @@ export default async function JobDetailPage({
 
   if (!job) notFound()
 
+  const roleAssignmentSelect = `
+    profile_id,
+    profiles!inner (
+      id,
+      full_name
+    ),
+    internal_roles!inner (
+      key
+    )
+  `
+
   const [
     { data: checklistItems, error: checklistItemsError },
     { data: checklistState, error: checklistStateError },
@@ -128,6 +165,8 @@ export default async function JobDetailPage({
     { data: jobClients, error: jobClientsError },
     { data: activeInternalUsers, error: activeInternalUsersError },
     { data: pmRoleAssignments, error: pmRoleAssignmentsError },
+    { data: estimatorRoleAssignments, error: estimatorRoleAssignmentsError },
+    { data: bookkeeperRoleAssignments, error: bookkeeperRoleAssignmentsError },
   ] = await Promise.all([
     supabase.from('checklist_items').select('*').is('job_id', null).order('sort_order'),
     supabase.from('job_checklist_state').select('*').eq('job_id', id),
@@ -175,63 +214,37 @@ export default async function JobDetailPage({
       .eq('is_active', true),
     supabase
       .from('internal_role_assignments')
-      .select(`
-        profile_id,
-        profiles!inner (
-          id,
-          full_name
-        ),
-        internal_roles!inner (
-          key
-        )
-      `)
+      .select(roleAssignmentSelect)
       .eq('internal_roles.key', 'project_manager'),
+    supabase
+      .from('internal_role_assignments')
+      .select(roleAssignmentSelect)
+      .eq('internal_roles.key', 'estimator'),
+    supabase
+      .from('internal_role_assignments')
+      .select(roleAssignmentSelect)
+      .eq('internal_roles.key', 'bookkeeper'),
   ])
 
-  if (checklistItemsError) {
-    console.error('Checklist items query failed:', checklistItemsError)
-  }
-  if (checklistStateError) {
-    console.error('Checklist state query failed:', checklistStateError)
-  }
-  if (issuesError) {
-    console.error('Issues query failed:', issuesError)
-  }
-  if (logsError) {
-    console.error('Logs query failed:', logsError)
-  }
-  if (scheduleItemsError) {
-    console.error('Schedule items query failed:', scheduleItemsError)
-  }
-  if (procurementItemsError) {
-    console.error('Procurement items query failed:', procurementItemsError)
-  }
-  if (jobClientsError) {
-    console.error('Job clients query failed:', jobClientsError)
-  }
-  if (activeInternalUsersError) {
-    console.error('Active internal users query failed:', activeInternalUsersError)
-  }
-  if (pmRoleAssignmentsError) {
-    console.error('PM role assignments query failed:', pmRoleAssignmentsError)
-  }
+  if (checklistItemsError) console.error('Checklist items query failed:', checklistItemsError)
+  if (checklistStateError) console.error('Checklist state query failed:', checklistStateError)
+  if (issuesError) console.error('Issues query failed:', issuesError)
+  if (logsError) console.error('Logs query failed:', logsError)
+  if (scheduleItemsError) console.error('Schedule items query failed:', scheduleItemsError)
+  if (procurementItemsError) console.error('Procurement items query failed:', procurementItemsError)
+  if (jobClientsError) console.error('Job clients query failed:', jobClientsError)
+  if (activeInternalUsersError) console.error('Active internal users query failed:', activeInternalUsersError)
+  if (pmRoleAssignmentsError) console.error('PM role assignments query failed:', pmRoleAssignmentsError)
+  if (estimatorRoleAssignmentsError) console.error('Estimator role assignments query failed:', estimatorRoleAssignmentsError)
+  if (bookkeeperRoleAssignmentsError) console.error('Bookkeeper role assignments query failed:', bookkeeperRoleAssignmentsError)
 
   const activeProfileIds = new Set(
     (activeInternalUsers || []).map((row: any) => row.profile_id)
   )
 
-  const pmOptions =
-    (pmRoleAssignments || [])
-      .map((row: any) => {
-        const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
-        return {
-          id: profile?.id,
-          full_name: profile?.full_name,
-          profile_id: row.profile_id,
-        }
-      })
-      .filter((row: any) => row.id && row.full_name && activeProfileIds.has(row.profile_id))
-      .sort((a: any, b: any) => a.full_name.localeCompare(b.full_name))
+  const pmOptions = normalizeRoleOptions(pmRoleAssignments, activeProfileIds)
+  const estimatorOptions = normalizeRoleOptions(estimatorRoleAssignments, activeProfileIds)
+  const bookkeeperOptions = normalizeRoleOptions(bookkeeperRoleAssignments, activeProfileIds)
 
   const primaryJobClient =
     (jobClients || []).find((c: any) => c.is_primary) ||
@@ -303,6 +316,13 @@ export default async function JobDetailPage({
   const nextStage = STAGES[curIdx + 1] || null
   const canEditInfo = true
   const pmProfile = getPmProfileValue(job.profiles)
+
+  const estimatorProfile = job.estimator
+    ? (Array.isArray(job.estimator) ? job.estimator[0] : job.estimator)
+    : null
+  const bookkeeperProfile = job.bookkeeper
+    ? (Array.isArray(job.bookkeeper) ? job.bookkeeper[0] : job.bookkeeper)
+    : null
 
   return (
     <div
@@ -541,7 +561,16 @@ export default async function JobDetailPage({
               {primaryContact?.email || primaryContact?.phone || '—'}
             </span>
             <span>
-              <strong style={{ color: 'var(--text)' }}>PM:</strong> {pmProfile?.full_name || 'Unassigned'}
+              <strong style={{ color: 'var(--text)' }}>PM:</strong>{' '}
+              {pmProfile?.full_name || 'Unassigned'}
+            </span>
+            <span>
+              <strong style={{ color: 'var(--text)' }}>Estimator:</strong>{' '}
+              {estimatorProfile?.full_name || 'Unassigned'}
+            </span>
+            <span>
+              <strong style={{ color: 'var(--text)' }}>Bookkeeper:</strong>{' '}
+              {bookkeeperProfile?.full_name || 'Unassigned'}
             </span>
             <span>
               <strong style={{ color: 'var(--text)' }}>Open Issues:</strong> {openIssues.length}
@@ -554,6 +583,32 @@ export default async function JobDetailPage({
               <strong style={{ color: 'var(--text)' }}>Confirmed Schedule:</strong>{' '}
               {confirmedScheduleItems.length}
             </span>
+            {job.garage_code && (
+              <span>
+                <strong style={{ color: 'var(--text)' }}>Garage:</strong> {job.garage_code}
+              </span>
+            )}
+            {job.lockbox_code && (
+              <span>
+                <strong style={{ color: 'var(--text)' }}>Lockbox:</strong> {job.lockbox_code}
+              </span>
+            )}
+            {job.gate_code && (
+              <span>
+                <strong style={{ color: 'var(--text)' }}>Gate:</strong> {job.gate_code}
+              </span>
+            )}
+            {job.parking_notes && (
+              <span>
+                <strong style={{ color: 'var(--text)' }}>Parking:</strong> {job.parking_notes}
+              </span>
+            )}
+            {job.neighborhood_requirements && (
+              <span>
+                <strong style={{ color: 'var(--text)' }}>Neighborhood:</strong>{' '}
+                {job.neighborhood_requirements}
+              </span>
+            )}
           </div>
         </div>
 
@@ -577,6 +632,8 @@ export default async function JobDetailPage({
           userId={user.id}
           canEditInfo={canEditInfo}
           pmOptions={pmOptions}
+          estimatorOptions={estimatorOptions}
+          bookkeeperOptions={bookkeeperOptions}
         />
       </div>
     </div>
