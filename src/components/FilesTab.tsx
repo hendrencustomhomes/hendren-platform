@@ -2,6 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+type VisibilityScope =
+  | 'internal_only'
+  | 'tagged_external'
+  | 'all_external_except_client'
+  | 'all_external_including_client'
+
+type EntityType = 'job' | 'schedule_item' | 'procurement_item' | 'task'
+
 type JobFile = {
   id: string
   category: string
@@ -10,29 +18,43 @@ type JobFile = {
   storage_path: string
   size_bytes: number | null
   mime_type: string | null
-  client_visible: boolean
-  companies_visible?: boolean | null
-  company_scope?: 'all' | 'selected' | null
+  visibility_scope?: VisibilityScope | null
+  include_in_packet?: boolean | null
+  entity_type?: EntityType | null
   created_at: string
   uploaded_by: string | null
+
+  // legacy compatibility fields still present in DB / API responses for now
+  client_visible?: boolean | null
+  companies_visible?: boolean | null
+  company_scope?: 'all' | 'selected' | null
 }
 
-const CATEGORIES = [
-  'contracts',
-  'plans',
-  'photos',
-  'selections',
-  'permits',
-  'lien-waivers',
-  'change-orders',
-  'other',
-  'coi',
-  'w9',
-  'general-contract',
-  'admin',
-] as const
-
+const CATEGORIES = ['plans', 'photos', 'admin', 'financial', 'other'] as const
 type KnownCategory = (typeof CATEGORIES)[number]
+
+const VISIBILITY_OPTIONS: { value: VisibilityScope; label: string; help: string }[] = [
+  {
+    value: 'internal_only',
+    label: 'Internal Only',
+    help: 'Never visible to clients or external companies.',
+  },
+  {
+    value: 'tagged_external',
+    label: 'Tagged External Only',
+    help: 'Visible only to matching external audiences through trade tags / packet rules.',
+  },
+  {
+    value: 'all_external_except_client',
+    label: 'All External Except Client',
+    help: 'Visible to external companies, hidden from client.',
+  },
+  {
+    value: 'all_external_including_client',
+    label: 'All External Including Client',
+    help: 'Visible to all external users, including client.',
+  },
+]
 
 function formatBytes(value: number | null) {
   if (!value) return ''
@@ -61,6 +83,21 @@ function getCategoryLabel(category: string) {
 }
 
 function getVisibilitySummary(file: JobFile) {
+  if (file.visibility_scope) {
+    switch (file.visibility_scope) {
+      case 'internal_only':
+        return 'Internal Only'
+      case 'tagged_external':
+        return 'Tagged External'
+      case 'all_external_except_client':
+        return 'All External Except Client'
+      case 'all_external_including_client':
+        return 'All External Including Client'
+      default:
+        break
+    }
+  }
+
   const clientPart = file.client_visible ? 'Client Visible' : 'Client Hidden'
 
   if (!file.companies_visible) {
@@ -82,6 +119,14 @@ function sectionCardStyle() {
   }
 }
 
+function getSafeDefaultVisibility(category: string): VisibilityScope {
+  if (category === 'plans' || category === 'photos') {
+    return 'tagged_external'
+  }
+
+  return 'internal_only'
+}
+
 function UploadModal({
   jobId,
   onClose,
@@ -89,21 +134,28 @@ function UploadModal({
 }: {
   jobId: string
   onClose: () => void
-  onUploaded: (file: JobFile) => void
+  onUploaded: (files: JobFile[]) => void
 }) {
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [category, setCategory] = useState<string>('other')
   const [displayName, setDisplayName] = useState('')
+  const [visibilityScope, setVisibilityScope] = useState<VisibilityScope>('internal_only')
+  const [includeInPacket, setIncludeInPacket] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [clientVisible, setClientVisible] = useState(false)
-  const [companiesVisible, setCompaniesVisible] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    setVisibilityScope(getSafeDefaultVisibility(category))
+    if (category !== 'plans' && category !== 'photos') {
+      setIncludeInPacket(false)
+    }
+  }, [category])
+
   async function handleSubmit() {
-    if (!file) {
-      setError('Select a file first.')
+    if (!files.length) {
+      setError('Select at least one file first.')
       return
     }
 
@@ -111,26 +163,37 @@ function UploadModal({
     setError(null)
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('job_id', jobId)
-      formData.append('category', category)
-      formData.append('display_name', displayName || file.name)
-      formData.append('client_visible', String(clientVisible))
-      formData.append('companies_visible', String(companiesVisible))
+      const uploadedFiles: JobFile[] = []
 
-      const response = await fetch('/api/files/upload', {
-        method: 'POST',
-        body: formData,
-      })
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index]
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('job_id', jobId)
+        formData.append('category', category)
+        formData.append(
+          'display_name',
+          files.length === 1 ? displayName || file.name : file.name
+        )
+        formData.append('visibility_scope', visibilityScope)
+        formData.append('include_in_packet', String(includeInPacket))
+        formData.append('entity_type', 'job')
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}))
-        throw new Error((body as { error?: string }).error ?? 'Upload failed')
+        const response = await fetch('/api/files/upload', {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}))
+          throw new Error((body as { error?: string }).error ?? 'Upload failed')
+        }
+
+        const { file: uploaded } = (await response.json()) as { file: JobFile }
+        uploadedFiles.push(uploaded)
       }
 
-      const { file: uploaded } = (await response.json()) as { file: JobFile }
-      onUploaded(uploaded)
+      onUploaded(uploadedFiles)
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
@@ -138,6 +201,13 @@ function UploadModal({
       setUploading(false)
     }
   }
+
+  const selectedFileLabel =
+    files.length === 0
+      ? 'Tap to select file(s)'
+      : files.length === 1
+        ? files[0].name
+        : `${files.length} files selected`
 
   return (
     <div
@@ -165,7 +235,7 @@ function UploadModal({
         }}
       >
         <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '6px' }}>
-          Upload File
+          Upload Files
         </div>
         <div
           style={{
@@ -175,7 +245,7 @@ function UploadModal({
             lineHeight: 1.5,
           }}
         >
-          Upload into the job file system and set who should be able to see it.
+          Upload files into the job file system using the permanent visibility model.
         </div>
 
         <div style={{ display: 'grid', gap: '12px' }}>
@@ -183,12 +253,13 @@ function UploadModal({
             <input
               ref={inputRef}
               type="file"
+              multiple
               style={{ display: 'none' }}
               onChange={(e) => {
-                const selected = e.target.files?.[0] ?? null
-                setFile(selected)
-                if (selected && !displayName) {
-                  setDisplayName(selected.name)
+                const selected = Array.from(e.target.files ?? [])
+                setFiles(selected)
+                if (selected.length === 1 && !displayName) {
+                  setDisplayName(selected[0].name)
                 }
               }}
             />
@@ -207,7 +278,7 @@ function UploadModal({
                 cursor: 'pointer',
               }}
             >
-              {file ? file.name : 'Tap to select a file'}
+              {selectedFileLabel}
             </button>
           </div>
 
@@ -247,38 +318,40 @@ function UploadModal({
             </select>
           </div>
 
-          <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: '11px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '.04em',
-                color: 'var(--text-muted)',
-                marginBottom: '6px',
-                fontFamily: 'ui-monospace,monospace',
-              }}
-            >
-              Display Name
-            </label>
-            <input
-              type="text"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder={file?.name ?? 'File label'}
-              style={{
-                width: '100%',
-                border: '1px solid var(--border)',
-                borderRadius: '10px',
-                padding: '12px',
-                fontSize: '16px',
-                background: 'var(--surface)',
-                color: 'var(--text)',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
+          {files.length <= 1 && (
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '.04em',
+                  color: 'var(--text-muted)',
+                  marginBottom: '6px',
+                  fontFamily: 'ui-monospace,monospace',
+                }}
+              >
+                Display Name
+              </label>
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder={files[0]?.name ?? 'File label'}
+                style={{
+                  width: '100%',
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  padding: '12px',
+                  fontSize: '16px',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+          )}
 
           <div
             style={{
@@ -292,25 +365,33 @@ function UploadModal({
               Visibility
             </div>
 
-            <label
+            <select
+              value={visibilityScope}
+              onChange={(e) => setVisibilityScope(e.target.value as VisibilityScope)}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                fontSize: '14px',
-                marginBottom: '10px',
+                width: '100%',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '12px',
+                fontSize: '16px',
+                background: 'var(--surface)',
                 color: 'var(--text)',
+                marginBottom: '8px',
               }}
             >
-              <input
-                type="checkbox"
-                checked={clientVisible}
-                onChange={(e) => setClientVisible(e.target.checked)}
-                style={{ width: '18px', height: '18px' }}
-              />
-              Client visible
-            </label>
+              {VISIBILITY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
 
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              {VISIBILITY_OPTIONS.find((option) => option.value === visibilityScope)?.help}
+            </div>
+          </div>
+
+          {(category === 'plans' || category === 'photos') && (
             <label
               style={{
                 display: 'flex',
@@ -318,17 +399,21 @@ function UploadModal({
                 gap: '10px',
                 fontSize: '14px',
                 color: 'var(--text)',
+                border: '1px solid var(--border)',
+                borderRadius: '12px',
+                padding: '12px',
+                background: 'var(--bg)',
               }}
             >
               <input
                 type="checkbox"
-                checked={companiesVisible}
-                onChange={(e) => setCompaniesVisible(e.target.checked)}
+                checked={includeInPacket}
+                onChange={(e) => setIncludeInPacket(e.target.checked)}
                 style={{ width: '18px', height: '18px' }}
               />
-              Visible to companies
+              Include in job packet
             </label>
-          </div>
+          )}
 
           {error && (
             <div
@@ -368,20 +453,20 @@ function UploadModal({
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={uploading || !file}
+              disabled={uploading || files.length === 0}
               style={{
                 flex: 1,
                 border: 'none',
                 borderRadius: '10px',
                 padding: '12px',
-                background: uploading || !file ? 'var(--border)' : 'var(--text)',
+                background: uploading || files.length === 0 ? 'var(--border)' : 'var(--text)',
                 color: 'var(--bg)',
                 fontSize: '14px',
                 fontWeight: 600,
-                cursor: uploading || !file ? 'not-allowed' : 'pointer',
+                cursor: uploading || files.length === 0 ? 'not-allowed' : 'pointer',
               }}
             >
-              {uploading ? 'Uploading...' : 'Upload'}
+              {uploading ? 'Uploading...' : files.length > 1 ? 'Upload Files' : 'Upload'}
             </button>
           </div>
         </div>
@@ -450,6 +535,7 @@ function FileRow({ file }: { file: JobFile }) {
           {formatDate(file.created_at)}
           {' · '}
           {getVisibilitySummary(file)}
+          {file.include_in_packet ? ' · In Packet' : ''}
         </div>
 
         {error && (
@@ -547,7 +633,7 @@ export default function FilesTab({ jobId }: { jobId: string }) {
               marginTop: '2px',
             }}
           >
-            Job files with client and company visibility controls
+            Job files using the permanent visibility model.
           </div>
         </div>
 
@@ -651,7 +737,9 @@ export default function FilesTab({ jobId }: { jobId: string }) {
         <UploadModal
           jobId={jobId}
           onClose={() => setShowUpload(false)}
-          onUploaded={(file) => setFiles((previous) => [file, ...previous])}
+          onUploaded={(uploadedFiles) =>
+            setFiles((previous) => [...uploadedFiles, ...previous])
+          }
         />
       )}
     </div>
