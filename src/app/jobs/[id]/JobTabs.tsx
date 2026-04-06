@@ -44,6 +44,8 @@ type JobTabProps = {
   userId: string
   canEditInfo: boolean
   pmOptions: { id: string; full_name: string | null }[]
+  estimatorOptions: { id: string; full_name: string | null }[]
+  bookkeeperOptions: { id: string; full_name: string | null }[]
 }
 
 function surfaceCardStyle() {
@@ -97,6 +99,11 @@ function formatShortDate(value: string | null | undefined) {
   })
 }
 
+function getRelatedProfile(value: any) {
+  if (!value) return null
+  return Array.isArray(value) ? value[0] || null : value
+}
+
 export default function JobTabs(props: JobTabProps) {
   const {
     jobId,
@@ -113,6 +120,8 @@ export default function JobTabs(props: JobTabProps) {
     userId,
     canEditInfo,
     pmOptions,
+    estimatorOptions,
+    bookkeeperOptions,
   } = props
 
   const router = useRouter()
@@ -161,11 +170,17 @@ export default function JobTabs(props: JobTabProps) {
     referral_source: '',
     contract_type: 'fixed_price',
     pm_id: '',
+    estimator_profile_id: '',
+    bookkeeper_profile_id: '',
     scope_notes: '',
   })
 
   const curIdx = stages.indexOf(job.current_stage)
   const inp = inputStyle()
+
+  const pmProfile = getRelatedProfile(job.profiles)
+  const estimatorProfile = getRelatedProfile(job.estimator)
+  const bookkeeperProfile = getRelatedProfile(job.bookkeeper)
 
   const openIssueCount = issues.filter((issue) => !issue.resolved).length
   const releasedScheduleCount = schedule.filter((item) => item.is_released).length
@@ -198,6 +213,8 @@ export default function JobTabs(props: JobTabProps) {
       referral_source: job.referral_source ?? '',
       contract_type: job.contract_type ?? 'fixed_price',
       pm_id: job.pm_id ?? '',
+      estimator_profile_id: job.estimator_profile_id ?? '',
+      bookkeeper_profile_id: job.bookkeeper_profile_id ?? '',
       scope_notes: job.scope_notes ?? '',
     })
     setInfoError(null)
@@ -218,6 +235,8 @@ export default function JobTabs(props: JobTabProps) {
       referral_source: '',
       contract_type: 'fixed_price',
       pm_id: '',
+      estimator_profile_id: '',
+      bookkeeper_profile_id: '',
       scope_notes: '',
     })
   }
@@ -243,6 +262,8 @@ export default function JobTabs(props: JobTabProps) {
       referral_source: infoDraft.referral_source || null,
       contract_type: infoDraft.contract_type,
       pm_id: infoDraft.pm_id || null,
+      estimator_profile_id: infoDraft.estimator_profile_id || null,
+      bookkeeper_profile_id: infoDraft.bookkeeper_profile_id || null,
       scope_notes: infoDraft.scope_notes.trim() || null,
     }
 
@@ -686,13 +707,13 @@ export default function JobTabs(props: JobTabProps) {
                 marginBottom: '8px',
               }}
             >
-              Project Manager
+              Staff
             </div>
 
-            <div style={{ fontSize: '12px', marginBottom: '6px' }}>
+            <div style={{ fontSize: '12px', marginBottom: '10px' }}>
               <strong>PM:</strong>{' '}
               {!isEditingInfo ? (
-                (job.profiles as any)?.full_name || '—'
+                pmProfile?.full_name || '—'
               ) : (
                 <select
                   value={infoDraft.pm_id}
@@ -711,8 +732,58 @@ export default function JobTabs(props: JobTabProps) {
               )}
             </div>
 
+            <div style={{ fontSize: '12px', marginBottom: '10px' }}>
+              <strong>Estimator:</strong>{' '}
+              {!isEditingInfo ? (
+                estimatorProfile?.full_name || '—'
+              ) : (
+                <select
+                  value={infoDraft.estimator_profile_id}
+                  onChange={(e) =>
+                    setInfoDraft((current) => ({
+                      ...current,
+                      estimator_profile_id: e.target.value,
+                    }))
+                  }
+                  style={inp}
+                >
+                  <option value="">Select estimator</option>
+                  {estimatorOptions.map((estimator) => (
+                    <option key={estimator.id} value={estimator.id}>
+                      {estimator.full_name || 'Unnamed User'}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div style={{ fontSize: '12px', marginBottom: '10px' }}>
+              <strong>Bookkeeper:</strong>{' '}
+              {!isEditingInfo ? (
+                bookkeeperProfile?.full_name || '—'
+              ) : (
+                <select
+                  value={infoDraft.bookkeeper_profile_id}
+                  onChange={(e) =>
+                    setInfoDraft((current) => ({
+                      ...current,
+                      bookkeeper_profile_id: e.target.value,
+                    }))
+                  }
+                  style={inp}
+                >
+                  <option value="">Select bookkeeper</option>
+                  {bookkeeperOptions.map((bookkeeper) => (
+                    <option key={bookkeeper.id} value={bookkeeper.id}>
+                      {bookkeeper.full_name || 'Unnamed User'}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
             <div style={{ fontSize: '12px' }}>
-              <strong>Phone:</strong> {(job.profiles as any)?.phone || '—'}
+              <strong>Phone:</strong> {pmProfile?.phone || '—'}
             </div>
           </div>
 
