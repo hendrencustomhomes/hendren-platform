@@ -172,6 +172,11 @@ export default function JobTabs(props: JobTabProps) {
     pm_id: '',
     estimator_profile_id: '',
     bookkeeper_profile_id: '',
+    garage_code: '',
+    lockbox_code: '',
+    gate_code: '',
+    parking_notes: '',
+    neighborhood_requirements: '',
     scope_notes: '',
   })
 
@@ -215,6 +220,11 @@ export default function JobTabs(props: JobTabProps) {
       pm_id: job.pm_id ?? '',
       estimator_profile_id: job.estimator_profile_id ?? '',
       bookkeeper_profile_id: job.bookkeeper_profile_id ?? '',
+      garage_code: job.garage_code ?? '',
+      lockbox_code: job.lockbox_code ?? '',
+      gate_code: job.gate_code ?? '',
+      parking_notes: job.parking_notes ?? '',
+      neighborhood_requirements: job.neighborhood_requirements ?? '',
       scope_notes: job.scope_notes ?? '',
     })
     setInfoError(null)
@@ -237,6 +247,11 @@ export default function JobTabs(props: JobTabProps) {
       pm_id: '',
       estimator_profile_id: '',
       bookkeeper_profile_id: '',
+      garage_code: '',
+      lockbox_code: '',
+      gate_code: '',
+      parking_notes: '',
+      neighborhood_requirements: '',
       scope_notes: '',
     })
   }
@@ -264,6 +279,11 @@ export default function JobTabs(props: JobTabProps) {
       pm_id: infoDraft.pm_id || null,
       estimator_profile_id: infoDraft.estimator_profile_id || null,
       bookkeeper_profile_id: infoDraft.bookkeeper_profile_id || null,
+      garage_code: infoDraft.garage_code.trim() || null,
+      lockbox_code: infoDraft.lockbox_code.trim() || null,
+      gate_code: infoDraft.gate_code.trim() || null,
+      parking_notes: infoDraft.parking_notes.trim() || null,
+      neighborhood_requirements: infoDraft.neighborhood_requirements.trim() || null,
       scope_notes: infoDraft.scope_notes.trim() || null,
     }
 
@@ -784,6 +804,105 @@ export default function JobTabs(props: JobTabProps) {
 
             <div style={{ fontSize: '12px' }}>
               <strong>Phone:</strong> {pmProfile?.phone || '—'}
+            </div>
+          </div>
+
+          <div style={surfaceCardStyle()}>
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: '700',
+                textTransform: 'uppercase',
+                letterSpacing: '.05em',
+                marginBottom: '8px',
+              }}
+            >
+              Access
+            </div>
+
+            <div style={{ fontSize: '12px', marginBottom: '10px' }}>
+              <strong>Garage Code:</strong>{' '}
+              {!isEditingInfo ? (
+                job.garage_code || '—'
+              ) : (
+                <input
+                  value={infoDraft.garage_code}
+                  onChange={(e) =>
+                    setInfoDraft((current) => ({ ...current, garage_code: e.target.value }))
+                  }
+                  style={inp}
+                />
+              )}
+            </div>
+
+            <div style={{ fontSize: '12px', marginBottom: '10px' }}>
+              <strong>Lockbox Code:</strong>{' '}
+              {!isEditingInfo ? (
+                job.lockbox_code || '—'
+              ) : (
+                <input
+                  value={infoDraft.lockbox_code}
+                  onChange={(e) =>
+                    setInfoDraft((current) => ({ ...current, lockbox_code: e.target.value }))
+                  }
+                  style={inp}
+                />
+              )}
+            </div>
+
+            <div style={{ fontSize: '12px', marginBottom: '10px' }}>
+              <strong>Gate Code:</strong>{' '}
+              {!isEditingInfo ? (
+                job.gate_code || '—'
+              ) : (
+                <input
+                  value={infoDraft.gate_code}
+                  onChange={(e) =>
+                    setInfoDraft((current) => ({ ...current, gate_code: e.target.value }))
+                  }
+                  style={inp}
+                />
+              )}
+            </div>
+
+            <div style={{ fontSize: '12px', marginBottom: '10px' }}>
+              <strong>Parking:</strong>{' '}
+              {!isEditingInfo ? (
+                job.parking_notes || '—'
+              ) : (
+                <div style={{ marginTop: '6px' }}>
+                  <textarea
+                    value={infoDraft.parking_notes}
+                    onChange={(e) =>
+                      setInfoDraft((current) => ({
+                        ...current,
+                        parking_notes: e.target.value,
+                      }))
+                    }
+                    style={{ ...inp, minHeight: '60px', resize: 'vertical' }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div style={{ fontSize: '12px' }}>
+              <strong>Neighborhood Requirements:</strong>{' '}
+              {!isEditingInfo ? (
+                job.neighborhood_requirements || '—'
+              ) : (
+                <div style={{ marginTop: '6px' }}>
+                  <textarea
+                    value={infoDraft.neighborhood_requirements}
+                    onChange={(e) =>
+                      setInfoDraft((current) => ({
+                        ...current,
+                        neighborhood_requirements: e.target.value,
+                      }))
+                    }
+                    style={{ ...inp, minHeight: '60px', resize: 'vertical' }}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
