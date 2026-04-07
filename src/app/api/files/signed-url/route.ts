@@ -23,14 +23,7 @@ export async function GET(req: NextRequest) {
 
     const { data: file, error: fileError } = await supabase
       .from('file_attachments')
-      .select(
-        `
-          id,
-          storage_path,
-          visibility_scope,
-          job_id
-        `
-      )
+      .select('id, storage_path')
       .eq('id', fileId)
       .single()
 
@@ -38,22 +31,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 })
     }
 
-    // 🔒 TEMP ACCESS RULE (tighten later with org + role checks)
-    // Right now: authenticated users can access job files
-    // Future: enforce visibility_scope + membership + trade tags
-
-    const { data: signed, error: signedError } = await admin.storage
+    const { data, error } = await admin.storage
       .from('job-files')
-      .createSignedUrl(file.storage_path, 60 * 5) // 5 minutes
+      .createSignedUrl(file.storage_path, 60 * 5)
 
-    if (signedError || !signed?.signedUrl) {
+    if (error || !data?.signedUrl) {
       return NextResponse.json(
-        { error: signedError?.message ?? 'Failed to generate URL' },
+        { error: error?.message || 'Could not generate signed URL' },
         { status: 500 }
       )
     }
 
-    return NextResponse.json({ url: signed.signedUrl })
+    return NextResponse.json({ url: data.signedUrl })
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Internal error' },
