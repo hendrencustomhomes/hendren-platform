@@ -507,7 +507,7 @@ export default async function JobDetailPage({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
               gap: '8px',
               marginBottom: '10px',
             }}

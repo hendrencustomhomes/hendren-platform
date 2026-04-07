@@ -32,11 +32,6 @@ type JobTabProps = {
   subs?: any[]
   orders?: any[]
 
-  selections?: any[]
-  takeoffItems?: any[]
-  estimates?: any[]
-  files?: any[]
-
   stages: string[]
   stageLabels: Record<string, string>
   stageIcons: Record<string, string>
@@ -190,6 +185,11 @@ export default function JobTabs(props: JobTabProps) {
     visible_to_external: false,
   })
   const [taskStatusUpdating, setTaskStatusUpdating] = useState<string | null>(null)
+
+  const [logError, setLogError] = useState<string | null>(null)
+  const [issueError, setIssueError] = useState<string | null>(null)
+  const [taskError, setTaskError] = useState<string | null>(null)
+  const [scheduleError, setScheduleError] = useState<string | null>(null)
 
   const [isEditingInfo, setIsEditingInfo] = useState(false)
   const [infoSaving, setInfoSaving] = useState(false)
@@ -370,8 +370,9 @@ export default function JobTabs(props: JobTabProps) {
     if (!logText.trim()) return
 
     setLogSaving(true)
+    setLogError(null)
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('job_logs')
       .insert({
         job_id: jobId,
@@ -383,18 +384,22 @@ export default function JobTabs(props: JobTabProps) {
 
     setLogSaving(false)
 
-    if (data) {
-      setLogs((current) => [data, ...current])
-      setLogText('')
+    if (error || !data) {
+      setLogError('Failed to save log entry. Please try again.')
+      return
     }
+
+    setLogs((current) => [data, ...current])
+    setLogText('')
   }
 
   async function addIssue() {
     if (!issueTitle.trim()) return
 
     setIssueSaving(true)
+    setIssueError(null)
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('issues')
       .insert({
         job_id: jobId,
@@ -408,23 +413,33 @@ export default function JobTabs(props: JobTabProps) {
 
     setIssueSaving(false)
 
-    if (data) {
-      setIssues((current) => [data, ...current])
-      setIssueTitle('')
-      setIssueDetail('')
-      setIssueSeverity('Warning')
-      setShowIssueForm(false)
+    if (error || !data) {
+      setIssueError('Failed to log issue. Please try again.')
+      return
     }
+
+    setIssues((current) => [data, ...current])
+    setIssueTitle('')
+    setIssueDetail('')
+    setIssueSeverity('Warning')
+    setShowIssueForm(false)
   }
 
   async function resolveIssue(issueId: string) {
-    await supabase
+    if (!window.confirm('Mark this issue as resolved? This cannot be undone.')) return
+
+    const { error } = await supabase
       .from('issues')
       .update({
         resolved: true,
         resolved_at: new Date().toISOString(),
       })
       .eq('id', issueId)
+
+    if (error) {
+      setIssueError('Failed to resolve issue. Please try again.')
+      return
+    }
 
     setIssues((current) =>
       current.map((issue) =>
@@ -447,7 +462,8 @@ export default function JobTabs(props: JobTabProps) {
   async function addTask() {
     if (!taskDraft.title.trim()) return
     setTaskSaving(true)
-    const { data } = await supabase
+    setTaskError(null)
+    const { data, error } = await supabase
       .from('job_tasks')
       .insert({
         job_id: jobId,
@@ -462,11 +478,13 @@ export default function JobTabs(props: JobTabProps) {
       .select()
       .single()
     setTaskSaving(false)
-    if (data) {
-      setTasks((t) => [data, ...t])
-      resetTaskDraft()
-      setShowTaskForm(false)
+    if (error || !data) {
+      setTaskError('Failed to add task. Please try again.')
+      return
     }
+    setTasks((t) => [data, ...t])
+    resetTaskDraft()
+    setShowTaskForm(false)
   }
 
   async function updateTaskStatus(taskId: string, status: TaskStatus) {
@@ -492,7 +510,7 @@ export default function JobTabs(props: JobTabProps) {
     setActingScheduleId(null)
 
     if (error) {
-      alert(error.message)
+      setScheduleError('Failed to update schedule item. Please try again.')
       return
     }
 
@@ -554,6 +572,7 @@ export default function JobTabs(props: JobTabProps) {
             key={tabKey}
             onClick={() => {
               if (activeTab === 'info' && tabKey !== 'info' && isEditingInfo) {
+                if (!window.confirm('You have unsaved changes. Discard them?')) return
                 cancelInfoEdit()
               }
               setActiveTab(tabKey)
@@ -1091,7 +1110,7 @@ export default function JobTabs(props: JobTabProps) {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
               gap: '8px',
               marginBottom: '10px',
             }}
@@ -1292,9 +1311,14 @@ export default function JobTabs(props: JobTabProps) {
       {activeTab === 'log' && (
         <div>
           <div style={{ ...surfaceCardStyle(), marginBottom: '10px' }}>
+            {logError && (
+              <div style={{ marginBottom: '8px', padding: '8px 10px', background: 'var(--red-bg)', border: '1px solid var(--red)', borderRadius: '6px', fontSize: '12px', color: 'var(--red)' }}>
+                {logError}
+              </div>
+            )}
             <textarea
               value={logText}
-              onChange={(e) => setLogText(e.target.value)}
+              onChange={(e) => { setLogText(e.target.value); if (logError) setLogError(null) }}
               placeholder="Add a log entry..."
               style={{ ...inp, minHeight: '70px', resize: 'vertical', marginBottom: '8px' }}
             />
@@ -1395,8 +1419,8 @@ export default function JobTabs(props: JobTabProps) {
               <div>
                 <div
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
+                    display: 'flex',
+                    flexDirection: 'column',
                     gap: '8px',
                     marginBottom: '8px',
                   }}
@@ -1426,7 +1450,7 @@ export default function JobTabs(props: JobTabProps) {
                     </select>
                   </div>
 
-                  <div style={{ gridColumn: '1 / -1' }}>
+                  <div>
                     <label
                       style={{
                         display: 'block',
@@ -1448,7 +1472,7 @@ export default function JobTabs(props: JobTabProps) {
                     />
                   </div>
 
-                  <div style={{ gridColumn: '1 / -1' }}>
+                  <div>
                     <label
                       style={{
                         display: 'block',
@@ -1471,9 +1495,14 @@ export default function JobTabs(props: JobTabProps) {
                   </div>
                 </div>
 
+                {issueError && (
+                  <div style={{ marginBottom: '8px', padding: '8px 10px', background: 'var(--red-bg)', border: '1px solid var(--red)', borderRadius: '6px', fontSize: '12px', color: 'var(--red)' }}>
+                    {issueError}
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                   <button
-                    onClick={() => setShowIssueForm(false)}
+                    onClick={() => { setShowIssueForm(false); setIssueError(null) }}
                     style={{
                       padding: '6px 12px',
                       border: '1px solid var(--border)',
@@ -1491,13 +1520,13 @@ export default function JobTabs(props: JobTabProps) {
                     disabled={issueSaving || !issueTitle.trim()}
                     style={{
                       padding: '6px 12px',
-                      background: 'var(--text)',
+                      background: issueSaving || !issueTitle.trim() ? 'var(--border)' : 'var(--text)',
                       color: 'var(--bg)',
                       border: 'none',
                       borderRadius: '7px',
                       fontSize: '12px',
                       fontWeight: '600',
-                      cursor: 'pointer',
+                      cursor: issueSaving || !issueTitle.trim() ? 'not-allowed' : 'pointer',
                     }}
                   >
                     {issueSaving ? 'Saving...' : 'Log Issue'}
@@ -1632,6 +1661,12 @@ export default function JobTabs(props: JobTabProps) {
               + Schedule Item
             </a>
           </div>
+
+          {scheduleError && (
+            <div style={{ margin: '10px 14px 0', padding: '8px 10px', background: 'var(--red-bg)', border: '1px solid var(--red)', borderRadius: '6px', fontSize: '12px', color: 'var(--red)' }}>
+              {scheduleError}
+            </div>
+          )}
 
           {!schedule.length ? (
             <div
@@ -2057,9 +2092,14 @@ export default function JobTabs(props: JobTabProps) {
                   </div>
                 </div>
 
+                {taskError && (
+                  <div style={{ marginBottom: '8px', padding: '8px 10px', background: 'var(--red-bg)', border: '1px solid var(--red)', borderRadius: '6px', fontSize: '12px', color: 'var(--red)' }}>
+                    {taskError}
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                   <button
-                    onClick={() => { setShowTaskForm(false); resetTaskDraft() }}
+                    onClick={() => { setShowTaskForm(false); resetTaskDraft(); setTaskError(null) }}
                     style={{
                       padding: '6px 12px',
                       border: '1px solid var(--border)',
