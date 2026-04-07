@@ -1,0 +1,13 @@
+{
+  "sandbox": {
+    "network": {
+      "allowedDomains": [
+        "supabase.co",
+        "*.supabase.co",
+        "vercel.com",
+        "*.vercel.com",
+        "api.vercel.com"
+      ]
+    }
+  }
+}
