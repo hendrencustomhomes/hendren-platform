@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { createClient } from '@/utils/supabase/client'
 
 const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: '📊', exact: true },
@@ -19,6 +20,12 @@ type NavProps = {
 export default function Nav({ title, back, jobId }: NavProps) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
+
+  async function handleLogout() {
+    await createClient().auth.signOut()
+    router.push('/login')
+  }
 
   function isActive(item: (typeof NAV_ITEMS)[number]) {
     if (item.exact) return pathname === item.href
@@ -283,9 +290,27 @@ export default function Nav({ title, back, jobId }: NavProps) {
             fontSize: '11px',
             color: 'var(--text-muted)',
             fontFamily: 'ui-monospace,monospace',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
-          Hendren · Internal
+          <span>Hendren · Internal</span>
+          <button
+            type="button"
+            onClick={handleLogout}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '11px',
+              color: 'var(--text-muted)',
+              fontFamily: 'ui-monospace,monospace',
+              padding: 0,
+            }}
+          >
+            Sign out
+          </button>
         </div>
       </div>
     </>
