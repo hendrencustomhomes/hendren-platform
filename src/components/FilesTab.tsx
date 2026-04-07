@@ -480,19 +480,31 @@ function FileRow({ file }: { file: JobFile }) {
   const [error, setError] = useState<string | null>(null)
 
   async function handleOpen() {
+    const popup = window.open('', '_blank', 'noopener,noreferrer')
     setOpening(true)
     setError(null)
 
     try {
       const response = await fetch(`/api/files/signed-url?file_id=${file.id}`)
+      const body = await response.json().catch(() => ({} as { error?: string; url?: string }))
+
       if (!response.ok) {
-        const body = await response.json().catch(() => ({}))
-        throw new Error((body as { error?: string }).error ?? 'Could not open file')
+        throw new Error(body.error ?? 'Could not open file')
       }
 
-      const { url } = (await response.json()) as { url: string }
-      window.open(url, '_blank', 'noopener,noreferrer')
+      if (!body.url) {
+        throw new Error('Signed URL missing from response')
+      }
+
+      if (popup) {
+        popup.location.href = body.url
+      } else {
+        window.location.href = body.url
+      }
     } catch (err) {
+      if (popup) {
+        popup.close()
+      }
       setError(err instanceof Error ? err.message : 'Could not open file')
     } finally {
       setOpening(false)
