@@ -135,6 +135,7 @@ export default function NewSubSchedulePage() {
     setLoading(false)
 
     if (error) {
+      console.error('SUB SCHEDULE INSERT ERROR:', error)
       alert(error.message)
       return
     }
