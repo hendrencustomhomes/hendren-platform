@@ -23,8 +23,6 @@ type JobFile = {
   entity_type?: EntityType | null
   created_at: string
   uploaded_by: string | null
-
-  // legacy compatibility fields still present in DB / API responses for now
   client_visible?: boolean | null
   companies_visible?: boolean | null
   company_scope?: 'all' | 'selected' | null
@@ -93,8 +91,6 @@ function getVisibilitySummary(file: JobFile) {
         return 'All External Except Client'
       case 'all_external_including_client':
         return 'All External Including Client'
-      default:
-        break
     }
   }
 
@@ -480,7 +476,17 @@ function FileRow({ file }: { file: JobFile }) {
   const [error, setError] = useState<string | null>(null)
 
   async function handleOpen() {
-    const popup = window.open('', '_blank', 'noopener,noreferrer')
+    const popup = window.open('about:blank', '_blank')
+
+    if (!popup) {
+      setError('Popup blocked. Allow popups for this site and try again.')
+      return
+    }
+
+    try {
+      popup.opener = null
+    } catch {}
+
     setOpening(true)
     setError(null)
 
@@ -496,15 +502,9 @@ function FileRow({ file }: { file: JobFile }) {
         throw new Error('Signed URL missing from response')
       }
 
-      if (popup) {
-        popup.location.href = body.url
-      } else {
-        window.location.href = body.url
-      }
+      popup.location.href = body.url
     } catch (err) {
-      if (popup) {
-        popup.close()
-      }
+      popup.close()
       setError(err instanceof Error ? err.message : 'Could not open file')
     } finally {
       setOpening(false)
