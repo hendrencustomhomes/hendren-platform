@@ -167,6 +167,7 @@ export default async function JobDetailPage({
     { data: pmRoleAssignments, error: pmRoleAssignmentsError },
     { data: estimatorRoleAssignments, error: estimatorRoleAssignmentsError },
     { data: bookkeeperRoleAssignments, error: bookkeeperRoleAssignmentsError },
+    { data: tasks },
   ] = await Promise.all([
     supabase.from('checklist_items').select('*').is('job_id', null).order('sort_order'),
     supabase.from('job_checklist_state').select('*').eq('job_id', id),
@@ -224,6 +225,7 @@ export default async function JobDetailPage({
       .from('internal_role_assignments')
       .select(roleAssignmentSelect)
       .eq('internal_roles.key', 'bookkeeper'),
+    supabase.from('job_tasks').select('*').eq('job_id', id).order('created_at', { ascending: false }),
   ])
 
   if (checklistItemsError) console.error('Checklist items query failed:', checklistItemsError)
@@ -634,6 +636,7 @@ export default async function JobDetailPage({
           pmOptions={pmOptions}
           estimatorOptions={estimatorOptions}
           bookkeeperOptions={bookkeeperOptions}
+          tasks={tasks || []}
         />
       </div>
     </div>

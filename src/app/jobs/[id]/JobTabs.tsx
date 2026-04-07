@@ -46,7 +46,29 @@ type JobTabProps = {
   pmOptions: { id: string; full_name: string | null }[]
   estimatorOptions: { id: string; full_name: string | null }[]
   bookkeeperOptions: { id: string; full_name: string | null }[]
+  tasks?: any[]
 }
+
+const TASK_STATUSES = ['open', 'in_progress', 'complete', 'cancelled', 'blocked'] as const
+type TaskStatus = typeof TASK_STATUSES[number]
+
+const TASK_STATUS_COLORS: Record<TaskStatus, string> = {
+  open: '#2563eb',
+  in_progress: '#b45309',
+  complete: '#16a34a',
+  cancelled: '#888',
+  blocked: '#dc2626',
+}
+
+const TASK_TYPE_OPTIONS = [
+  'general',
+  'inspection',
+  'delivery',
+  'approval',
+  'meeting',
+  'punch_list',
+  'other',
+]
 
 function surfaceCardStyle() {
   return {
@@ -156,6 +178,19 @@ export default function JobTabs(props: JobTabProps) {
   const [issueDetail, setIssueDetail] = useState('')
   const [issueSaving, setIssueSaving] = useState(false)
 
+  const [tasks, setTasks] = useState<any[]>(props.tasks ?? [])
+  const [showTaskForm, setShowTaskForm] = useState(false)
+  const [taskSaving, setTaskSaving] = useState(false)
+  const [taskDraft, setTaskDraft] = useState({
+    title: '',
+    description: '',
+    task_type: 'general',
+    due_at: '',
+    requires_file_upload: false,
+    visible_to_external: false,
+  })
+  const [taskStatusUpdating, setTaskStatusUpdating] = useState<string | null>(null)
+
   const [isEditingInfo, setIsEditingInfo] = useState(false)
   const [infoSaving, setInfoSaving] = useState(false)
   const [infoError, setInfoError] = useState<string | null>(null)
@@ -194,13 +229,16 @@ export default function JobTabs(props: JobTabProps) {
     (item) => !['Delivered', 'Confirmed'].includes(item.status)
   ).length
 
-  const TABS = ['info', 'pipeline', 'log', 'issues', 'schedule', 'procurement', 'files']
+  const openTaskCount = tasks.filter((t) => t.status === 'open' || t.status === 'in_progress').length
+
+  const TABS = ['info', 'pipeline', 'log', 'issues', 'tasks', 'schedule', 'procurement', 'files']
 
   const TAB_LABELS: Record<string, string> = {
     info: 'Info',
     pipeline: 'Pipeline',
     log: 'Log',
     issues: openIssueCount ? `Issues (${openIssueCount})` : 'Issues',
+    tasks: openTaskCount ? `Tasks (${openTaskCount})` : 'Tasks',
     schedule: 'Schedule',
     procurement: 'Procurement',
     files: 'Files',
@@ -393,6 +431,51 @@ export default function JobTabs(props: JobTabProps) {
         issue.id === issueId ? { ...issue, resolved: true } : issue
       )
     )
+  }
+
+  function resetTaskDraft() {
+    setTaskDraft({
+      title: '',
+      description: '',
+      task_type: 'general',
+      due_at: '',
+      requires_file_upload: false,
+      visible_to_external: false,
+    })
+  }
+
+  async function addTask() {
+    if (!taskDraft.title.trim()) return
+    setTaskSaving(true)
+    const { data } = await supabase
+      .from('job_tasks')
+      .insert({
+        job_id: jobId,
+        title: taskDraft.title.trim(),
+        description: taskDraft.description.trim() || null,
+        task_type: taskDraft.task_type || null,
+        due_at: taskDraft.due_at || null,
+        requires_file_upload: taskDraft.requires_file_upload,
+        visible_to_external: taskDraft.visible_to_external,
+        status: 'open',
+      })
+      .select()
+      .single()
+    setTaskSaving(false)
+    if (data) {
+      setTasks((t) => [data, ...t])
+      resetTaskDraft()
+      setShowTaskForm(false)
+    }
+  }
+
+  async function updateTaskStatus(taskId: string, status: TaskStatus) {
+    setTaskStatusUpdating(taskId)
+    const { error } = await supabase.from('job_tasks').update({ status }).eq('id', taskId)
+    setTaskStatusUpdating(null)
+    if (!error) {
+      setTasks((t) => t.map((x) => (x.id === taskId ? { ...x, status } : x)))
+    }
   }
 
   async function updateScheduleItem(id: string, patch: Record<string, any>) {
@@ -1875,6 +1958,220 @@ export default function JobTabs(props: JobTabProps) {
               )
             })
           )}
+        </div>
+      )}
+
+      {activeTab === 'tasks' && (
+        <div>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '12px 14px', marginBottom: '10px' }}>
+            {!showTaskForm ? (
+              <button
+                onClick={() => setShowTaskForm(true)}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  background: 'var(--bg)',
+                  border: '1px dashed var(--border)',
+                  borderRadius: '7px',
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                }}
+              >
+                + Add Task
+              </button>
+            ) : (
+              <div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: 'ui-monospace,monospace' }}>
+                      Title *
+                    </label>
+                    <input
+                      style={inp}
+                      value={taskDraft.title}
+                      onChange={(e) => setTaskDraft((d) => ({ ...d, title: e.target.value }))}
+                      placeholder="Task title"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: 'ui-monospace,monospace' }}>
+                      Type
+                    </label>
+                    <select
+                      style={inp}
+                      value={taskDraft.task_type}
+                      onChange={(e) => setTaskDraft((d) => ({ ...d, task_type: e.target.value }))}
+                    >
+                      {TASK_TYPE_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>{opt.replace('_', ' ')}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: 'ui-monospace,monospace' }}>
+                      Due Date
+                    </label>
+                    <input
+                      type="date"
+                      style={inp}
+                      value={taskDraft.due_at}
+                      onChange={(e) => setTaskDraft((d) => ({ ...d, due_at: e.target.value }))}
+                    />
+                  </div>
+
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: 'ui-monospace,monospace' }}>
+                      Description
+                    </label>
+                    <textarea
+                      style={{ ...inp, minHeight: '60px', resize: 'vertical' }}
+                      value={taskDraft.description}
+                      onChange={(e) => setTaskDraft((d) => ({ ...d, description: e.target.value }))}
+                      placeholder="Optional details..."
+                    />
+                  </div>
+
+                  <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '16px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={taskDraft.requires_file_upload}
+                        onChange={(e) => setTaskDraft((d) => ({ ...d, requires_file_upload: e.target.checked }))}
+                        style={{ accentColor: 'var(--blue)', cursor: 'pointer' }}
+                      />
+                      Requires file upload
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={taskDraft.visible_to_external}
+                        onChange={(e) => setTaskDraft((d) => ({ ...d, visible_to_external: e.target.checked }))}
+                        style={{ accentColor: 'var(--blue)', cursor: 'pointer' }}
+                      />
+                      Visible to client
+                    </label>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => { setShowTaskForm(false); resetTaskDraft() }}
+                    style={{
+                      padding: '6px 12px',
+                      border: '1px solid var(--border)',
+                      borderRadius: '7px',
+                      fontSize: '12px',
+                      background: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={addTask}
+                    disabled={taskSaving || !taskDraft.title.trim()}
+                    style={{
+                      padding: '6px 12px',
+                      background: taskSaving || !taskDraft.title.trim() ? 'var(--border)' : 'var(--text)',
+                      color: 'var(--bg)',
+                      border: 'none',
+                      borderRadius: '7px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      cursor: taskSaving || !taskDraft.title.trim() ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {taskSaving ? 'Saving...' : 'Add Task'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px' }}>
+            {!tasks.length ? (
+              <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                No tasks yet
+              </div>
+            ) : (
+              tasks.map((task: any) => {
+                const color = TASK_STATUS_COLORS[task.status as TaskStatus] ?? '#888'
+                const isUpdating = taskStatusUpdating === task.id
+                return (
+                  <div
+                    key={task.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
+                      padding: '10px 14px',
+                      borderBottom: '1px solid var(--border)',
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '2px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: '600' }}>{task.title}</span>
+                        {task.task_type && (
+                          <span style={{ fontSize: '9px', color: 'var(--text-faint)', fontFamily: 'ui-monospace,monospace', textTransform: 'uppercase' }}>
+                            {task.task_type.replace('_', ' ')}
+                          </span>
+                        )}
+                        {task.requires_file_upload && (
+                          <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px', background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}>
+                            file req
+                          </span>
+                        )}
+                        {task.visible_to_external && (
+                          <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>
+                            client visible
+                          </span>
+                        )}
+                      </div>
+                      {task.description && (
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', lineHeight: '1.4' }}>
+                          {task.description}
+                        </div>
+                      )}
+                      {task.due_at && (
+                        <div style={{ fontSize: '10px', color: 'var(--text-faint)', marginTop: '3px', fontFamily: 'ui-monospace,monospace' }}>
+                          Due {formatShortDate(task.due_at)}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ flexShrink: 0 }}>
+                      <select
+                        value={task.status}
+                        disabled={isUpdating}
+                        onChange={(e) => updateTaskStatus(task.id, e.target.value as TaskStatus)}
+                        style={{
+                          fontSize: '10px',
+                          fontWeight: '600',
+                          padding: '3px 6px',
+                          borderRadius: '5px',
+                          border: `1px solid ${color}44`,
+                          background: color + '18',
+                          color,
+                          cursor: isUpdating ? 'not-allowed' : 'pointer',
+                          fontFamily: 'system-ui,-apple-system,sans-serif',
+                          outline: 'none',
+                        }}
+                      >
+                        {TASK_STATUSES.map((s) => (
+                          <option key={s} value={s}>{s.replace('_', ' ')}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
         </div>
       )}
 
