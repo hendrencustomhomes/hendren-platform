@@ -42,6 +42,35 @@ function shouldIncludeInPacketByDefault(category: Category) {
   return category === 'plans' || category === 'photos'
 }
 
+function getLegacyVisibilityFields(visibilityScope: VisibilityScope) {
+  switch (visibilityScope) {
+    case 'internal_only':
+      return {
+        client_visible: false,
+        companies_visible: false,
+        company_scope: null,
+      }
+    case 'tagged_external':
+      return {
+        client_visible: true,
+        companies_visible: true,
+        company_scope: 'selected',
+      }
+    case 'all_external_except_client':
+      return {
+        client_visible: false,
+        companies_visible: true,
+        company_scope: 'all',
+      }
+    case 'all_external_including_client':
+      return {
+        client_visible: true,
+        companies_visible: true,
+        company_scope: 'all',
+      }
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient()
@@ -87,10 +116,6 @@ export async function POST(req: NextRequest) {
 
     const entityType: EntityType = isAllowedEntityType(entityTypeRaw) ? entityTypeRaw : 'job'
 
-    if (entityType === 'job' && !jobId) {
-      return NextResponse.json({ error: 'job_id required for job files' }, { status: 400 })
-    }
-
     if (entityType === 'schedule_item' && !scheduleItemId) {
       return NextResponse.json(
         { error: 'schedule_item_id required for schedule_item files' },
@@ -131,6 +156,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const legacyVisibility = getLegacyVisibilityFields(visibilityScope)
+
     const insertPayload = {
       id: fileId,
       job_id: jobId,
@@ -149,14 +176,9 @@ export async function POST(req: NextRequest) {
       task_id: entityType === 'task' ? taskId : null,
 
       // legacy compatibility fields retained for now
-      client_visible:
-        visibilityScope === 'all_external_including_client' ||
-        visibilityScope === 'tagged_external',
-      companies_visible:
-        visibilityScope === 'tagged_external' ||
-        visibilityScope === 'all_external_except_client' ||
-        visibilityScope === 'all_external_including_client',
-      company_scope: visibilityScope === 'tagged_external' ? 'selected' : 'all',
+      client_visible: legacyVisibility.client_visible,
+      companies_visible: legacyVisibility.companies_visible,
+      company_scope: legacyVisibility.company_scope,
     }
 
     const { data: inserted, error: dbError } = await admin
