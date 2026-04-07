@@ -197,13 +197,6 @@ function NewOrderForm() {
     setError('')
 
     const leadDays = parseInt(form.lead_days, 10) || 0
-    let orderByDateValue: string | null = null
-
-    if (form.required_on_site_date) {
-      const requiredDate = new Date(form.required_on_site_date)
-      requiredDate.setDate(requiredDate.getDate() - leadDays)
-      orderByDateValue = requiredDate.toISOString().slice(0, 10)
-    }
 
     const { error: insertError } = await supabase.from('procurement_items').insert({
       job_id: form.job_id,
@@ -215,7 +208,7 @@ function NewOrderForm() {
       unit_cost: form.unit_cost ? parseFloat(form.unit_cost) : null,
       lead_days: leadDays,
       required_on_site_date: form.required_on_site_date || null,
-      order_by_date: orderByDateValue,
+      // order_by_date is a GENERATED ALWAYS AS column — do not insert it
       status: form.status,
       depends_on: form.depends_on,
       selection_reference: form.selection_reference.trim() || null,

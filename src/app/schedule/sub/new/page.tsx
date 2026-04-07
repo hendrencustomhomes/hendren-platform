@@ -126,6 +126,8 @@ export default function NewSubSchedulePage() {
         : 14,
       cost_code: form.cost_code.trim() || null,
       status: form.status,
+      // sub_status mirrors status to satisfy the sub_status enum column
+      sub_status: form.status,
       confirmed_date:
         form.status === 'confirmed' ? new Date().toISOString() : null,
     }
