@@ -1,9 +1,44 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import FilesTab from '@/components/FilesTab'
 import { createClient } from '@/utils/supabase/client'
+
+const STATE_ABBREV: Record<string, string> = {
+  'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
+  'Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA',
+  'Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA',
+  'Kansas':'KS','Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD',
+  'Massachusetts':'MA','Michigan':'MI','Minnesota':'MN','Mississippi':'MS','Missouri':'MO',
+  'Montana':'MT','Nebraska':'NE','Nevada':'NV','New Hampshire':'NH','New Jersey':'NJ',
+  'New Mexico':'NM','New York':'NY','North Carolina':'NC','North Dakota':'ND','Ohio':'OH',
+  'Oklahoma':'OK','Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC',
+  'South Dakota':'SD','Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT',
+  'Virginia':'VA','Washington':'WA','West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY',
+}
+
+function parseAddress(addr: string | null) {
+  if (!addr) return { street: '', city: '', state: '', zip: '' }
+  const m = addr.match(/^(.+?),\s*(.+?),?\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/)
+  if (m) return { street: m[1].trim(), city: m[2].trim(), state: m[3].trim(), zip: m[4].split('-')[0] }
+  return { street: addr.trim(), city: '', state: '', zip: '' }
+}
+
+function composeAddress(street: string, city: string, state: string, zip: string): string | null {
+  const s = street.trim(), c = city.trim(), st = state.trim(), z = zip.trim()
+  const cityStateZip = [c, [st, z].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+  return [s, cityStateZip].filter(Boolean).join(', ') || null
+}
+
+function formatAddrSuggestion(s: any): string {
+  const a = s.address || {}
+  const street = [a.house_number, a.road].filter(Boolean).join(' ')
+  const city = a.city || a.town || a.village || a.hamlet || ''
+  const state = STATE_ABBREV[a.state] || a.state || ''
+  const zip = a.postcode?.split('-')[0] || ''
+  return [street, city, [state, zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+}
 
 const REFERRAL_OPTIONS = [
   'Past Client',
@@ -196,7 +231,10 @@ export default function JobTabs(props: JobTabProps) {
   const [infoError, setInfoError] = useState<string | null>(null)
   const [infoDraft, setInfoDraft] = useState({
     job_name: '',
-    project_address: '',
+    addr_street: '',
+    addr_city: '',
+    addr_state: '',
+    addr_zip: '',
     client_name: '',
     client_email: '',
     client_phone: '',
@@ -214,6 +252,9 @@ export default function JobTabs(props: JobTabProps) {
     neighborhood_requirements: '',
     scope_notes: '',
   })
+
+  const [addrSuggestions, setAddrSuggestions] = useState<any[]>([])
+  const addrTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const curIdx = stages.indexOf(job.current_stage)
   const inp = inputStyle()
@@ -245,9 +286,13 @@ export default function JobTabs(props: JobTabProps) {
   }
 
   function beginInfoEdit() {
+    const parsed = parseAddress(job.project_address)
     setInfoDraft({
       job_name: job.job_name ?? '',
-      project_address: job.project_address ?? '',
+      addr_street: parsed.street,
+      addr_city: parsed.city,
+      addr_state: parsed.state,
+      addr_zip: parsed.zip,
       client_name: job.client_name ?? '',
       client_email: job.client_email ?? '',
       client_phone: job.client_phone ?? '',
@@ -274,7 +319,10 @@ export default function JobTabs(props: JobTabProps) {
     setInfoError(null)
     setInfoDraft({
       job_name: '',
-      project_address: '',
+      addr_street: '',
+      addr_city: '',
+      addr_state: '',
+      addr_zip: '',
       client_name: '',
       client_email: '',
       client_phone: '',
@@ -300,13 +348,41 @@ export default function JobTabs(props: JobTabProps) {
     return Number.isFinite(parsed) ? parsed : null
   }
 
+  function handleAddrStreetChange(val: string) {
+    setInfoDraft((d) => ({ ...d, addr_street: val }))
+    if (addrTimer.current) clearTimeout(addrTimer.current)
+    if (val.trim().length < 4) { setAddrSuggestions([]); return }
+    addrTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&addressdetails=1&countrycodes=us&limit=5`,
+          { headers: { 'Accept-Language': 'en' } }
+        )
+        const data = await res.json()
+        setAddrSuggestions(data.filter((s: any) => s.address?.road))
+      } catch { setAddrSuggestions([]) }
+    }, 500)
+  }
+
+  function applyAddrSuggestion(s: any) {
+    const a = s.address || {}
+    setInfoDraft((d) => ({
+      ...d,
+      addr_street: [a.house_number, a.road].filter(Boolean).join(' '),
+      addr_city: a.city || a.town || a.village || a.hamlet || '',
+      addr_state: STATE_ABBREV[a.state] || a.state || '',
+      addr_zip: a.postcode?.split('-')[0] || '',
+    }))
+    setAddrSuggestions([])
+  }
+
   async function saveInfo() {
     setInfoSaving(true)
     setInfoError(null)
 
     const payload = {
       job_name: infoDraft.job_name.trim() || null,
-      project_address: infoDraft.project_address.trim() || null,
+      project_address: composeAddress(infoDraft.addr_street, infoDraft.addr_city, infoDraft.addr_state, infoDraft.addr_zip),
       client_name: infoDraft.client_name.trim() || null,
       client_email: infoDraft.client_email.trim() || null,
       client_phone: infoDraft.client_phone.trim() || null,
@@ -645,16 +721,37 @@ export default function JobTabs(props: JobTabProps) {
               {!isEditingInfo ? (
                 job.project_address || '—'
               ) : (
-                <input
-                  value={infoDraft.project_address}
-                  onChange={(e) =>
-                    setInfoDraft((current) => ({
-                      ...current,
-                      project_address: e.target.value,
-                    }))
-                  }
-                  style={inp}
-                />
+                <div style={{ marginTop: '6px', display: 'grid', gap: '8px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      value={infoDraft.addr_street}
+                      onChange={(e) => handleAddrStreetChange(e.target.value)}
+                      onBlur={() => setTimeout(() => setAddrSuggestions([]), 150)}
+                      placeholder="1234 Maple St"
+                      autoComplete="address-line1"
+                      style={inp}
+                    />
+                    {addrSuggestions.length > 0 && (
+                      <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:50, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', marginTop:'4px', boxShadow:'0 4px 16px rgba(0,0,0,0.14)', overflow:'hidden' }}>
+                        {addrSuggestions.map((s, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onMouseDown={() => applyAddrSuggestion(s)}
+                            style={{ display:'block', width:'100%', textAlign:'left', padding:'10px 14px', background:'none', border:'none', borderBottom: i < addrSuggestions.length - 1 ? '1px solid var(--border)' : 'none', cursor:'pointer', fontSize:'13px', color:'var(--text)', fontFamily:'system-ui,-apple-system,sans-serif' }}
+                          >
+                            {formatAddrSuggestion(s)}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 60px 90px', gap: '8px' }}>
+                    <input value={infoDraft.addr_city} onChange={(e) => setInfoDraft((d) => ({ ...d, addr_city: e.target.value }))} placeholder="City" autoComplete="address-level2" style={inp} />
+                    <input value={infoDraft.addr_state} onChange={(e) => setInfoDraft((d) => ({ ...d, addr_state: e.target.value }))} placeholder="ST" maxLength={2} autoComplete="address-level1" style={inp} />
+                    <input value={infoDraft.addr_zip} onChange={(e) => setInfoDraft((d) => ({ ...d, addr_zip: e.target.value }))} placeholder="ZIP" inputMode="numeric" autoComplete="postal-code" style={inp} />
+                  </div>
+                </div>
               )}
             </div>
           </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 
@@ -14,6 +14,34 @@ const JOB_COLORS = [
   '#0891b2',
   '#65a30d',
 ]
+
+const STATE_ABBREV: Record<string, string> = {
+  'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
+  'Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA',
+  'Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA',
+  'Kansas':'KS','Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD',
+  'Massachusetts':'MA','Michigan':'MI','Minnesota':'MN','Mississippi':'MS','Missouri':'MO',
+  'Montana':'MT','Nebraska':'NE','Nevada':'NV','New Hampshire':'NH','New Jersey':'NJ',
+  'New Mexico':'NM','New York':'NY','North Carolina':'NC','North Dakota':'ND','Ohio':'OH',
+  'Oklahoma':'OK','Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC',
+  'South Dakota':'SD','Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT',
+  'Virginia':'VA','Washington':'WA','West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY',
+}
+
+function composeAddress(street: string, city: string, state: string, zip: string): string {
+  const s = street.trim(), c = city.trim(), st = state.trim(), z = zip.trim()
+  const cityStateZip = [c, [st, z].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+  return [s, cityStateZip].filter(Boolean).join(', ')
+}
+
+function formatSuggestion(s: any): string {
+  const a = s.address || {}
+  const street = [a.house_number, a.road].filter(Boolean).join(' ')
+  const city = a.city || a.town || a.village || a.hamlet || ''
+  const state = STATE_ABBREV[a.state] || a.state || ''
+  const zip = a.postcode?.split('-')[0] || ''
+  return [street, city, [state, zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+}
 
 const REFERRAL_OPTIONS = [
   'Past Client',
@@ -73,7 +101,10 @@ export default function NewJobPage() {
   const [form, setForm] = useState({
     job_name: '',
     client_name: '',
-    project_address: '',
+    addr_street: '',
+    addr_city: '',
+    addr_state: '',
+    addr_zip: '',
     client_email: '',
     client_phone: '',
     sqft: '',
@@ -82,6 +113,8 @@ export default function NewJobPage() {
     contract_type: 'fixed_price',
     scope_notes: '',
   })
+  const [addrSuggestions, setAddrSuggestions] = useState<any[]>([])
+  const addrTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const inp = useMemo(() => inputStyle(), [])
 
@@ -95,10 +128,38 @@ export default function NewJobPage() {
     setForm((current) => ({ ...current, [field]: value }))
   }
 
+  function handleStreetChange(val: string) {
+    setField('addr_street', val)
+    if (addrTimer.current) clearTimeout(addrTimer.current)
+    if (val.trim().length < 4) { setAddrSuggestions([]); return }
+    addrTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&addressdetails=1&countrycodes=us&limit=5`,
+          { headers: { 'Accept-Language': 'en' } }
+        )
+        const data = await res.json()
+        setAddrSuggestions(data.filter((s: any) => s.address?.road))
+      } catch { setAddrSuggestions([]) }
+    }, 500)
+  }
+
+  function applyAddrSuggestion(s: any) {
+    const a = s.address || {}
+    setForm((f) => ({
+      ...f,
+      addr_street: [a.house_number, a.road].filter(Boolean).join(' '),
+      addr_city: a.city || a.town || a.village || a.hamlet || '',
+      addr_state: STATE_ABBREV[a.state] || a.state || '',
+      addr_zip: a.postcode?.split('-')[0] || '',
+    }))
+    setAddrSuggestions([])
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
-    if (!form.job_name.trim() || !form.client_name.trim() || !form.project_address.trim()) {
+    if (!form.job_name.trim() || !form.client_name.trim() || !form.addr_street.trim()) {
       setError('Job name, client name, and project address are required.')
       return
     }
@@ -113,7 +174,7 @@ export default function NewJobPage() {
       .insert({
         job_name: form.job_name.trim(),
         client_name: form.client_name.trim(),
-        project_address: form.project_address.trim(),
+        project_address: composeAddress(form.addr_street, form.addr_city, form.addr_state, form.addr_zip) || null,
         client_email: form.client_email.trim() || null,
         client_phone: form.client_phone.trim() || null,
         sqft: form.sqft ? parseInt(form.sqft, 10) : null,
@@ -215,14 +276,47 @@ export default function NewJobPage() {
               </div>
 
               <div>
-                <label style={labelStyle()}>Project Address</label>
-                <input
-                  style={inp}
-                  value={form.project_address}
-                  onChange={(e) => setField('project_address', e.target.value)}
-                  placeholder="1234 Maple St, Carmel IN 46032"
-                  required
-                />
+                <label style={labelStyle()}>Street</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    style={inp}
+                    value={form.addr_street}
+                    onChange={(e) => handleStreetChange(e.target.value)}
+                    onBlur={() => setTimeout(() => setAddrSuggestions([]), 150)}
+                    placeholder="1234 Maple St"
+                    autoComplete="address-line1"
+                    required
+                  />
+                  {addrSuggestions.length > 0 && (
+                    <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:50, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', marginTop:'4px', boxShadow:'0 4px 16px rgba(0,0,0,0.14)', overflow:'hidden' }}>
+                      {addrSuggestions.map((s, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onMouseDown={() => applyAddrSuggestion(s)}
+                          style={{ display:'block', width:'100%', textAlign:'left', padding:'10px 14px', background:'none', border:'none', borderBottom: i < addrSuggestions.length - 1 ? '1px solid var(--border)' : 'none', cursor:'pointer', fontSize:'13px', color:'var(--text)', fontFamily:'system-ui,-apple-system,sans-serif' }}
+                        >
+                          {formatSuggestion(s)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 80px 100px', gap: '12px' }}>
+                <div>
+                  <label style={labelStyle()}>City</label>
+                  <input style={inp} value={form.addr_city} onChange={(e) => setField('addr_city', e.target.value)} placeholder="Carmel" autoComplete="address-level2" />
+                </div>
+                <div>
+                  <label style={labelStyle()}>State</label>
+                  <input style={inp} value={form.addr_state} onChange={(e) => setField('addr_state', e.target.value)} placeholder="IN" maxLength={2} autoComplete="address-level1" />
+                </div>
+                <div>
+                  <label style={labelStyle()}>ZIP</label>
+                  <input style={inp} value={form.addr_zip} onChange={(e) => setField('addr_zip', e.target.value)} placeholder="46032" inputMode="numeric" autoComplete="postal-code" />
+                </div>
               </div>
             </div>
           </div>
