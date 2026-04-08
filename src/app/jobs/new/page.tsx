@@ -135,7 +135,7 @@ export default function NewJobPage() {
     addrTimer.current = setTimeout(async () => {
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&addressdetails=1&countrycodes=us&limit=5`,
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&addressdetails=1&countrycodes=us&limit=5&viewbox=-88.1,42.2,-86.1,40.7`,
           { headers: { 'Accept-Language': 'en' } }
         )
         const data = await res.json()
@@ -283,7 +283,7 @@ export default function NewJobPage() {
                     value={form.addr_street}
                     onChange={(e) => handleStreetChange(e.target.value)}
                     onBlur={() => setTimeout(() => setAddrSuggestions([]), 150)}
-                    placeholder="1234 Maple St"
+                    placeholder="166 W Lincolnway"
                     autoComplete="address-line1"
                     required
                   />
@@ -307,7 +307,7 @@ export default function NewJobPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 80px 100px', gap: '12px' }}>
                 <div>
                   <label style={labelStyle()}>City</label>
-                  <input style={inp} value={form.addr_city} onChange={(e) => setField('addr_city', e.target.value)} placeholder="Carmel" autoComplete="address-level2" />
+                  <input style={inp} value={form.addr_city} onChange={(e) => setField('addr_city', e.target.value)} placeholder="Valparaiso" autoComplete="address-level2" />
                 </div>
                 <div>
                   <label style={labelStyle()}>State</label>
@@ -315,7 +315,7 @@ export default function NewJobPage() {
                 </div>
                 <div>
                   <label style={labelStyle()}>ZIP</label>
-                  <input style={inp} value={form.addr_zip} onChange={(e) => setField('addr_zip', e.target.value)} placeholder="46032" inputMode="numeric" autoComplete="postal-code" />
+                  <input style={inp} value={form.addr_zip} onChange={(e) => setField('addr_zip', e.target.value)} placeholder="46383" inputMode="numeric" autoComplete="postal-code" />
                 </div>
               </div>
             </div>
