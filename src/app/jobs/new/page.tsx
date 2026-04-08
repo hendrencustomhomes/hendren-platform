@@ -34,12 +34,45 @@ function composeAddress(street: string, city: string, state: string, zip: string
   return [s, cityStateZip].filter(Boolean).join(', ')
 }
 
+const NW_IN_ZIP_CITY: Record<string, string> = {
+  '46301':'Dyer','46303':'Griffith','46304':'Chesterton','46307':'Crown Point',
+  '46310':'Demotte','46311':'Dyer','46312':'East Chicago','46319':'Griffith',
+  '46320':'Hammond','46321':'Munster','46322':'Highland','46323':'Hammond',
+  '46324':'Hammond','46325':'Hammond','46327':'Hammond','46340':'Hammond',
+  '46341':'Highland','46356':'Lowell','46368':'Portage','46373':'St. John',
+  '46375':'Schererville','46383':'Valparaiso','46384':'Valparaiso','46385':'Valparaiso',
+  '46390':'Wanatah','46391':'Westville','46392':'Wheatfield',
+  '46401':'Gary','46402':'Gary','46403':'Gary','46404':'Gary','46405':'Gary',
+  '46406':'Gary','46407':'Gary','46408':'Gary','46409':'Gary',
+  '46410':'Merrillville','46411':'Merrillville',
+}
+
+function localityLabel(a: any): string {
+  const zip5 = (a.postcode || '').split('-')[0]
+  return a.city || a.town || a.municipality || a.village || a.suburb || a.hamlet
+    || NW_IN_ZIP_CITY[zip5] || a.county || ''
+}
+
+function rankResult(x: any, typedRoadPrefix: string): number {
+  let score = 0
+  const zip = x.address?.postcode || ''
+  if (zip === '46383' || zip === '46384' || zip === '46385') score += 40
+  else if (zip.startsWith('463')) score += 30
+  else if (zip.startsWith('464')) score += 20
+  else if (zip.startsWith('46')) score += 10
+  const road = (x.address?.road || '').toLowerCase()
+  if (typedRoadPrefix && road.startsWith(typedRoadPrefix)) score += 25
+  else if (typedRoadPrefix && road.includes(typedRoadPrefix)) score += 10
+  if (x.address?.house_number) score += 15
+  return score
+}
+
 function formatSuggestion(s: any): string {
   const a = s.address || {}
   const street = [a.house_number, a.road].filter(Boolean).join(' ')
-  const city = a.city || a.town || a.municipality || a.village || a.suburb || a.hamlet || a.county || ''
+  const city = localityLabel(a)
   const state = STATE_ABBREV[a.state] || a.state || ''
-  const zip = a.postcode?.split('-')[0] || ''
+  const zip = (a.postcode || '').split('-')[0]
   return [street, city, [state, zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')
 }
 
@@ -134,30 +167,34 @@ export default function NewJobPage() {
     if (val.trim().length < 4) { setAddrSuggestions([]); return }
     addrTimer.current = setTimeout(async () => {
       try {
-        // Use structured street= param when input starts with a house number.
-        // Nominatim resolves partial road names far better via street= than q=.
+        const base = 'https://nominatim.openstreetmap.org/search'
+        const common = 'format=json&addressdetails=1&countrycodes=us&limit=6&viewbox=-87.41,41.72,-86.81,41.22'
         const startsWithNum = /^\d/.test(val.trim())
-        const params = startsWithNum
-          ? `street=${encodeURIComponent(val)}&state=Indiana&countrycodes=us&format=json&addressdetails=1&limit=8&viewbox=-87.41,41.72,-86.81,41.22`
-          : `q=${encodeURIComponent(val)}&format=json&addressdetails=1&countrycodes=us&limit=8&viewbox=-87.41,41.72,-86.81,41.22`
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?${params}`,
-          { headers: { 'Accept-Language': 'en' } }
-        )
-        const data: any[] = await res.json()
-        const withRoad = data.filter((s: any) => s.address?.road)
-        // Sort: Porter County 463xx first, then Lake County 464xx, then any Indiana 46x, then rest
-        withRoad.sort((a: any, b: any) => {
-          const score = (x: any) => {
-            const z: string = x.address?.postcode || ''
-            if (z.startsWith('463')) return 3
-            if (z.startsWith('464')) return 2
-            if (z.startsWith('46')) return 1
-            return 0
-          }
-          return score(b) - score(a)
-        })
-        setAddrSuggestions(withRoad.slice(0, 5))
+        // Parallel: (A) city-context query anchors partial road to Valparaiso,
+        //           (B) structured street= catches nearby non-Valparaiso addresses
+        const [cityCtx, structured] = await Promise.all([
+          startsWithNum
+            ? fetch(`${base}?q=${encodeURIComponent(val + ', Valparaiso, IN')}&${common}`, { headers: { 'Accept-Language': 'en' } }).then(r => r.json()).catch(() => [])
+            : Promise.resolve([]),
+          fetch(
+            startsWithNum
+              ? `${base}?street=${encodeURIComponent(val)}&state=Indiana&${common}`
+              : `${base}?q=${encodeURIComponent(val)}&${common}`,
+            { headers: { 'Accept-Language': 'en' } }
+          ).then(r => r.json()).catch(() => []),
+        ])
+        // Merge, deduplicate by osm_id, keep only results with a road
+        const seen = new Set<string>()
+        const merged: any[] = []
+        for (const r of [...cityCtx, ...structured]) {
+          const key = String(r.osm_id ?? r.place_id)
+          if (r.address?.road && !seen.has(key)) { seen.add(key); merged.push(r) }
+        }
+        // Road prefix: strip leading house number from typed input for scoring
+        const typedWords = val.trim().split(/\s+/)
+        const typedRoadPrefix = (startsWithNum ? typedWords.slice(1) : typedWords).join(' ').toLowerCase()
+        merged.sort((a, b) => rankResult(b, typedRoadPrefix) - rankResult(a, typedRoadPrefix))
+        setAddrSuggestions(merged.slice(0, 5))
       } catch { setAddrSuggestions([]) }
     }, 500)
   }
@@ -167,9 +204,9 @@ export default function NewJobPage() {
     setForm((f) => ({
       ...f,
       addr_street: [a.house_number, a.road].filter(Boolean).join(' '),
-      addr_city: a.city || a.town || a.municipality || a.village || a.suburb || a.hamlet || a.county || '',
+      addr_city: localityLabel(a),
       addr_state: STATE_ABBREV[a.state] || a.state || '',
-      addr_zip: a.postcode?.split('-')[0] || '',
+      addr_zip: (a.postcode || '').split('-')[0],
     }))
     setAddrSuggestions([])
   }
