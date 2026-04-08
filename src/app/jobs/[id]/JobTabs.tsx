@@ -540,7 +540,7 @@ export default function JobTabs(props: JobTabProps) {
     await updateScheduleItem(item.id, {
       is_released: false,
       release_date: null,
-      status: item.status === 'confirmed' ? 'scheduled' : item.status,
+      status: item.status,
       confirmed_date: null,
     })
   }
@@ -1732,19 +1732,6 @@ export default function JobTabs(props: JobTabProps) {
                         }}
                       >
                         {item.status}
-                      </span>
-
-                      <span
-                        style={{
-                          fontSize: '10px',
-                          fontWeight: '600',
-                          padding: '2px 7px',
-                          borderRadius: '10px',
-                          border: `1px solid ${badge.color}`,
-                          color: badge.color,
-                        }}
-                      >
-                        {badge.label}
                       </span>
 
                       <span

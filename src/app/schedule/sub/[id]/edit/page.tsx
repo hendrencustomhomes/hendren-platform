@@ -168,9 +168,7 @@ export default function EditSubSchedulePage() {
       status:
         checked && prev.status === 'tentative'
           ? 'scheduled'
-          : !checked && prev.status === 'confirmed'
-            ? 'scheduled'
-            : prev.status,
+          : prev.status,
     }))
   }
 
