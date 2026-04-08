@@ -37,7 +37,7 @@ function composeAddress(street: string, city: string, state: string, zip: string
 function formatSuggestion(s: any): string {
   const a = s.address || {}
   const street = [a.house_number, a.road].filter(Boolean).join(' ')
-  const city = a.city || a.town || a.village || a.hamlet || ''
+  const city = a.city || a.town || a.municipality || a.village || a.hamlet || ''
   const state = STATE_ABBREV[a.state] || a.state || ''
   const zip = a.postcode?.split('-')[0] || ''
   return [street, city, [state, zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')
@@ -135,7 +135,7 @@ export default function NewJobPage() {
     addrTimer.current = setTimeout(async () => {
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&addressdetails=1&countrycodes=us&limit=5&viewbox=-88.1,42.2,-86.1,40.7`,
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&addressdetails=1&countrycodes=us&limit=5&viewbox=-87.41,41.72,-86.81,41.22`,
           { headers: { 'Accept-Language': 'en' } }
         )
         const data = await res.json()
@@ -149,7 +149,7 @@ export default function NewJobPage() {
     setForm((f) => ({
       ...f,
       addr_street: [a.house_number, a.road].filter(Boolean).join(' '),
-      addr_city: a.city || a.town || a.village || a.hamlet || '',
+      addr_city: a.city || a.town || a.municipality || a.village || a.hamlet || '',
       addr_state: STATE_ABBREV[a.state] || a.state || '',
       addr_zip: a.postcode?.split('-')[0] || '',
     }))
