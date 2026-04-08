@@ -37,7 +37,7 @@ function composeAddress(street: string, city: string, state: string, zip: string
 function formatSuggestion(s: any): string {
   const a = s.address || {}
   const street = [a.house_number, a.road].filter(Boolean).join(' ')
-  const city = a.city || a.town || a.municipality || a.village || a.hamlet || ''
+  const city = a.city || a.town || a.municipality || a.village || a.suburb || a.hamlet || a.county || ''
   const state = STATE_ABBREV[a.state] || a.state || ''
   const zip = a.postcode?.split('-')[0] || ''
   return [street, city, [state, zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')
@@ -134,12 +134,30 @@ export default function NewJobPage() {
     if (val.trim().length < 4) { setAddrSuggestions([]); return }
     addrTimer.current = setTimeout(async () => {
       try {
+        // Use structured street= param when input starts with a house number.
+        // Nominatim resolves partial road names far better via street= than q=.
+        const startsWithNum = /^\d/.test(val.trim())
+        const params = startsWithNum
+          ? `street=${encodeURIComponent(val)}&state=Indiana&countrycodes=us&format=json&addressdetails=1&limit=8&viewbox=-87.41,41.72,-86.81,41.22`
+          : `q=${encodeURIComponent(val)}&format=json&addressdetails=1&countrycodes=us&limit=8&viewbox=-87.41,41.72,-86.81,41.22`
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&addressdetails=1&countrycodes=us&limit=5&viewbox=-87.41,41.72,-86.81,41.22`,
+          `https://nominatim.openstreetmap.org/search?${params}`,
           { headers: { 'Accept-Language': 'en' } }
         )
-        const data = await res.json()
-        setAddrSuggestions(data.filter((s: any) => s.address?.road))
+        const data: any[] = await res.json()
+        const withRoad = data.filter((s: any) => s.address?.road)
+        // Sort: Porter County 463xx first, then Lake County 464xx, then any Indiana 46x, then rest
+        withRoad.sort((a: any, b: any) => {
+          const score = (x: any) => {
+            const z: string = x.address?.postcode || ''
+            if (z.startsWith('463')) return 3
+            if (z.startsWith('464')) return 2
+            if (z.startsWith('46')) return 1
+            return 0
+          }
+          return score(b) - score(a)
+        })
+        setAddrSuggestions(withRoad.slice(0, 5))
       } catch { setAddrSuggestions([]) }
     }, 500)
   }
@@ -149,7 +167,7 @@ export default function NewJobPage() {
     setForm((f) => ({
       ...f,
       addr_street: [a.house_number, a.road].filter(Boolean).join(' '),
-      addr_city: a.city || a.town || a.municipality || a.village || a.hamlet || '',
+      addr_city: a.city || a.town || a.municipality || a.village || a.suburb || a.hamlet || a.county || '',
       addr_state: STATE_ABBREV[a.state] || a.state || '',
       addr_zip: a.postcode?.split('-')[0] || '',
     }))
