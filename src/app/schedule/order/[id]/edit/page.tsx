@@ -36,7 +36,7 @@ type OrderFormState = {
 
 const EMPTY_FORM: OrderFormState = {
   job_id: null,
-  trade: 'Framing',
+  trade: '',
   description: '',
   vendor: '',
   qty: '',
@@ -117,6 +117,9 @@ export default function EditOrderPage() {
       setLoadingTrades(true)
       const data = await fetchActiveTrades(supabase)
       setTrades(data)
+      if (data.length > 0) {
+        setForm((prev) => (prev.trade === '' ? { ...prev, trade: data[0].name } : prev))
+      }
       setLoadingTrades(false)
     }
     loadTrades()
@@ -164,7 +167,7 @@ export default function EditOrderPage() {
 
       setForm({
         job_id: data.job_id,
-        trade: data.trade || 'Framing',
+        trade: data.trade || '',
         description: data.description || '',
         vendor: data.vendor || '',
         qty: data.qty?.toString() || '',
