@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import Nav from '@/components/nav'
+import Nav from '@/components/Nav'
 
 const MORE_ITEMS = [
   { href: '/more/clients', label: 'Clients', icon: '👤' },
