@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto'
 const ALLOWED_CATEGORIES = ['plans', 'photos', 'admin', 'financial', 'other'] as const
 type Category = (typeof ALLOWED_CATEGORIES)[number]
 
-const ALLOWED_VISIBILITY_SCOPES = [
+const ALLOWED_VISIBILITY_SCOPES = [ 
   'internal_only',
   'tagged_external',
   'all_external_except_client',
