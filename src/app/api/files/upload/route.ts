@@ -142,7 +142,10 @@ export async function POST(req: NextRequest) {
       const legacy = getLegacyVisibilityFields(visibilityScope)
       clientVisible = legacy.client_visible
       companiesVisible = legacy.companies_visible
-      companyScope = legacy.company_scope
+      companyScope =
+  legacy.company_scope === "all" || legacy.company_scope === "selected"
+    ? legacy.company_scope
+    : null
     }
 
     const includeInPacket =
