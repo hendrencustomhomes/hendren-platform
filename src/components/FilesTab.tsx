@@ -2,13 +2,41 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-type VisibilityScope =
+// ─── Trades ──────────────────────────────────────────────────────────────────
+
+const TRADES = [
+  'Concrete/Foundation',
+  'Framing',
+  'Rough Electrical',
+  'Rough Plumbing',
+  'HVAC',
+  'Insulation',
+  'Drywall',
+  'Finish Electrical',
+  'Finish Plumbing',
+  'Tile',
+  'Flooring',
+  'Cabinetry',
+  'Trim/Millwork',
+  'Paint',
+  'Exterior/Roofing',
+  'Landscaping',
+  'Demo',
+  'Other',
+] as const
+
+type Trade = (typeof TRADES)[number]
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type EntityType = 'job' | 'schedule_item' | 'procurement_item' | 'task'
+
+// Legacy scope kept only for reading old records
+type LegacyVisibilityScope =
   | 'internal_only'
   | 'tagged_external'
   | 'all_external_except_client'
   | 'all_external_including_client'
-
-type EntityType = 'job' | 'schedule_item' | 'procurement_item' | 'task'
 
 type JobFile = {
   id: string
@@ -18,41 +46,122 @@ type JobFile = {
   storage_path: string
   size_bytes: number | null
   mime_type: string | null
-  visibility_scope?: VisibilityScope | null
+  // New-style granular fields (primary)
+  client_visible?: boolean | null
+  companies_visible?: boolean | null
+  company_scope?: 'all' | 'selected' | null
+  // Legacy field (for reading old records)
+  visibility_scope?: LegacyVisibilityScope | null
   include_in_packet?: boolean | null
   entity_type?: EntityType | null
   created_at: string
   uploaded_by: string | null
-  client_visible?: boolean | null
-  companies_visible?: boolean | null
-  company_scope?: 'all' | 'selected' | null
+}
+
+// In-session permission state driven by the checkboxes.
+// Internal is always on — not stored here, always assumed.
+type VisibilityState = {
+  client: boolean
+  // Trade names that are checked; empty = no trade access
+  selectedTrades: Trade[]
+}
+
+// ─── Permission helpers ───────────────────────────────────────────────────────
+
+function defaultVisibilityState(): VisibilityState {
+  return { client: false, selectedTrades: [] }
+}
+
+/**
+ * Reconstruct checkbox state from a loaded file record.
+ * Granular fields (client_visible, companies_visible, company_scope) are
+ * the source of truth — always set by the API. Legacy visibility_scope is
+ * only used as a fallback for records that predate the granular columns.
+ *
+ * Limitation: company_scope='selected' means "some trades" but the DB has
+ * no per-file trade list, so individual trade selections cannot be restored
+ * after save. The summary still shows "Some Trades".
+ */
+function deriveVisibilityState(file: JobFile): VisibilityState {
+  const hasGranularFields =
+    (file.client_visible !== undefined && file.client_visible !== null) ||
+    (file.companies_visible !== undefined && file.companies_visible !== null)
+
+  if (!hasGranularFields && file.visibility_scope) {
+    switch (file.visibility_scope) {
+      case 'internal_only':
+        return { client: false, selectedTrades: [] }
+      case 'tagged_external':
+        return { client: true, selectedTrades: [] }
+      case 'all_external_except_client':
+        return { client: false, selectedTrades: [...TRADES] }
+      case 'all_external_including_client':
+        return { client: true, selectedTrades: [...TRADES] }
+    }
+  }
+
+  const client = file.client_visible ?? false
+  const selectedTrades: Trade[] =
+    file.companies_visible && file.company_scope === 'all' ? [...TRADES] : []
+
+  return { client, selectedTrades }
+}
+
+/**
+ * Map checkbox state to DB columns.
+ * Derives a legacy visibility_scope value for backward compat.
+ */
+function visibilityToPayload(state: VisibilityState) {
+  const companiesVisible = state.selectedTrades.length > 0
+  const allTradesChecked = state.selectedTrades.length === TRADES.length
+  const companyScope: 'all' | 'selected' | null = companiesVisible
+    ? allTradesChecked
+      ? 'all'
+      : 'selected'
+    : null
+
+  let visibilityScope: LegacyVisibilityScope
+  if (!companiesVisible && !state.client) {
+    visibilityScope = 'internal_only'
+  } else if (companiesVisible && allTradesChecked && !state.client) {
+    visibilityScope = 'all_external_except_client'
+  } else if (companiesVisible && state.client) {
+    visibilityScope = 'all_external_including_client'
+  } else {
+    visibilityScope = 'tagged_external'
+  }
+
+  return {
+    client_visible: state.client,
+    companies_visible: companiesVisible,
+    company_scope: companyScope,
+    visibility_scope: visibilityScope,
+  }
+}
+
+// ─── Display helpers ──────────────────────────────────────────────────────────
+
+function getVisibilitySummary(file: JobFile): string {
+  const parts: string[] = ['Internal']
+
+  if (file.client_visible) parts.push('Client')
+
+  if (file.companies_visible) {
+    parts.push(file.company_scope === 'all' ? 'All Trades' : 'Some Trades')
+  } else if (
+    file.visibility_scope === 'tagged_external' ||
+    file.visibility_scope === 'all_external_except_client' ||
+    file.visibility_scope === 'all_external_including_client'
+  ) {
+    // Fallback for legacy records without granular fields
+    parts.push('Trades')
+  }
+
+  return parts.join(' · ')
 }
 
 const CATEGORIES = ['plans', 'photos', 'admin', 'financial', 'other'] as const
 type KnownCategory = (typeof CATEGORIES)[number]
-
-const VISIBILITY_OPTIONS: { value: VisibilityScope; label: string; help: string }[] = [
-  {
-    value: 'internal_only',
-    label: 'Internal Only',
-    help: 'Never visible to clients or external companies.',
-  },
-  {
-    value: 'tagged_external',
-    label: 'Tagged External Only',
-    help: 'Visible only to matching external audiences through trade tags / packet rules.',
-  },
-  {
-    value: 'all_external_except_client',
-    label: 'All External Except Client',
-    help: 'Visible to external companies, hidden from client.',
-  },
-  {
-    value: 'all_external_including_client',
-    label: 'All External Including Client',
-    help: 'Visible to all external users, including client.',
-  },
-]
 
 function formatBytes(value: number | null) {
   if (!value) return ''
@@ -80,31 +189,11 @@ function getCategoryLabel(category: string) {
   return titleizeCategory(category)
 }
 
-function getVisibilitySummary(file: JobFile) {
-  if (file.visibility_scope) {
-    switch (file.visibility_scope) {
-      case 'internal_only':
-        return 'Internal Only'
-      case 'tagged_external':
-        return 'Tagged External'
-      case 'all_external_except_client':
-        return 'All External Except Client'
-      case 'all_external_including_client':
-        return 'All External Including Client'
-    }
+function getSafeDefaultVisibility(category: string): VisibilityState {
+  if (category === 'plans' || category === 'photos') {
+    return { client: false, selectedTrades: [...TRADES] }
   }
-
-  const clientPart = file.client_visible ? 'Client Visible' : 'Client Hidden'
-
-  if (!file.companies_visible) {
-    return `${clientPart} · Companies Hidden`
-  }
-
-  if (file.company_scope === 'selected') {
-    return `${clientPart} · Selected Companies`
-  }
-
-  return `${clientPart} · All Invited Companies`
+  return defaultVisibilityState()
 }
 
 function sectionCardStyle() {
@@ -115,13 +204,173 @@ function sectionCardStyle() {
   }
 }
 
-function getSafeDefaultVisibility(category: string): VisibilityScope {
-  if (category === 'plans' || category === 'photos') {
-    return 'tagged_external'
+function labelStyle() {
+  return {
+    display: 'block',
+    fontSize: '11px',
+    fontWeight: 700,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '.04em',
+    color: 'var(--text-muted)',
+    marginBottom: '6px',
+    fontFamily: 'ui-monospace,monospace',
+  }
+}
+
+// ─── VisibilityPicker ─────────────────────────────────────────────────────────
+
+function VisibilityPicker({
+  state,
+  onChange,
+}: {
+  state: VisibilityState
+  onChange: (next: VisibilityState) => void
+}) {
+  const [tradesOpen, setTradesOpen] = useState(false)
+
+  const allTradesChecked = state.selectedTrades.length === TRADES.length
+  const someTradesChecked = state.selectedTrades.length > 0 && !allTradesChecked
+
+  function toggleAllTrades(checked: boolean) {
+    onChange({ ...state, selectedTrades: checked ? [...TRADES] : [] })
   }
 
-  return 'internal_only'
+  function toggleTrade(trade: Trade, checked: boolean) {
+    // If a trade is manually unchecked, only that trade is removed.
+    // All Trades visually de-selects (indeterminate → unchecked)
+    // but remaining trades stay selected.
+    const next: Trade[] = checked
+      ? ([...state.selectedTrades, trade] as Trade[])
+      : state.selectedTrades.filter((t) => t !== trade)
+    onChange({ ...state, selectedTrades: next })
+  }
+
+  const rowStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '8px 0',
+    fontSize: '14px',
+    color: 'var(--text)',
+  } as const
+
+  const checkStyle = {
+    width: '18px',
+    height: '18px',
+    flexShrink: 0,
+    accentColor: 'var(--text)',
+    cursor: 'pointer',
+  } as const
+
+  return (
+    <div
+      style={{
+        border: '1px solid var(--border)',
+        borderRadius: '12px',
+        padding: '12px',
+        background: 'var(--bg)',
+      }}
+    >
+      <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>Visibility</div>
+
+      {/* Internal — always on, not editable */}
+      <div style={{ ...rowStyle, opacity: 0.55, cursor: 'default' }}>
+        <input
+          type="checkbox"
+          checked
+          readOnly
+          style={{ ...checkStyle, cursor: 'not-allowed' }}
+        />
+        <span>
+          <strong>Internal</strong>
+          <span style={{ marginLeft: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>
+            (always visible to your team)
+          </span>
+        </span>
+      </div>
+
+      {/* Client */}
+      <label style={{ ...rowStyle, cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={state.client}
+          onChange={(e) => onChange({ ...state, client: e.target.checked })}
+          style={checkStyle}
+        />
+        Client
+      </label>
+
+      <div style={{ borderTop: '1px solid var(--border)', margin: '8px 0' }} />
+
+      {/* All Trades — shows indeterminate when some (not all) trades are selected */}
+      <label style={{ ...rowStyle, cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          ref={(el) => {
+            if (el) el.indeterminate = someTradesChecked
+          }}
+          checked={allTradesChecked}
+          onChange={(e) => toggleAllTrades(e.target.checked)}
+          style={checkStyle}
+        />
+        All Trades
+      </label>
+
+      {/* Toggle individual trades */}
+      <button
+        type="button"
+        onClick={() => setTradesOpen((open) => !open)}
+        style={{
+          background: 'none',
+          border: 'none',
+          padding: '4px 0 4px 28px',
+          fontSize: '12px',
+          color: 'var(--blue)',
+          cursor: 'pointer',
+          display: 'block',
+          width: '100%',
+          textAlign: 'left',
+        }}
+      >
+        {tradesOpen ? '▲ Hide individual trades' : '▼ Select individual trades'}
+        {someTradesChecked && (
+          <span style={{ marginLeft: '6px', color: 'var(--text-muted)' }}>
+            ({state.selectedTrades.length}/{TRADES.length})
+          </span>
+        )}
+      </button>
+
+      {tradesOpen && (
+        <div
+          style={{
+            maxHeight: '180px',
+            overflowY: 'auto',
+            borderTop: '1px solid var(--border)',
+            marginTop: '4px',
+            paddingTop: '4px',
+          }}
+        >
+          {TRADES.map((trade) => (
+            <label
+              key={trade}
+              style={{ ...rowStyle, cursor: 'pointer', paddingLeft: '28px' }}
+            >
+              <input
+                type="checkbox"
+                checked={state.selectedTrades.includes(trade)}
+                onChange={(e) => toggleTrade(trade, e.target.checked)}
+                style={checkStyle}
+              />
+              {trade}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
+
+// ─── UploadModal ──────────────────────────────────────────────────────────────
 
 function UploadModal({
   jobId,
@@ -135,7 +384,7 @@ function UploadModal({
   const [files, setFiles] = useState<File[]>([])
   const [category, setCategory] = useState<string>('other')
   const [displayName, setDisplayName] = useState('')
-  const [visibilityScope, setVisibilityScope] = useState<VisibilityScope>('internal_only')
+  const [visibility, setVisibility] = useState<VisibilityState>(defaultVisibilityState())
   const [includeInPacket, setIncludeInPacket] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -143,7 +392,7 @@ function UploadModal({
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setVisibilityScope(getSafeDefaultVisibility(category))
+    setVisibility(getSafeDefaultVisibility(category))
     if (category !== 'plans' && category !== 'photos') {
       setIncludeInPacket(false)
     }
@@ -158,6 +407,8 @@ function UploadModal({
     setUploading(true)
     setError(null)
 
+    const payload = visibilityToPayload(visibility)
+
     try {
       const uploadedFiles: JobFile[] = []
 
@@ -171,7 +422,10 @@ function UploadModal({
           'display_name',
           files.length === 1 ? displayName || file.name : file.name
         )
-        formData.append('visibility_scope', visibilityScope)
+        formData.append('client_visible', String(payload.client_visible))
+        formData.append('companies_visible', String(payload.companies_visible))
+        formData.append('company_scope', payload.company_scope ?? '')
+        formData.append('visibility_scope', payload.visibility_scope)
         formData.append('include_in_packet', String(includeInPacket))
         formData.append('entity_type', 'job')
 
@@ -228,20 +482,12 @@ function UploadModal({
           borderRadius: '16px',
           padding: '16px',
           boxShadow: '0 20px 50px rgba(0,0,0,0.20)',
+          maxHeight: '92dvh',
+          overflowY: 'auto',
         }}
       >
-        <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '6px' }}>
+        <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '14px' }}>
           Upload Files
-        </div>
-        <div
-          style={{
-            fontSize: '14px',
-            color: 'var(--text-muted)',
-            marginBottom: '14px',
-            lineHeight: 1.5,
-          }}
-        >
-          Upload files into the job file system using the permanent visibility model.
         </div>
 
         <div style={{ display: 'grid', gap: '12px' }}>
@@ -279,20 +525,7 @@ function UploadModal({
           </div>
 
           <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: '11px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '.04em',
-                color: 'var(--text-muted)',
-                marginBottom: '6px',
-                fontFamily: 'ui-monospace,monospace',
-              }}
-            >
-              Category
-            </label>
+            <label style={labelStyle()}>Category</label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
@@ -316,20 +549,7 @@ function UploadModal({
 
           {files.length <= 1 && (
             <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '.04em',
-                  color: 'var(--text-muted)',
-                  marginBottom: '6px',
-                  fontFamily: 'ui-monospace,monospace',
-                }}
-              >
-                Display Name
-              </label>
+              <label style={labelStyle()}>Display Name</label>
               <input
                 type="text"
                 value={displayName}
@@ -349,43 +569,7 @@ function UploadModal({
             </div>
           )}
 
-          <div
-            style={{
-              border: '1px solid var(--border)',
-              borderRadius: '12px',
-              padding: '12px',
-              background: 'var(--bg)',
-            }}
-          >
-            <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '10px' }}>
-              Visibility
-            </div>
-
-            <select
-              value={visibilityScope}
-              onChange={(e) => setVisibilityScope(e.target.value as VisibilityScope)}
-              style={{
-                width: '100%',
-                border: '1px solid var(--border)',
-                borderRadius: '10px',
-                padding: '12px',
-                fontSize: '16px',
-                background: 'var(--surface)',
-                color: 'var(--text)',
-                marginBottom: '8px',
-              }}
-            >
-              {VISIBILITY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              {VISIBILITY_OPTIONS.find((option) => option.value === visibilityScope)?.help}
-            </div>
-          </div>
+          <VisibilityPicker state={visibility} onChange={setVisibility} />
 
           {(category === 'plans' || category === 'photos') && (
             <label
@@ -471,6 +655,8 @@ function UploadModal({
   )
 }
 
+// ─── EditFileModal ────────────────────────────────────────────────────────────
+
 function EditFileModal({
   file,
   onClose,
@@ -482,8 +668,8 @@ function EditFileModal({
 }) {
   const [category, setCategory] = useState<string>(file.category)
   const [displayName, setDisplayName] = useState(file.display_name ?? '')
-  const [visibilityScope, setVisibilityScope] = useState<VisibilityScope>(
-    file.visibility_scope ?? 'internal_only'
+  const [visibility, setVisibility] = useState<VisibilityState>(() =>
+    deriveVisibilityState(file)
   )
   const [includeInPacket, setIncludeInPacket] = useState(file.include_in_packet ?? false)
   const [saving, setSaving] = useState(false)
@@ -499,16 +685,18 @@ function EditFileModal({
     setSaving(true)
     setError(null)
 
+    const payload = visibilityToPayload(visibility)
+
     try {
       const response = await fetch('/api/files/update', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           file_id: file.id,
-          display_name: displayName,
+          display_name: displayName.trim() || file.filename,
           category,
-          visibility_scope: visibilityScope,
           include_in_packet: includeInPacket,
+          ...payload,
         }),
       })
 
@@ -550,9 +738,11 @@ function EditFileModal({
           borderRadius: '16px',
           padding: '16px',
           boxShadow: '0 20px 50px rgba(0,0,0,0.20)',
+          maxHeight: '92dvh',
+          overflowY: 'auto',
         }}
       >
-        <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '6px' }}>
+        <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '4px' }}>
           Edit File Info
         </div>
         <div
@@ -568,20 +758,7 @@ function EditFileModal({
 
         <div style={{ display: 'grid', gap: '12px' }}>
           <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: '11px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '.04em',
-                color: 'var(--text-muted)',
-                marginBottom: '6px',
-                fontFamily: 'ui-monospace,monospace',
-              }}
-            >
-              Display Name
-            </label>
+            <label style={labelStyle()}>Display Name</label>
             <input
               type="text"
               value={displayName}
@@ -601,20 +778,7 @@ function EditFileModal({
           </div>
 
           <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: '11px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '.04em',
-                color: 'var(--text-muted)',
-                marginBottom: '6px',
-                fontFamily: 'ui-monospace,monospace',
-              }}
-            >
-              Category
-            </label>
+            <label style={labelStyle()}>Category</label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
@@ -636,43 +800,7 @@ function EditFileModal({
             </select>
           </div>
 
-          <div
-            style={{
-              border: '1px solid var(--border)',
-              borderRadius: '12px',
-              padding: '12px',
-              background: 'var(--bg)',
-            }}
-          >
-            <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '10px' }}>
-              Visibility
-            </div>
-
-            <select
-              value={visibilityScope}
-              onChange={(e) => setVisibilityScope(e.target.value as VisibilityScope)}
-              style={{
-                width: '100%',
-                border: '1px solid var(--border)',
-                borderRadius: '10px',
-                padding: '12px',
-                fontSize: '16px',
-                background: 'var(--surface)',
-                color: 'var(--text)',
-                marginBottom: '8px',
-              }}
-            >
-              {VISIBILITY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              {VISIBILITY_OPTIONS.find((option) => option.value === visibilityScope)?.help}
-            </div>
-          </div>
+          <VisibilityPicker state={visibility} onChange={setVisibility} />
 
           {(category === 'plans' || category === 'photos') && (
             <label
@@ -758,6 +886,8 @@ function EditFileModal({
   )
 }
 
+// ─── FileRow ──────────────────────────────────────────────────────────────────
+
 function FileRow({ file, onUpdated }: { file: JobFile; onUpdated: (file: JobFile) => void }) {
   const [opening, setOpening] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
@@ -805,7 +935,9 @@ function FileRow({ file, onUpdated }: { file: JobFile; onUpdated: (file: JobFile
         role="button"
         tabIndex={0}
         onClick={handleOpen}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleOpen() }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') handleOpen()
+        }}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -829,13 +961,7 @@ function FileRow({ file, onUpdated }: { file: JobFile; onUpdated: (file: JobFile
             {file.display_name || file.filename}
           </div>
 
-          <div
-            style={{
-              fontSize: '12px',
-              color: 'var(--text-muted)',
-              lineHeight: 1.5,
-            }}
-          >
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
             {formatBytes(file.size_bytes)}
             {file.size_bytes ? ' · ' : ''}
             {formatDate(file.created_at)}
@@ -892,6 +1018,8 @@ function FileRow({ file, onUpdated }: { file: JobFile; onUpdated: (file: JobFile
   )
 }
 
+// ─── FilesTab ─────────────────────────────────────────────────────────────────
+
 export default function FilesTab({ jobId }: { jobId: string }) {
   const [files, setFiles] = useState<JobFile[]>([])
   const [loading, setLoading] = useState(true)
@@ -926,7 +1054,6 @@ export default function FilesTab({ jobId }: { jobId: string }) {
     const dynamicCategories = Array.from(new Set(files.map((file) => file.category))).filter(
       (category) => !CATEGORIES.includes(category as KnownCategory)
     )
-
     return [...CATEGORIES, ...dynamicCategories]
   }, [files])
 
@@ -951,14 +1078,8 @@ export default function FilesTab({ jobId }: { jobId: string }) {
       >
         <div>
           <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text)' }}>Files</div>
-          <div
-            style={{
-              fontSize: '13px',
-              color: 'var(--text-muted)',
-              marginTop: '2px',
-            }}
-          >
-            Job files using the permanent visibility model.
+          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
+            Job files and visibility settings.
           </div>
         </div>
 
@@ -1047,18 +1168,16 @@ export default function FilesTab({ jobId }: { jobId: string }) {
               </div>
 
               <div style={sectionCardStyle()}>
-                {categoryFiles.map((file, index) => (
-                  <div key={file.id}>
-                    <FileRow
-                      file={file}
-                      onUpdated={(updated) =>
-                        setFiles((previous) =>
-                          previous.map((f) => (f.id === updated.id ? updated : f))
-                        )
-                      }
-                    />
-                    {index === categoryFiles.length - 1 && <div style={{ height: 0 }} />}
-                  </div>
+                {categoryFiles.map((file) => (
+                  <FileRow
+                    key={file.id}
+                    file={file}
+                    onUpdated={(updated) =>
+                      setFiles((previous) =>
+                        previous.map((f) => (f.id === updated.id ? updated : f))
+                      )
+                    }
+                  />
                 ))}
               </div>
             </div>

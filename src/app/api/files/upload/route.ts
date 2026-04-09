@@ -90,6 +90,10 @@ export async function POST(req: NextRequest) {
     const categoryRaw = form.get('category') as string | null
     const displayNameRaw = form.get('display_name') as string | null
     const visibilityScopeRaw = form.get('visibility_scope') as string | null
+    // New granular permission fields (preferred over visibility_scope when present)
+    const clientVisibleRaw = form.get('client_visible') as string | null
+    const companiesVisibleRaw = form.get('companies_visible') as string | null
+    const companyScopeRaw = form.get('company_scope') as string | null
     const includeInPacketRaw = form.get('include_in_packet') as string | null
     const entityTypeRaw = form.get('entity_type') as string | null
     const scheduleItemId = form.get('schedule_item_id') as string | null
@@ -105,9 +109,41 @@ export async function POST(req: NextRequest) {
     }
 
     const category: Category = isAllowedCategory(categoryRaw) ? categoryRaw : 'other'
-    const visibilityScope: VisibilityScope = isAllowedVisibilityScope(visibilityScopeRaw)
-      ? visibilityScopeRaw
-      : getDefaultVisibilityScope(category)
+
+    // Resolve permission fields.
+    // If granular fields are provided (new UI), use them directly.
+    // Otherwise fall back to visibility_scope for backward compat.
+    const hasGranularFields = clientVisibleRaw !== null || companiesVisibleRaw !== null
+
+    let clientVisible: boolean
+    let companiesVisible: boolean
+    let companyScope: 'all' | 'selected' | null
+    let visibilityScope: VisibilityScope
+
+    if (hasGranularFields) {
+      clientVisible = clientVisibleRaw === 'true'
+      companiesVisible = companiesVisibleRaw === 'true'
+      companyScope =
+        companyScopeRaw === 'all' ? 'all' : companyScopeRaw === 'selected' ? 'selected' : null
+
+      if (!companiesVisible && !clientVisible) {
+        visibilityScope = 'internal_only'
+      } else if (companiesVisible && companyScope === 'all' && !clientVisible) {
+        visibilityScope = 'all_external_except_client'
+      } else if (companiesVisible && clientVisible) {
+        visibilityScope = 'all_external_including_client'
+      } else {
+        visibilityScope = 'tagged_external'
+      }
+    } else {
+      visibilityScope = isAllowedVisibilityScope(visibilityScopeRaw)
+        ? visibilityScopeRaw
+        : getDefaultVisibilityScope(category)
+      const legacy = getLegacyVisibilityFields(visibilityScope)
+      clientVisible = legacy.client_visible
+      companiesVisible = legacy.companies_visible
+      companyScope = legacy.company_scope
+    }
 
     const includeInPacket =
       includeInPacketRaw === null
@@ -156,8 +192,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const legacyVisibility = getLegacyVisibilityFields(visibilityScope)
-
     const insertPayload = {
       id: fileId,
       job_id: jobId,
@@ -174,11 +208,9 @@ export async function POST(req: NextRequest) {
       schedule_item_id: entityType === 'schedule_item' ? scheduleItemId : null,
       procurement_item_id: entityType === 'procurement_item' ? procurementItemId : null,
       task_id: entityType === 'task' ? taskId : null,
-
-      // legacy compatibility fields retained for now
-      client_visible: legacyVisibility.client_visible,
-      companies_visible: legacyVisibility.companies_visible,
-      company_scope: legacyVisibility.company_scope,
+      client_visible: clientVisible,
+      companies_visible: companiesVisible,
+      company_scope: companyScope,
     }
 
     const { data: inserted, error: dbError } = await admin

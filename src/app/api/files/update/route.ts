@@ -21,19 +21,6 @@ function isAllowedVisibilityScope(value: unknown): value is VisibilityScope {
   return typeof value === 'string' && ALLOWED_VISIBILITY_SCOPES.includes(value as VisibilityScope)
 }
 
-function getLegacyVisibilityFields(visibilityScope: VisibilityScope) {
-  switch (visibilityScope) {
-    case 'internal_only':
-      return { client_visible: false, companies_visible: false, company_scope: null }
-    case 'tagged_external':
-      return { client_visible: true, companies_visible: true, company_scope: 'selected' }
-    case 'all_external_except_client':
-      return { client_visible: false, companies_visible: true, company_scope: 'all' }
-    case 'all_external_including_client':
-      return { client_visible: true, companies_visible: true, company_scope: 'all' }
-  }
-}
-
 export async function PATCH(req: NextRequest) {
   try {
     const supabase = await createClient()
@@ -51,7 +38,18 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
 
-    const { file_id, display_name, category, visibility_scope, include_in_packet } = body as Record<string, unknown>
+    const {
+      file_id,
+      display_name,
+      category,
+      include_in_packet,
+      // New granular permission fields (preferred)
+      client_visible,
+      companies_visible,
+      company_scope,
+      // Legacy fallback
+      visibility_scope,
+    } = body as Record<string, unknown>
 
     if (typeof file_id !== 'string' || !file_id) {
       return NextResponse.json({ error: 'file_id required' }, { status: 400 })
@@ -61,8 +59,62 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
     }
 
-    if (!isAllowedVisibilityScope(visibility_scope)) {
-      return NextResponse.json({ error: 'Invalid visibility_scope' }, { status: 400 })
+    // Resolve permission fields.
+    // If granular fields are present (new UI), use them directly and derive
+    // visibility_scope for backward compat. Otherwise fall back to the legacy
+    // visibility_scope field (older callers).
+    const hasGranularFields =
+      typeof client_visible === 'boolean' || typeof companies_visible === 'boolean'
+
+    let resolvedClientVisible: boolean
+    let resolvedCompaniesVisible: boolean
+    let resolvedCompanyScope: 'all' | 'selected' | null
+    let resolvedVisibilityScope: VisibilityScope
+
+    if (hasGranularFields) {
+      resolvedClientVisible = client_visible === true
+      resolvedCompaniesVisible = companies_visible === true
+      resolvedCompanyScope =
+        company_scope === 'all' ? 'all' : company_scope === 'selected' ? 'selected' : null
+
+      if (!resolvedCompaniesVisible && !resolvedClientVisible) {
+        resolvedVisibilityScope = 'internal_only'
+      } else if (resolvedCompaniesVisible && resolvedCompanyScope === 'all' && !resolvedClientVisible) {
+        resolvedVisibilityScope = 'all_external_except_client'
+      } else if (resolvedCompaniesVisible && resolvedClientVisible) {
+        resolvedVisibilityScope = 'all_external_including_client'
+      } else {
+        resolvedVisibilityScope = 'tagged_external'
+      }
+    } else {
+      if (!isAllowedVisibilityScope(visibility_scope)) {
+        return NextResponse.json({ error: 'Invalid visibility_scope' }, { status: 400 })
+      }
+      resolvedVisibilityScope = visibility_scope
+
+      // Derive granular fields from legacy scope
+      switch (resolvedVisibilityScope) {
+        case 'internal_only':
+          resolvedClientVisible = false
+          resolvedCompaniesVisible = false
+          resolvedCompanyScope = null
+          break
+        case 'tagged_external':
+          resolvedClientVisible = true
+          resolvedCompaniesVisible = true
+          resolvedCompanyScope = 'selected'
+          break
+        case 'all_external_except_client':
+          resolvedClientVisible = false
+          resolvedCompaniesVisible = true
+          resolvedCompanyScope = 'all'
+          break
+        case 'all_external_including_client':
+          resolvedClientVisible = true
+          resolvedCompaniesVisible = true
+          resolvedCompanyScope = 'all'
+          break
+      }
     }
 
     // Verify the file exists and the user has access via RLS
@@ -76,8 +128,6 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 })
     }
 
-    const legacyVisibility = getLegacyVisibilityFields(visibility_scope)
-
     const admin = createAdminClient()
 
     const { data: updated, error: updateError } = await admin
@@ -85,9 +135,11 @@ export async function PATCH(req: NextRequest) {
       .update({
         display_name: typeof display_name === 'string' ? display_name.trim() || null : null,
         category,
-        visibility_scope,
         include_in_packet: include_in_packet === true,
-        ...legacyVisibility,
+        visibility_scope: resolvedVisibilityScope,
+        client_visible: resolvedClientVisible,
+        companies_visible: resolvedCompaniesVisible,
+        company_scope: resolvedCompanyScope,
       })
       .eq('id', file_id)
       .select(
