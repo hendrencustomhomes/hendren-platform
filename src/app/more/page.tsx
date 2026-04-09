@@ -7,31 +7,26 @@ const MORE_ITEMS = [
     href: '/more/clients',
     label: 'Clients',
     icon: '👤',
-    description: 'Manage shared client records',
   },
   {
     href: '/more/companies',
     label: 'Companies',
     icon: '🏢',
-    description: 'Manage companies, trades, compliance, and contacts',
   },
   {
     href: '/more/internal-users',
     label: 'Internal Users',
     icon: '👥',
-    description: 'Manage internal users, admin access, and contact fields',
   },
   {
     href: '/more/trades',
     label: 'Trades',
     icon: '🛠️',
-    description: 'Manage the shared trade list',
   },
   {
     href: '/more/cost-codes',
     label: 'Cost Codes',
     icon: '🏷️',
-    description: 'Manage the shared cost code list',
   },
 ]
 
@@ -57,19 +52,9 @@ export default function MorePage() {
             fontSize: '18px',
             fontWeight: 700,
             color: 'var(--text)',
-            marginBottom: '4px',
           }}
         >
           More
-        </div>
-        <div
-          style={{
-            fontSize: '13px',
-            color: 'var(--text-muted)',
-            lineHeight: 1.45,
-          }}
-        >
-          Shared datasets and internal management tools for the Hendren Platform.
         </div>
       </div>
 
@@ -117,29 +102,13 @@ export default function MorePage() {
 
               <div
                 style={{
-                  minWidth: 0,
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: 'var(--text)',
                   flex: 1,
                 }}
               >
-                <div
-                  style={{
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    color: 'var(--text)',
-                    marginBottom: '2px',
-                  }}
-                >
-                  {item.label}
-                </div>
-                <div
-                  style={{
-                    fontSize: '12px',
-                    color: 'var(--text-muted)',
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {item.description}
-                </div>
+                {item.label}
               </div>
 
               <div
