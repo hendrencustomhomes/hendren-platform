@@ -471,8 +471,296 @@ function UploadModal({
   )
 }
 
-function FileRow({ file }: { file: JobFile }) {
+function EditFileModal({
+  file,
+  onClose,
+  onUpdated,
+}: {
+  file: JobFile
+  onClose: () => void
+  onUpdated: (file: JobFile) => void
+}) {
+  const [category, setCategory] = useState<string>(file.category)
+  const [displayName, setDisplayName] = useState(file.display_name ?? '')
+  const [visibilityScope, setVisibilityScope] = useState<VisibilityScope>(
+    file.visibility_scope ?? 'internal_only'
+  )
+  const [includeInPacket, setIncludeInPacket] = useState(file.include_in_packet ?? false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (category !== 'plans' && category !== 'photos') {
+      setIncludeInPacket(false)
+    }
+  }, [category])
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/files/update', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          file_id: file.id,
+          display_name: displayName,
+          category,
+          visibility_scope: visibilityScope,
+          include_in_packet: includeInPacket,
+        }),
+      })
+
+      const body = await response.json().catch(() => ({} as { error?: string; file?: JobFile }))
+
+      if (!response.ok) {
+        throw new Error((body as { error?: string }).error ?? 'Save failed')
+      }
+
+      onUpdated((body as { file: JobFile }).file)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 60,
+        background: 'rgba(0,0,0,0.45)',
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        padding: '16px',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '560px',
+          background: 'var(--surface)',
+          color: 'var(--text)',
+          border: '1px solid var(--border)',
+          borderRadius: '16px',
+          padding: '16px',
+          boxShadow: '0 20px 50px rgba(0,0,0,0.20)',
+        }}
+      >
+        <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '6px' }}>
+          Edit File Info
+        </div>
+        <div
+          style={{
+            fontSize: '13px',
+            color: 'var(--text-muted)',
+            marginBottom: '14px',
+            wordBreak: 'break-word',
+          }}
+        >
+          {file.filename}
+        </div>
+
+        <div style={{ display: 'grid', gap: '12px' }}>
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '11px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '.04em',
+                color: 'var(--text-muted)',
+                marginBottom: '6px',
+                fontFamily: 'ui-monospace,monospace',
+              }}
+            >
+              Display Name
+            </label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder={file.filename}
+              style={{
+                width: '100%',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '12px',
+                fontSize: '16px',
+                background: 'var(--surface)',
+                color: 'var(--text)',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '11px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '.04em',
+                color: 'var(--text-muted)',
+                marginBottom: '6px',
+                fontFamily: 'ui-monospace,monospace',
+              }}
+            >
+              Category
+            </label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              style={{
+                width: '100%',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '12px',
+                fontSize: '16px',
+                background: 'var(--surface)',
+                color: 'var(--text)',
+              }}
+            >
+              {CATEGORIES.map((item) => (
+                <option key={item} value={item}>
+                  {getCategoryLabel(item)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div
+            style={{
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              padding: '12px',
+              background: 'var(--bg)',
+            }}
+          >
+            <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '10px' }}>
+              Visibility
+            </div>
+
+            <select
+              value={visibilityScope}
+              onChange={(e) => setVisibilityScope(e.target.value as VisibilityScope)}
+              style={{
+                width: '100%',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '12px',
+                fontSize: '16px',
+                background: 'var(--surface)',
+                color: 'var(--text)',
+                marginBottom: '8px',
+              }}
+            >
+              {VISIBILITY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              {VISIBILITY_OPTIONS.find((option) => option.value === visibilityScope)?.help}
+            </div>
+          </div>
+
+          {(category === 'plans' || category === 'photos') && (
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '14px',
+                color: 'var(--text)',
+                border: '1px solid var(--border)',
+                borderRadius: '12px',
+                padding: '12px',
+                background: 'var(--bg)',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={includeInPacket}
+                onChange={(e) => setIncludeInPacket(e.target.checked)}
+                style={{ width: '18px', height: '18px' }}
+              />
+              Include in job packet
+            </label>
+          )}
+
+          {error && (
+            <div
+              style={{
+                fontSize: '13px',
+                color: 'var(--red)',
+                background: 'var(--red-bg)',
+                border: '1px solid var(--red)',
+                borderRadius: '10px',
+                padding: '10px 12px',
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              style={{
+                flex: 1,
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '12px',
+                background: 'var(--surface)',
+                color: 'var(--text)',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: saving ? 'not-allowed' : 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              style={{
+                flex: 1,
+                border: 'none',
+                borderRadius: '10px',
+                padding: '12px',
+                background: saving ? 'var(--border)' : 'var(--text)',
+                color: 'var(--bg)',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: saving ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FileRow({ file, onUpdated }: { file: JobFile; onUpdated: (file: JobFile) => void }) {
   const [opening, setOpening] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function handleOpen() {
@@ -512,70 +800,95 @@ function FileRow({ file }: { file: JobFile }) {
   }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '12px',
-        padding: '12px 14px',
-        borderBottom: '1px solid var(--border)',
-      }}
-    >
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div
-          style={{
-            fontSize: '14px',
-            fontWeight: 600,
-            color: 'var(--text)',
-            marginBottom: '3px',
-            wordBreak: 'break-word',
-          }}
-        >
-          {file.display_name || file.filename}
-        </div>
-
-        <div
-          style={{
-            fontSize: '12px',
-            color: 'var(--text-muted)',
-            lineHeight: 1.5,
-          }}
-        >
-          {formatBytes(file.size_bytes)}
-          {file.size_bytes ? ' · ' : ''}
-          {formatDate(file.created_at)}
-          {' · '}
-          {getVisibilitySummary(file)}
-          {file.include_in_packet ? ' · In Packet' : ''}
-        </div>
-
-        {error && (
-          <div style={{ fontSize: '12px', color: 'var(--red)', marginTop: '4px' }}>
-            {error}
-          </div>
-        )}
-      </div>
-
-      <button
-        type="button"
+    <>
+      <div
+        role="button"
+        tabIndex={0}
         onClick={handleOpen}
-        disabled={opening}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleOpen() }}
         style={{
-          flexShrink: 0,
-          border: '1px solid var(--border)',
-          background: 'var(--surface)',
-          color: 'var(--blue)',
-          borderRadius: '10px',
-          padding: '8px 12px',
-          fontSize: '12px',
-          fontWeight: 600,
-          cursor: opening ? 'not-allowed' : 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          padding: '12px 14px',
+          borderBottom: '1px solid var(--border)',
+          cursor: opening ? 'wait' : 'pointer',
         }}
       >
-        {opening ? '...' : 'Open'}
-      </button>
-    </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: 'var(--text)',
+              marginBottom: '3px',
+              wordBreak: 'break-word',
+            }}
+          >
+            {file.display_name || file.filename}
+          </div>
+
+          <div
+            style={{
+              fontSize: '12px',
+              color: 'var(--text-muted)',
+              lineHeight: 1.5,
+            }}
+          >
+            {formatBytes(file.size_bytes)}
+            {file.size_bytes ? ' · ' : ''}
+            {formatDate(file.created_at)}
+            {' · '}
+            {getVisibilitySummary(file)}
+            {file.include_in_packet ? ' · In Packet' : ''}
+          </div>
+
+          {error && (
+            <div style={{ fontSize: '12px', color: 'var(--red)', marginTop: '4px' }}>
+              {error}
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          aria-label="File actions"
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowEdit(true)
+          }}
+          style={{
+            flexShrink: 0,
+            border: '1px solid var(--border)',
+            background: 'var(--surface)',
+            color: 'var(--text-muted)',
+            borderRadius: '8px',
+            width: '32px',
+            height: '32px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '18px',
+            lineHeight: 1,
+            cursor: 'pointer',
+          }}
+        >
+          ⋮
+        </button>
+      </div>
+
+      {showEdit && (
+        <EditFileModal
+          file={file}
+          onClose={() => setShowEdit(false)}
+          onUpdated={(updated) => {
+            onUpdated(updated)
+            setShowEdit(false)
+          }}
+        />
+      )}
+    </>
   )
 }
 
@@ -736,7 +1049,14 @@ export default function FilesTab({ jobId }: { jobId: string }) {
               <div style={sectionCardStyle()}>
                 {categoryFiles.map((file, index) => (
                   <div key={file.id}>
-                    <FileRow file={file} />
+                    <FileRow
+                      file={file}
+                      onUpdated={(updated) =>
+                        setFiles((previous) =>
+                          previous.map((f) => (f.id === updated.id ? updated : f))
+                        )
+                      }
+                    />
                     {index === categoryFiles.length - 1 && <div style={{ height: 0 }} />}
                   </div>
                 ))}
