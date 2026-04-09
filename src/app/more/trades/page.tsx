@@ -17,17 +17,14 @@ export default function TradesPage() {
   const [trades, setTrades] = useState<Trade[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [newName, setNewName] = useState('')
   const [newSortOrder, setNewSortOrder] = useState('100')
   const [creating, setCreating] = useState(false)
-
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editName, setEditName] = useState('')
-  const [editSortOrder, setEditSortOrder] = useState('100')
-  const [savingId, setSavingId] = useState<string | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   async function loadTrades() {
     setError(null)
@@ -83,17 +80,25 @@ export default function TradesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function startEdit(trade: Trade) {
-    setEditingId(trade.id)
-    setEditName(trade.name)
-    setEditSortOrder(String(trade.sort_order))
-    setError(null)
-  }
+  function handleTradeFieldChange(
+    tradeId: string,
+    field: 'name' | 'sort_order',
+    value: string
+  ) {
+    setTrades((current) =>
+      current.map((trade) => {
+        if (trade.id !== tradeId) return trade
 
-  function cancelEdit() {
-    setEditingId(null)
-    setEditName('')
-    setEditSortOrder('100')
+        if (field === 'name') {
+          return { ...trade, name: value }
+        }
+
+        return {
+          ...trade,
+          sort_order: value === '' ? 0 : Number(value),
+        }
+      })
+    )
   }
 
   async function handleCreate() {
@@ -128,50 +133,13 @@ export default function TradesPage() {
 
     setNewName('')
     setNewSortOrder('100')
+    setShowAddForm(false)
     setCreating(false)
     await loadTrades()
   }
 
-  async function handleSaveEdit(tradeId: string) {
-    const trimmedName = editName.trim()
-    const parsedSortOrder = Number(editSortOrder)
-
-    if (!trimmedName) {
-      setError('Trade name is required')
-      return
-    }
-
-    if (!Number.isFinite(parsedSortOrder)) {
-      setError('Sort order must be a number')
-      return
-    }
-
-    setSavingId(tradeId)
-    setError(null)
-
-    const { error } = await supabase
-      .from('trades')
-      .update({
-        name: trimmedName,
-        sort_order: parsedSortOrder,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', tradeId)
-
-    if (error) {
-      console.error('Failed to update trade:', error)
-      setError(error.message || 'Failed to update trade')
-      setSavingId(null)
-      return
-    }
-
-    setSavingId(null)
-    cancelEdit()
-    await loadTrades()
-  }
-
   async function handleToggleActive(trade: Trade) {
-    setSavingId(trade.id)
+    setSaving(true)
     setError(null)
 
     const { error } = await supabase
@@ -185,39 +153,53 @@ export default function TradesPage() {
     if (error) {
       console.error('Failed to update trade status:', error)
       setError(error.message || 'Failed to update trade status')
-      setSavingId(null)
+      setSaving(false)
       return
     }
 
-    setSavingId(null)
     await loadTrades()
+    setSaving(false)
   }
 
-  async function handleDelete(trade: Trade) {
-    const confirmed = window.confirm(
-      `Delete trade "${trade.name}"? This cannot be undone.`
-    )
-
-    if (!confirmed) return
-
-    setDeletingId(trade.id)
+  async function handleSave() {
+    setSaving(true)
     setError(null)
 
-    const { error } = await supabase.from('trades').delete().eq('id', trade.id)
+    for (const trade of trades) {
+      const trimmedName = trade.name.trim()
 
-    if (error) {
-      console.error('Failed to delete trade:', error)
-      setError(error.message || 'Failed to delete trade')
-      setDeletingId(null)
-      return
+      if (!trimmedName) {
+        setError('Trade name is required')
+        setSaving(false)
+        return
+      }
+
+      if (!Number.isFinite(Number(trade.sort_order))) {
+        setError('Sort order must be a number')
+        setSaving(false)
+        return
+      }
+
+      const { error } = await supabase
+        .from('trades')
+        .update({
+          name: trimmedName,
+          sort_order: Number(trade.sort_order),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', trade.id)
+
+      if (error) {
+        console.error('Failed to save trade:', error)
+        setError(error.message || 'Failed to save trade')
+        setSaving(false)
+        return
+      }
     }
 
-    if (editingId === trade.id) {
-      cancelEdit()
-    }
-
-    setDeletingId(null)
     await loadTrades()
+    setIsEditing(false)
+    setSaving(false)
   }
 
   return (
@@ -236,22 +218,86 @@ export default function TradesPage() {
           {isAdmin && (
             <div
               style={{
-                padding: '16px 18px',
+                padding: '10px 12px',
                 borderBottom: '1px solid var(--border)',
-                display: 'grid',
-                gap: '10px',
+                display: 'flex',
+                gap: '8px',
+                alignItems: 'center',
+                flexWrap: 'wrap',
               }}
             >
-              <div
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddForm((current) => !current)
+                  setError(null)
+                }}
                 style={{
+                  background: 'transparent',
+                  color: 'var(--text)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  padding: '8px 10px',
                   fontSize: '13px',
                   fontWeight: 700,
-                  color: 'var(--text)',
+                  cursor: 'pointer',
                 }}
               >
-                Add Trade
-              </div>
+                {showAddForm ? 'Hide Add' : 'Add'}
+              </button>
 
+              {!isEditing ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditing(true)
+                    setError(null)
+                  }}
+                  style={{
+                    background: 'transparent',
+                    color: 'var(--text)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '10px',
+                    padding: '8px 10px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Edit
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  style={{
+                    background: 'var(--text)',
+                    color: 'var(--surface)',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '8px 10px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: saving ? 'default' : 'pointer',
+                    opacity: saving ? 0.7 : 1,
+                  }}
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              )}
+            </div>
+          )}
+
+          {showAddForm && isAdmin && (
+            <div
+              style={{
+                padding: '10px 12px',
+                borderBottom: '1px solid var(--border)',
+                display: 'grid',
+                gap: '8px',
+              }}
+            >
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -262,7 +308,7 @@ export default function TradesPage() {
                   borderRadius: '10px',
                   padding: '10px 12px',
                   color: 'var(--text)',
-                  fontSize: '14px',
+                  fontSize: '16px',
                   outline: 'none',
                 }}
               />
@@ -278,7 +324,7 @@ export default function TradesPage() {
                   borderRadius: '10px',
                   padding: '10px 12px',
                   color: 'var(--text)',
-                  fontSize: '14px',
+                  fontSize: '16px',
                   outline: 'none',
                 }}
               />
@@ -293,7 +339,7 @@ export default function TradesPage() {
                   border: 'none',
                   borderRadius: '10px',
                   padding: '10px 12px',
-                  fontSize: '14px',
+                  fontSize: '13px',
                   fontWeight: 700,
                   cursor: creating ? 'default' : 'pointer',
                   opacity: creating ? 0.7 : 1,
@@ -307,10 +353,10 @@ export default function TradesPage() {
           {error && (
             <div
               style={{
-                padding: '14px 18px',
+                padding: '10px 12px',
                 borderBottom: '1px solid var(--border)',
                 color: '#fca5a5',
-                fontSize: '13px',
+                fontSize: '12px',
               }}
             >
               {error}
@@ -320,8 +366,8 @@ export default function TradesPage() {
           {loading ? (
             <div
               style={{
-                padding: '16px 18px',
-                fontSize: '14px',
+                padding: '12px',
+                fontSize: '13px',
                 color: 'var(--text-muted)',
               }}
             >
@@ -330,8 +376,8 @@ export default function TradesPage() {
           ) : trades.length === 0 ? (
             <div
               style={{
-                padding: '16px 18px',
-                fontSize: '14px',
+                padding: '12px',
+                fontSize: '13px',
                 color: 'var(--text-muted)',
               }}
             >
@@ -339,207 +385,115 @@ export default function TradesPage() {
             </div>
           ) : (
             <div>
-              {trades.map((trade, index) => {
-                const isEditing = editingId === trade.id
-                const isSavingThisRow = savingId === trade.id
-                const isDeletingThisRow = deletingId === trade.id
-
-                return (
+              {trades.map((trade, index) => (
+                <div
+                  key={trade.id}
+                  style={{
+                    padding: '10px 12px',
+                    borderTop: index === 0 ? 'none' : '1px solid var(--border)',
+                    display: 'grid',
+                    gap: '8px',
+                  }}
+                >
                   <div
-                    key={trade.id}
                     style={{
-                      padding: '16px 18px',
-                      borderTop: index === 0 ? 'none' : '1px solid var(--border)',
                       display: 'grid',
-                      gap: '12px',
+                      gridTemplateColumns: isEditing ? '1fr 72px 28px' : '1fr auto',
+                      alignItems: 'center',
+                      gap: '8px',
                     }}
                   >
                     {isEditing ? (
                       <>
                         <input
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          placeholder="Trade name"
+                          value={trade.name}
+                          onChange={(e) =>
+                            handleTradeFieldChange(trade.id, 'name', e.target.value)
+                          }
                           style={{
                             background: 'var(--background)',
                             border: '1px solid var(--border)',
-                            borderRadius: '10px',
-                            padding: '10px 12px',
+                            borderRadius: '8px',
+                            padding: '10px 10px',
                             color: 'var(--text)',
-                            fontSize: '14px',
+                            fontSize: '16px',
+                            fontWeight: 600,
                             outline: 'none',
+                            minWidth: 0,
                           }}
                         />
 
                         <input
-                          value={editSortOrder}
-                          onChange={(e) => setEditSortOrder(e.target.value)}
+                          value={String(trade.sort_order)}
+                          onChange={(e) =>
+                            handleTradeFieldChange(
+                              trade.id,
+                              'sort_order',
+                              e.target.value
+                            )
+                          }
                           inputMode="numeric"
-                          placeholder="Sort order"
                           style={{
                             background: 'var(--background)',
                             border: '1px solid var(--border)',
-                            borderRadius: '10px',
-                            padding: '10px 12px',
+                            borderRadius: '8px',
+                            padding: '10px 8px',
                             color: 'var(--text)',
-                            fontSize: '14px',
+                            fontSize: '16px',
+                            textAlign: 'center',
                             outline: 'none',
+                            width: '72px',
                           }}
                         />
 
-                        <div
+                        <button
+                          type="button"
+                          onClick={() => handleToggleActive(trade)}
+                          disabled={saving || creating}
+                          aria-label={
+                            trade.is_active ? `Deactivate ${trade.name}` : `Activate ${trade.name}`
+                          }
                           style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: '8px',
+                            background: 'transparent',
+                            border: 'none',
+                            color: trade.is_active ? '#fca5a5' : 'var(--text-muted)',
+                            fontSize: '18px',
+                            lineHeight: 1,
+                            padding: '6px 4px',
+                            cursor: saving || creating ? 'default' : 'pointer',
+                            opacity: saving || creating ? 0.6 : 1,
                           }}
                         >
-                          <button
-                            type="button"
-                            onClick={() => handleSaveEdit(trade.id)}
-                            disabled={isSavingThisRow}
-                            style={{
-                              background: 'var(--text)',
-                              color: 'var(--surface)',
-                              border: 'none',
-                              borderRadius: '10px',
-                              padding: '10px 12px',
-                              fontSize: '13px',
-                              fontWeight: 700,
-                              cursor: isSavingThisRow ? 'default' : 'pointer',
-                              opacity: isSavingThisRow ? 0.7 : 1,
-                            }}
-                          >
-                            {isSavingThisRow ? 'Saving...' : 'Save'}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={cancelEdit}
-                            disabled={isSavingThisRow}
-                            style={{
-                              background: 'transparent',
-                              color: 'var(--text-muted)',
-                              border: '1px solid var(--border)',
-                              borderRadius: '10px',
-                              padding: '10px 12px',
-                              fontSize: '13px',
-                              fontWeight: 700,
-                              cursor: isSavingThisRow ? 'default' : 'pointer',
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                          ✕
+                        </button>
                       </>
                     ) : (
                       <>
                         <div
                           style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '12px',
+                            fontSize: '15px',
+                            fontWeight: 600,
+                            color: trade.is_active ? 'var(--text)' : 'var(--text-muted)',
+                            minWidth: 0,
                           }}
                         >
-                          <div
-                            style={{
-                              fontSize: '15px',
-                              fontWeight: 700,
-                              color: trade.is_active
-                                ? 'var(--text)'
-                                : 'var(--text-muted)',
-                            }}
-                          >
-                            {trade.name}
-                          </div>
-
-                          <div
-                            style={{
-                              fontSize: '12px',
-                              color: trade.is_active
-                                ? 'var(--text-muted)'
-                                : '#fbbf24',
-                              flexShrink: 0,
-                            }}
-                          >
-                            {trade.is_active ? `#${trade.sort_order}` : 'Inactive'}
-                          </div>
+                          {trade.name}
                         </div>
 
-                        {isAdmin && (
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexWrap: 'wrap',
-                              gap: '8px',
-                            }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => startEdit(trade)}
-                              style={{
-                                background: 'transparent',
-                                color: 'var(--text)',
-                                border: '1px solid var(--border)',
-                                borderRadius: '10px',
-                                padding: '8px 10px',
-                                fontSize: '12px',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              Edit
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleToggleActive(trade)}
-                              disabled={isSavingThisRow}
-                              style={{
-                                background: 'transparent',
-                                color: 'var(--text)',
-                                border: '1px solid var(--border)',
-                                borderRadius: '10px',
-                                padding: '8px 10px',
-                                fontSize: '12px',
-                                fontWeight: 700,
-                                cursor: isSavingThisRow ? 'default' : 'pointer',
-                                opacity: isSavingThisRow ? 0.7 : 1,
-                              }}
-                            >
-                              {isSavingThisRow
-                                ? 'Saving...'
-                                : trade.is_active
-                                  ? 'Deactivate'
-                                  : 'Activate'}
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(trade)}
-                              disabled={isDeletingThisRow}
-                              style={{
-                                background: 'transparent',
-                                color: '#fca5a5',
-                                border: '1px solid rgba(252, 165, 165, 0.35)',
-                                borderRadius: '10px',
-                                padding: '8px 10px',
-                                fontSize: '12px',
-                                fontWeight: 700,
-                                cursor: isDeletingThisRow ? 'default' : 'pointer',
-                                opacity: isDeletingThisRow ? 0.7 : 1,
-                              }}
-                            >
-                              {isDeletingThisRow ? 'Deleting...' : 'Delete'}
-                            </button>
-                          </div>
-                        )}
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            color: trade.is_active ? 'var(--text-muted)' : '#fbbf24',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {trade.is_active ? `#${trade.sort_order}` : 'Inactive'}
+                        </div>
                       </>
                     )}
                   </div>
-                )
-              })}
+                </div>
+              ))}
             </div>
           )}
         </div>
