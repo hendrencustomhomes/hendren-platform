@@ -3,27 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-
-const TRADES = [
-  'Concrete/Foundation',
-  'Framing',
-  'Rough Electrical',
-  'Rough Plumbing',
-  'HVAC',
-  'Insulation',
-  'Drywall',
-  'Finish Electrical',
-  'Finish Plumbing',
-  'Tile',
-  'Flooring',
-  'Cabinetry',
-  'Trim/Millwork',
-  'Paint',
-  'Exterior/Roofing',
-  'Landscaping',
-  'Demo',
-  'Other',
-]
+import { fetchActiveTrades, type TradeOption } from '@/lib/trades'
 
 const STATUS_OPTIONS = ['Pending', 'Ordered', 'Confirmed', 'Delivered', 'Issue']
 const DEPENDENCY_OPTIONS = [
@@ -74,13 +54,15 @@ function NewOrderForm() {
   const supabase = createClient()
 
   const [jobs, setJobs] = useState<any[]>([])
+  const [trades, setTrades] = useState<TradeOption[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingJobs, setLoadingJobs] = useState(true)
+  const [loadingTrades, setLoadingTrades] = useState(true)
   const [error, setError] = useState('')
 
   const [form, setForm] = useState({
     job_id: searchParams.get('jobId') || searchParams.get('job') || '',
-    trade: 'Framing',
+    trade: '',
     description: '',
     vendor: '',
     qty: '',
@@ -105,18 +87,27 @@ function NewOrderForm() {
   useEffect(() => {
     async function loadJobs() {
       setLoadingJobs(true)
-
       const { data } = await supabase
         .from('jobs')
         .select('id, client_name, job_name, project_address, color')
         .eq('is_active', true)
         .order('created_at', { ascending: false })
-
       setJobs(data || [])
       setLoadingJobs(false)
     }
 
+    async function loadTrades() {
+      setLoadingTrades(true)
+      const data = await fetchActiveTrades(supabase)
+      setTrades(data)
+      if (data.length > 0) {
+        setForm((prev) => (prev.trade === '' ? { ...prev, trade: data[0].name } : prev))
+      }
+      setLoadingTrades(false)
+    }
+
     loadJobs()
+    loadTrades()
   }, [supabase])
 
   function setField(key: string, value: any) {
@@ -301,13 +292,15 @@ function NewOrderForm() {
               <div>
                 <label style={labelStyle()}>Trade</label>
                 <select
-                  style={inp}
+                  style={{ ...inp, opacity: loadingTrades ? 0.7 : 1 }}
                   value={form.trade}
                   onChange={(e) => setField('trade', e.target.value)}
+                  disabled={loadingTrades}
                 >
-                  {TRADES.map((trade) => (
-                    <option key={trade} value={trade}>
-                      {trade}
+                  {loadingTrades && <option value="">Loading...</option>}
+                  {trades.map((t) => (
+                    <option key={t.id} value={t.name}>
+                      {t.name}
                     </option>
                   ))}
                 </select>

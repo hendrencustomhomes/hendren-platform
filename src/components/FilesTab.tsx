@@ -1,31 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-
-// ─── Trades ──────────────────────────────────────────────────────────────────
-
-const TRADES = [
-  'Concrete/Foundation',
-  'Framing',
-  'Rough Electrical',
-  'Rough Plumbing',
-  'HVAC',
-  'Insulation',
-  'Drywall',
-  'Finish Electrical',
-  'Finish Plumbing',
-  'Tile',
-  'Flooring',
-  'Cabinetry',
-  'Trim/Millwork',
-  'Paint',
-  'Exterior/Roofing',
-  'Landscaping',
-  'Demo',
-  'Other',
-] as const
-
-type Trade = (typeof TRADES)[number]
+import { createClient } from '@/utils/supabase/client'
+import { fetchActiveTrades } from '@/lib/trades'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,7 +40,7 @@ type JobFile = {
 type VisibilityState = {
   client: boolean
   // Trade names that are checked; empty = no trade access
-  selectedTrades: Trade[]
+  selectedTrades: string[]
 }
 
 // ─── Permission helpers ───────────────────────────────────────────────────────
@@ -82,7 +59,7 @@ function defaultVisibilityState(): VisibilityState {
  * no per-file trade list, so individual trade selections cannot be restored
  * after save. The summary still shows "Some Trades".
  */
-function deriveVisibilityState(file: JobFile): VisibilityState {
+function deriveVisibilityState(file: JobFile, availableTrades: string[]): VisibilityState {
   const hasGranularFields =
     (file.client_visible !== undefined && file.client_visible !== null) ||
     (file.companies_visible !== undefined && file.companies_visible !== null)
@@ -94,15 +71,15 @@ function deriveVisibilityState(file: JobFile): VisibilityState {
       case 'tagged_external':
         return { client: true, selectedTrades: [] }
       case 'all_external_except_client':
-        return { client: false, selectedTrades: [...TRADES] }
+        return { client: false, selectedTrades: [...availableTrades] }
       case 'all_external_including_client':
-        return { client: true, selectedTrades: [...TRADES] }
+        return { client: true, selectedTrades: [...availableTrades] }
     }
   }
 
   const client = file.client_visible ?? false
-  const selectedTrades: Trade[] =
-    file.companies_visible && file.company_scope === 'all' ? [...TRADES] : []
+  const selectedTrades: string[] =
+    file.companies_visible && file.company_scope === 'all' ? [...availableTrades] : []
 
   return { client, selectedTrades }
 }
@@ -111,9 +88,9 @@ function deriveVisibilityState(file: JobFile): VisibilityState {
  * Map checkbox state to DB columns.
  * Derives a legacy visibility_scope value for backward compat.
  */
-function visibilityToPayload(state: VisibilityState) {
+function visibilityToPayload(state: VisibilityState, totalTradeCount: number) {
   const companiesVisible = state.selectedTrades.length > 0
-  const allTradesChecked = state.selectedTrades.length === TRADES.length
+  const allTradesChecked = totalTradeCount > 0 && state.selectedTrades.length >= totalTradeCount
   const companyScope: 'all' | 'selected' | null = companiesVisible
     ? allTradesChecked
       ? 'all'
@@ -189,9 +166,9 @@ function getCategoryLabel(category: string) {
   return titleizeCategory(category)
 }
 
-function getSafeDefaultVisibility(category: string): VisibilityState {
+function getSafeDefaultVisibility(category: string, availableTrades: string[]): VisibilityState {
   if (category === 'plans' || category === 'photos') {
-    return { client: false, selectedTrades: [...TRADES] }
+    return { client: false, selectedTrades: [...availableTrades] }
   }
   return defaultVisibilityState()
 }
@@ -222,25 +199,27 @@ function labelStyle() {
 function VisibilityPicker({
   state,
   onChange,
+  trades,
 }: {
   state: VisibilityState
   onChange: (next: VisibilityState) => void
+  trades: string[]
 }) {
   const [tradesOpen, setTradesOpen] = useState(false)
 
-  const allTradesChecked = state.selectedTrades.length === TRADES.length
+  const allTradesChecked = trades.length > 0 && state.selectedTrades.length >= trades.length
   const someTradesChecked = state.selectedTrades.length > 0 && !allTradesChecked
 
   function toggleAllTrades(checked: boolean) {
-    onChange({ ...state, selectedTrades: checked ? [...TRADES] : [] })
+    onChange({ ...state, selectedTrades: checked ? [...trades] : [] })
   }
 
-  function toggleTrade(trade: Trade, checked: boolean) {
+  function toggleTrade(trade: string, checked: boolean) {
     // If a trade is manually unchecked, only that trade is removed.
     // All Trades visually de-selects (indeterminate → unchecked)
     // but remaining trades stay selected.
-    const next: Trade[] = checked
-      ? ([...state.selectedTrades, trade] as Trade[])
+    const next = checked
+      ? [...state.selectedTrades, trade]
       : state.selectedTrades.filter((t) => t !== trade)
     onChange({ ...state, selectedTrades: next })
   }
@@ -335,7 +314,7 @@ function VisibilityPicker({
         {tradesOpen ? '▲ Hide individual trades' : '▼ Select individual trades'}
         {someTradesChecked && (
           <span style={{ marginLeft: '6px', color: 'var(--text-muted)' }}>
-            ({state.selectedTrades.length}/{TRADES.length})
+            ({state.selectedTrades.length}/{trades.length})
           </span>
         )}
       </button>
@@ -350,7 +329,7 @@ function VisibilityPicker({
             paddingTop: '4px',
           }}
         >
-          {TRADES.map((trade) => (
+          {trades.map((trade) => (
             <label
               key={trade}
               style={{ ...rowStyle, cursor: 'pointer', paddingLeft: '28px' }}
@@ -376,10 +355,12 @@ function UploadModal({
   jobId,
   onClose,
   onUploaded,
+  trades,
 }: {
   jobId: string
   onClose: () => void
   onUploaded: (files: JobFile[]) => void
+  trades: string[]
 }) {
   const [files, setFiles] = useState<File[]>([])
   const [category, setCategory] = useState<string>('other')
@@ -392,7 +373,7 @@ function UploadModal({
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setVisibility(getSafeDefaultVisibility(category))
+    setVisibility(getSafeDefaultVisibility(category, trades))
     if (category !== 'plans' && category !== 'photos') {
       setIncludeInPacket(false)
     }
@@ -407,7 +388,7 @@ function UploadModal({
     setUploading(true)
     setError(null)
 
-    const payload = visibilityToPayload(visibility)
+    const payload = visibilityToPayload(visibility, trades.length)
 
     try {
       const uploadedFiles: JobFile[] = []
@@ -569,7 +550,7 @@ function UploadModal({
             </div>
           )}
 
-          <VisibilityPicker state={visibility} onChange={setVisibility} />
+          <VisibilityPicker state={visibility} onChange={setVisibility} trades={trades} />
 
           {(category === 'plans' || category === 'photos') && (
             <label
@@ -661,15 +642,17 @@ function EditFileModal({
   file,
   onClose,
   onUpdated,
+  trades,
 }: {
   file: JobFile
   onClose: () => void
   onUpdated: (file: JobFile) => void
+  trades: string[]
 }) {
   const [category, setCategory] = useState<string>(file.category)
   const [displayName, setDisplayName] = useState(file.display_name ?? '')
   const [visibility, setVisibility] = useState<VisibilityState>(() =>
-    deriveVisibilityState(file)
+    deriveVisibilityState(file, trades)
   )
   const [includeInPacket, setIncludeInPacket] = useState(file.include_in_packet ?? false)
   const [saving, setSaving] = useState(false)
@@ -685,7 +668,7 @@ function EditFileModal({
     setSaving(true)
     setError(null)
 
-    const payload = visibilityToPayload(visibility)
+    const payload = visibilityToPayload(visibility, trades.length)
 
     try {
       const response = await fetch('/api/files/update', {
@@ -800,7 +783,7 @@ function EditFileModal({
             </select>
           </div>
 
-          <VisibilityPicker state={visibility} onChange={setVisibility} />
+          <VisibilityPicker state={visibility} onChange={setVisibility} trades={trades} />
 
           {(category === 'plans' || category === 'photos') && (
             <label
@@ -888,7 +871,15 @@ function EditFileModal({
 
 // ─── FileRow ──────────────────────────────────────────────────────────────────
 
-function FileRow({ file, onUpdated }: { file: JobFile; onUpdated: (file: JobFile) => void }) {
+function FileRow({
+  file,
+  onUpdated,
+  trades,
+}: {
+  file: JobFile
+  onUpdated: (file: JobFile) => void
+  trades: string[]
+}) {
   const [opening, setOpening] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1012,6 +1003,7 @@ function FileRow({ file, onUpdated }: { file: JobFile; onUpdated: (file: JobFile
             onUpdated(updated)
             setShowEdit(false)
           }}
+          trades={trades}
         />
       )}
     </>
@@ -1025,6 +1017,12 @@ export default function FilesTab({ jobId }: { jobId: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showUpload, setShowUpload] = useState(false)
+  const [trades, setTrades] = useState<string[]>([])
+
+  useEffect(() => {
+    const supabase = createClient()
+    fetchActiveTrades(supabase).then((list) => setTrades(list.map((t) => t.name)))
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -1177,6 +1175,7 @@ export default function FilesTab({ jobId }: { jobId: string }) {
                         previous.map((f) => (f.id === updated.id ? updated : f))
                       )
                     }
+                    trades={trades}
                   />
                 ))}
               </div>
@@ -1191,6 +1190,7 @@ export default function FilesTab({ jobId }: { jobId: string }) {
           onUploaded={(uploadedFiles) =>
             setFiles((previous) => [...uploadedFiles, ...previous])
           }
+          trades={trades}
         />
       )}
     </div>

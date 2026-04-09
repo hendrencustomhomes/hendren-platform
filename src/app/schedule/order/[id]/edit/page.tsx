@@ -3,27 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-
-const TRADES = [
-  'Concrete/Foundation',
-  'Framing',
-  'Rough Electrical',
-  'Rough Plumbing',
-  'HVAC',
-  'Insulation',
-  'Drywall',
-  'Finish Electrical',
-  'Finish Plumbing',
-  'Tile',
-  'Flooring',
-  'Cabinetry',
-  'Trim/Millwork',
-  'Paint',
-  'Exterior/Roofing',
-  'Landscaping',
-  'Demo',
-  'Other',
-]
+import { fetchActiveTrades, type TradeOption } from '@/lib/trades'
 
 const STATUS_OPTIONS = ['Pending', 'Ordered', 'Confirmed', 'Will Call', 'Delivered', 'Issue']
 const DEPENDENCY_OPTIONS = [
@@ -127,8 +107,20 @@ export default function EditOrderPage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [form, setForm] = useState<OrderFormState>(EMPTY_FORM)
   const [scheduleOptions, setScheduleOptions] = useState<any[]>([])
+  const [trades, setTrades] = useState<TradeOption[]>([])
+  const [loadingTrades, setLoadingTrades] = useState(true)
 
   const inp = useMemo(() => inputStyle(), [])
+
+  useEffect(() => {
+    async function loadTrades() {
+      setLoadingTrades(true)
+      const data = await fetchActiveTrades(supabase)
+      setTrades(data)
+      setLoadingTrades(false)
+    }
+    loadTrades()
+  }, [supabase])
 
   useEffect(() => {
     if (!id) return
@@ -436,11 +428,17 @@ export default function EditOrderPage() {
               <select
                 value={form.trade}
                 onChange={(e) => setField('trade', e.target.value)}
-                style={inp}
+                style={{ ...inp, opacity: loadingTrades ? 0.7 : 1 }}
+                disabled={loadingTrades}
               >
-                {TRADES.map((trade) => (
-                  <option key={trade} value={trade}>
-                    {trade}
+                {loadingTrades && <option value="">Loading...</option>}
+                {/* Keep existing value visible even if not in active trades */}
+                {form.trade && !trades.some((t) => t.name === form.trade) && (
+                  <option value={form.trade}>{form.trade}</option>
+                )}
+                {trades.map((t) => (
+                  <option key={t.id} value={t.name}>
+                    {t.name}
                   </option>
                 ))}
               </select>
