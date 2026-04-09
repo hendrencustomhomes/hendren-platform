@@ -265,7 +265,7 @@ export default async function SchedulePage({
           </Link>
 
           <h1 style={{ margin: 0, fontSize: '28px' }}>
-            Master Schedule{jobFilter ? ' — This Job' : ''}
+            Global Schedule{jobFilter ? ' — This Job' : ''}
           </h1>
 
           <div

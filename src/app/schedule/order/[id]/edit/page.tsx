@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 
 const TRADES = [
@@ -116,8 +116,11 @@ export default function EditOrderPage() {
   const supabase = createClient()
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
 
   const id = Array.isArray(params.id) ? params.id[0] : params.id
+  const jobParam = searchParams.get('job')
+  const returnTo = jobParam ? `/jobs/${jobParam}?tab=orders` : '/schedule'
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -328,7 +331,7 @@ export default function EditOrderPage() {
       return
     }
 
-    router.push(`/jobs/${form.job_id}`)
+    router.push(returnTo)
   }
 
   if (loading) {
@@ -389,7 +392,7 @@ export default function EditOrderPage() {
       <div style={{ marginBottom: '14px' }}>
         <button
           type="button"
-          onClick={() => router.push(form.job_id ? `/jobs/${form.job_id}` : '/schedule')}
+          onClick={() => router.push(returnTo)}
           style={{
             border: 'none',
             background: 'none',
@@ -696,7 +699,7 @@ export default function EditOrderPage() {
         >
           <button
             type="button"
-            onClick={() => router.push(form.job_id ? `/jobs/${form.job_id}` : '/schedule')}
+            onClick={() => router.push(returnTo)}
             style={{
               padding: '12px 16px',
               borderRadius: '10px',

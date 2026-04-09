@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 
 type ScheduleFormState = {
@@ -81,8 +81,11 @@ export default function EditSubSchedulePage() {
   const supabase = createClient()
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
 
   const id = Array.isArray(params.id) ? params.id[0] : params.id
+  const jobParam = searchParams.get('job')
+  const returnTo = jobParam ? `/jobs/${jobParam}?tab=subs` : '/schedule'
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -239,7 +242,7 @@ export default function EditSubSchedulePage() {
       return
     }
 
-    router.push(`/jobs/${form.job_id}`)
+    router.push(returnTo)
   }
 
   if (loading) {
@@ -310,7 +313,7 @@ export default function EditSubSchedulePage() {
         <div>
           <button
             type="button"
-            onClick={() => router.push(form.job_id ? `/jobs/${form.job_id}` : '/schedule')}
+            onClick={() => router.push(returnTo)}
             style={{
               border: 'none',
               background: 'none',
@@ -544,7 +547,7 @@ export default function EditSubSchedulePage() {
         >
           <button
             type="button"
-            onClick={() => router.push(form.job_id ? `/jobs/${form.job_id}` : '/schedule')}
+            onClick={() => router.push(returnTo)}
             style={{
               padding: '12px 16px',
               borderRadius: '10px',

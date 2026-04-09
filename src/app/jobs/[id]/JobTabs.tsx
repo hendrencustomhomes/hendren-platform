@@ -1793,7 +1793,7 @@ export default function JobTabs(props: JobTabProps) {
                   }}
                 >
                   <a
-                    href={`/schedule/sub/${item.id}/edit`}
+                    href={`/schedule/sub/${item.id}/edit?job=${jobId}`}
                     style={{
                       flex: 1,
                       minWidth: 0,
@@ -1907,7 +1907,7 @@ export default function JobTabs(props: JobTabProps) {
                     )}
 
                     <a
-                      href={`/schedule/sub/${item.id}/edit`}
+                      href={`/schedule/sub/${item.id}/edit?job=${jobId}`}
                       style={{
                         fontSize: '10px',
                         fontWeight: '600',
@@ -1995,7 +1995,7 @@ export default function JobTabs(props: JobTabProps) {
               return (
                 <a
                   key={item.id}
-                  href={`/schedule/order/${item.id}/edit`}
+                  href={`/schedule/order/${item.id}/edit?job=${jobId}`}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
