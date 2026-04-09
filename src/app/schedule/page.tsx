@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
+import Nav from '@/components/Nav'
 import {
   getOrderRiskLevel,
   getScheduleRiskLevel,
@@ -230,86 +231,56 @@ export default async function SchedulePage({
   const soonCount = alerts.filter((alert) => alert.level === 'soon').length
 
   return (
-    <main
-      style={{
-        padding: '16px',
-        maxWidth: '1400px',
-        margin: '0 auto',
-        background: 'var(--bg)',
-        minHeight: '100vh',
-        color: 'var(--text)',
-      }}
-    >
+    <>
+      <Nav title={jobFilter ? 'Schedule — This Job' : 'Schedule'} />
+      <main
+        style={{
+          padding: '16px',
+          maxWidth: '1400px',
+          margin: '0 auto',
+          background: 'var(--bg)',
+          minHeight: '100vh',
+          color: 'var(--text)',
+        }}
+      >
       <div
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '12px',
+          justifyContent: 'flex-end',
+          gap: '10px',
           flexWrap: 'wrap',
           marginBottom: '16px',
         }}
       >
-        <div>
-          <Link
-            href="/"
-            style={{
-              color: 'var(--blue)',
-              textDecoration: 'none',
-              fontSize: '14px',
-              display: 'inline-block',
-              marginBottom: '6px',
-            }}
-          >
-            ← Dashboard
-          </Link>
+        <Link
+          href={`/schedule/sub/new${jobFilter ? `?jobId=${jobFilter}` : ''}`}
+          style={{
+            textDecoration: 'none',
+            background: 'var(--text)',
+            color: 'var(--bg)',
+            padding: '10px 14px',
+            borderRadius: '10px',
+            fontWeight: 600,
+            fontSize: '14px',
+          }}
+        >
+          + Labor Schedule
+        </Link>
 
-          <h1 style={{ margin: 0, fontSize: '28px' }}>
-            Global Schedule{jobFilter ? ' — This Job' : ''}
-          </h1>
-
-          <div
-            style={{
-              marginTop: '4px',
-              fontSize: '14px',
-              color: 'var(--text-muted)',
-            }}
-          >
-            Schedule coordination and procurement timing in one view
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <Link
-            href={`/schedule/sub/new${jobFilter ? `?jobId=${jobFilter}` : ''}`}
-            style={{
-              textDecoration: 'none',
-              background: 'var(--text)',
-              color: 'var(--bg)',
-              padding: '10px 14px',
-              borderRadius: '10px',
-              fontWeight: 600,
-              fontSize: '14px',
-            }}
-          >
-            + Schedule Item
-          </Link>
-
-          <Link
-            href={`/schedule/order/new${jobFilter ? `?jobId=${jobFilter}` : ''}`}
-            style={{
-              textDecoration: 'none',
-              background: 'var(--blue)',
-              color: '#fff',
-              padding: '10px 14px',
-              borderRadius: '10px',
-              fontWeight: 600,
-              fontSize: '14px',
-            }}
-          >
-            + Procurement Item
-          </Link>
-        </div>
+        <Link
+          href={`/schedule/order/new${jobFilter ? `?jobId=${jobFilter}` : ''}`}
+          style={{
+            textDecoration: 'none',
+            background: 'var(--blue)',
+            color: '#fff',
+            padding: '10px 14px',
+            borderRadius: '10px',
+            fontWeight: 600,
+            fontSize: '14px',
+          }}
+        >
+          + Material Schedule
+        </Link>
       </div>
 
       {alerts.length > 0 && (
@@ -376,7 +347,7 @@ export default async function SchedulePage({
                     }}
                   >
                     {alert.level === 'overdue' ? 'CRITICAL' : 'WARNING'} ·{' '}
-                    {alert.type === 'schedule' ? 'Schedule' : 'Procurement'}
+                    {alert.type === 'schedule' ? 'Labor Schedule' : 'Material Schedule'}
                   </div>
 
                   <div style={{ fontSize: '14px', lineHeight: 1.5 }}>{alert.message}</div>
@@ -399,7 +370,7 @@ export default async function SchedulePage({
           }}
         >
           <div>
-            <h2 style={{ margin: 0, fontSize: '20px' }}>Schedule</h2>
+            <h2 style={{ margin: 0, fontSize: '20px' }}>Labor Schedule</h2>
             <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
               {scheduleList.length} entries
             </div>
@@ -511,7 +482,7 @@ export default async function SchedulePage({
           }}
         >
           <div>
-            <h2 style={{ margin: 0, fontSize: '20px' }}>Procurement</h2>
+            <h2 style={{ margin: 0, fontSize: '20px' }}>Material Schedule</h2>
             <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
               {procurementList.length} items
             </div>
@@ -609,6 +580,7 @@ export default async function SchedulePage({
           </table>
         )}
       </section>
-    </main>
+      </main>
+    </>
   )
 }
