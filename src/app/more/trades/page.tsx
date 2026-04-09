@@ -1,49 +1,130 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import Nav from '@/components/Nav'
+import { createClient } from '@/utils/supabase/client'
+
+type Trade = {
+  id: string
+  name: string
+  is_active: boolean
+  sort_order: number
+}
+
 export default function TradesPage() {
-  const placeholderTrades = [
-    'Framing',
-    'Electrical',
-    'Plumbing',
-    'HVAC',
-    'Drywall',
-    'Paint',
-    'Flooring',
-    'Cabinets',
-    'Roofing',
-    'Landscaping',
-  ]
+  const [trades, setTrades] = useState<Trade[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const supabase = createClient()
+
+    async function loadTrades() {
+      const { data, error } = await supabase
+        .from('trades')
+        .select('id, name, is_active, sort_order')
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true })
+
+      if (error) {
+        console.error('Failed to load trades:', error)
+      } else {
+        setTrades(data || [])
+      }
+
+      setLoading(false)
+    }
+
+    loadTrades()
+  }, [])
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Trades</h1>
-        <p className="text-sm text-muted-foreground">
-          This page will manage the shared trade list used across the Hendren
-          Platform.
-        </p>
-      </div>
+    <>
+      <Nav title="Trades" />
 
-      <div className="rounded-lg border bg-card p-4 md:p-6">
-        <div className="space-y-3">
-          <h2 className="text-base font-medium">Current placeholder list</h2>
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            {placeholderTrades.map((trade) => (
-              <li key={trade} className="ml-5 list-disc">
-                {trade}
-              </li>
-            ))}
-          </ul>
+      <div style={{ padding: '16px' }}>
+        <div
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: '18px',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              padding: '18px 18px 16px',
+              borderBottom: '1px solid var(--border)',
+              fontSize: '18px',
+              fontWeight: 700,
+              color: 'var(--text)',
+            }}
+          >
+            Trades
+          </div>
+
+          {loading ? (
+            <div
+              style={{
+                padding: '16px 18px',
+                fontSize: '14px',
+                color: 'var(--text-muted)',
+              }}
+            >
+              Loading...
+            </div>
+          ) : trades.length === 0 ? (
+            <div
+              style={{
+                padding: '16px 18px',
+                fontSize: '14px',
+                color: 'var(--text-muted)',
+              }}
+            >
+              No trades found
+            </div>
+          ) : (
+            <div>
+              {trades.map((trade, index) => (
+                <div
+                  key={trade.id}
+                  style={{
+                    padding: '16px 18px',
+                    borderTop:
+                      index === 0 ? 'none' : '1px solid var(--border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      color: trade.is_active
+                        ? 'var(--text)'
+                        : 'var(--text-muted)',
+                    }}
+                  >
+                    {trade.name}
+                  </div>
+
+                  {!trade.is_active && (
+                    <div
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      inactive
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-
-      <div className="rounded-lg border bg-card p-4 md:p-6">
-        <div className="space-y-2">
-          <h2 className="text-base font-medium">Next step</h2>
-          <p className="text-sm text-muted-foreground">
-            Later we will connect this page to a single centralized trade source
-            and admin-only editing.
-          </p>
-        </div>
-      </div>
-    </div>
+    </>
   )
 }
