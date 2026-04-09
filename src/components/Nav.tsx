@@ -8,7 +8,7 @@ const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: '📊', exact: true },
   { href: '/schedule', label: 'Schedule', icon: '📅', exact: false },
   { href: '/jobs', label: 'Jobs', icon: '🏠', exact: false },
-  { href: '/jobs/new', label: 'New Job', icon: '➕', exact: true },
+  { href: '/more', label: 'More', icon: '⋯', exact: false },
 ]
 
 type NavProps = {
