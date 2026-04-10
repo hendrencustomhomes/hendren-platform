@@ -16,7 +16,7 @@ type CostCode = {
   trades: { name: string } | null
 }
 
-const inp: React.CSSProperties = {
+const inp = {
   background: 'var(--background)',
   border: '1px solid var(--border)',
   borderRadius: '8px',
@@ -26,7 +26,7 @@ const inp: React.CSSProperties = {
   outline: 'none',
   minWidth: 0,
   width: '100%',
-  boxSizing: 'border-box',
+  boxSizing: 'border-box' as const,
 }
 
 export default function CostCodesPage() {
@@ -62,7 +62,16 @@ export default function CostCodesPage() {
       return
     }
 
-    setCostCodes((data || []) as CostCode[])
+    setCostCodes(
+      (data || []).map((row) => ({
+        ...row,
+        // Supabase returns joined rows as an array for some relationship types.
+        // Normalise to { name: string } | null regardless.
+        trades: Array.isArray(row.trades)
+          ? (row.trades[0] ?? null)
+          : (row.trades ?? null),
+      })) as CostCode[]
+    )
   }
 
   async function loadAdminStatus() {
