@@ -83,6 +83,19 @@ export type JobWithDetails = Record<string, unknown> & {
   procurement_items: ProcurementItem[]
 }
 
+export type ScheduleItemDependency = {
+  id: string
+  job_id: string
+  predecessor_type: 'schedule' | 'procurement'
+  predecessor_id: string
+  successor_type: 'schedule' | 'procurement'
+  successor_id: string
+  reference_point: 'start' | 'end'
+  offset_working_days: number
+  created_at: string
+  updated_at: string
+}
+
 export type CompanyType = 'sub' | 'vendor' | 'both'
 
 export type CompanyRow = {
@@ -221,6 +234,20 @@ export async function getJobWithDetails(
 
   if (error || !data) throw error ?? new Error('Job not found')
   return data as JobWithDetails
+}
+
+export async function getScheduleDependencies(
+  supabase: SupabaseClient,
+  jobId: string
+): Promise<ScheduleItemDependency[]> {
+  const { data, error } = await supabase
+    .from('schedule_item_dependencies')
+    .select('*')
+    .eq('job_id', jobId)
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as ScheduleItemDependency[]
 }
 
 export async function getCompanies(
