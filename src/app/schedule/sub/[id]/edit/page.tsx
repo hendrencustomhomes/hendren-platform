@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { fetchActiveTrades, type TradeOption } from '@/lib/trades'
 
 type ScheduleFormState = {
   job_id: string | null
@@ -91,8 +92,24 @@ export default function EditSubSchedulePage() {
   const [saving, setSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [form, setForm] = useState<ScheduleFormState>(EMPTY_FORM)
+  const [trades, setTrades] = useState<TradeOption[]>([])
+  const [loadingTrades, setLoadingTrades] = useState(true)
+  const [tradeSearch, setTradeSearch] = useState('')
+  const [tradeOpen, setTradeOpen] = useState(false)
+  const tradeRef = useRef<HTMLDivElement>(null)
 
   const inp = useMemo(() => inputStyle(), [])
+
+  const displayTrades = useMemo(() => {
+    let base = [...trades]
+    // In edit mode, include existing trade if it's not in the active list
+    if (form.trade && !base.some((t) => t.name === form.trade)) {
+      base = [{ id: '__existing__', name: form.trade, sort_order: -1 }, ...base]
+    }
+    const q = tradeSearch.trim().toLowerCase()
+    if (!q) return base
+    return base.filter((t) => t.name.toLowerCase().includes(q))
+  }, [trades, form.trade, tradeSearch])
 
   useEffect(() => {
     if (!id) return
@@ -141,12 +158,23 @@ export default function EditSubSchedulePage() {
         cost_code: data.cost_code || '',
         status: data.status || 'tentative',
       })
+      setTradeSearch(data.trade || '')
 
       setLoading(false)
     }
 
     load()
   }, [id, supabase])
+
+  useEffect(() => {
+    async function loadTrades() {
+      setLoadingTrades(true)
+      const data = await fetchActiveTrades(supabase)
+      setTrades(data)
+      setLoadingTrades(false)
+    }
+    loadTrades()
+  }, [supabase])
 
   function handleChange(
     key: keyof ScheduleFormState,
@@ -389,13 +417,70 @@ export default function EditSubSchedulePage() {
           <div style={{ display: 'grid', gap: '12px' }}>
             <div>
               <label style={labelStyle()}>Trade</label>
-              <input
-                placeholder="Plumbing, Framing, Electrical..."
-                value={form.trade}
-                onChange={(e) => handleChange('trade', e.target.value)}
-                required
-                style={inp}
-              />
+              <div ref={tradeRef} style={{ position: 'relative' }}>
+                <input
+                  value={tradeSearch}
+                  onChange={(e) => {
+                    setTradeSearch(e.target.value)
+                    setTradeOpen(true)
+                  }}
+                  onFocus={() => setTradeOpen(true)}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      setTradeOpen(false)
+                      setTradeSearch(form.trade)
+                    }, 150)
+                  }}
+                  placeholder={loadingTrades ? 'Loading trades...' : 'Search trades...'}
+                  disabled={loadingTrades}
+                  autoComplete="off"
+                  style={{ ...inp, opacity: loadingTrades ? 0.7 : 1 }}
+                />
+                {tradeOpen && displayTrades.length > 0 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      zIndex: 50,
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '10px',
+                      marginTop: '4px',
+                      maxHeight: '220px',
+                      overflowY: 'auto',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                    }}
+                  >
+                    {displayTrades.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          handleChange('trade', t.name)
+                          setTradeSearch(t.name)
+                          setTradeOpen(false)
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          textAlign: 'left',
+                          border: 'none',
+                          borderBottom: '1px solid var(--border)',
+                          background: form.trade === t.name ? 'var(--blue-bg)' : 'transparent',
+                          color: form.trade === t.name ? 'var(--blue)' : 'var(--text)',
+                          cursor: 'pointer',
+                          fontSize: '15px',
+                        }}
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div>
