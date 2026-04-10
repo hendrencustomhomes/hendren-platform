@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { fetchActiveTrades, type TradeOption } from '@/lib/trades'
 
 const STATUS_OPTIONS = [
   { value: 'tentative', label: 'Tentative' },
@@ -54,6 +55,11 @@ export default function NewSubSchedulePage() {
 
   const [jobId, setJobId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [trades, setTrades] = useState<TradeOption[]>([])
+  const [loadingTrades, setLoadingTrades] = useState(true)
+  const [tradeSearch, setTradeSearch] = useState('')
+  const [tradeOpen, setTradeOpen] = useState(false)
+  const tradeRef = useRef<HTMLDivElement>(null)
 
   const [form, setForm] = useState({
     trade: '',
@@ -74,7 +80,23 @@ export default function NewSubSchedulePage() {
     setJobId(params.get('jobId'))
   }, [])
 
+  useEffect(() => {
+    async function loadTrades() {
+      setLoadingTrades(true)
+      const data = await fetchActiveTrades(supabase)
+      setTrades(data)
+      setLoadingTrades(false)
+    }
+    loadTrades()
+  }, [supabase])
+
   const inp = useMemo(() => inputStyle(), [])
+
+  const displayTrades = useMemo(() => {
+    const q = tradeSearch.trim().toLowerCase()
+    if (!q) return trades
+    return trades.filter((t) => t.name.toLowerCase().includes(q))
+  }, [trades, tradeSearch])
 
   function handleChange(key: string, value: string | number | boolean) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -210,13 +232,70 @@ export default function NewSubSchedulePage() {
           <div style={{ display: 'grid', gap: '12px' }}>
             <div>
               <label style={labelStyle()}>Trade</label>
-              <input
-                placeholder="Plumbing, Framing, Electrical..."
-                value={form.trade}
-                onChange={(e) => handleChange('trade', e.target.value)}
-                required
-                style={inp}
-              />
+              <div ref={tradeRef} style={{ position: 'relative' }}>
+                <input
+                  value={tradeSearch}
+                  onChange={(e) => {
+                    setTradeSearch(e.target.value)
+                    setTradeOpen(true)
+                  }}
+                  onFocus={() => setTradeOpen(true)}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      setTradeOpen(false)
+                      setTradeSearch(form.trade)
+                    }, 150)
+                  }}
+                  placeholder={loadingTrades ? 'Loading trades...' : 'Search trades...'}
+                  disabled={loadingTrades}
+                  autoComplete="off"
+                  style={{ ...inp, opacity: loadingTrades ? 0.7 : 1 }}
+                />
+                {tradeOpen && displayTrades.length > 0 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      zIndex: 50,
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '10px',
+                      marginTop: '4px',
+                      maxHeight: '220px',
+                      overflowY: 'auto',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                    }}
+                  >
+                    {displayTrades.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          handleChange('trade', t.name)
+                          setTradeSearch(t.name)
+                          setTradeOpen(false)
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          textAlign: 'left',
+                          border: 'none',
+                          borderBottom: '1px solid var(--border)',
+                          background: form.trade === t.name ? 'var(--blue-bg)' : 'transparent',
+                          color: form.trade === t.name ? 'var(--blue)' : 'var(--text)',
+                          cursor: 'pointer',
+                          fontSize: '15px',
+                        }}
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div>
