@@ -7,11 +7,6 @@ import { fetchActiveTrades, type TradeOption } from '@/lib/trades'
 import { fetchActiveCostCodes, type CostCodeOption } from '@/lib/cost-codes'
 
 const STATUS_OPTIONS = ['Pending', 'Ordered', 'Confirmed', 'Will Call', 'Delivered', 'Issue']
-const DEPENDENCY_OPTIONS = [
-  { value: 'contract_signed', label: 'Contract Signed' },
-  { value: 'selection_locked', label: 'Selection Locked' },
-  { value: 'none', label: 'None' },
-]
 
 type OrderFormState = {
   job_id: string | null
@@ -24,7 +19,6 @@ type OrderFormState = {
   lead_days: string
   required_on_site_date: string
   status: string
-  depends_on: string
   selection_reference: string
   notes: string
   cost_code: string
@@ -46,7 +40,6 @@ const EMPTY_FORM: OrderFormState = {
   lead_days: '7',
   required_on_site_date: '',
   status: 'Pending',
-  depends_on: 'contract_signed',
   selection_reference: '',
   notes: '',
   cost_code: '',
@@ -188,7 +181,6 @@ export default function EditOrderPage() {
           lead_days,
           required_on_site_date,
           status,
-          depends_on,
           selection_reference,
           notes,
           cost_code,
@@ -218,7 +210,6 @@ export default function EditOrderPage() {
         lead_days: data.lead_days?.toString() || '0',
         required_on_site_date: data.required_on_site_date || '',
         status: data.status || 'Pending',
-        depends_on: data.depends_on || 'contract_signed',
         selection_reference: data.selection_reference || '',
         notes: data.notes || '',
         cost_code: data.cost_code || '',
@@ -329,13 +320,6 @@ export default function EditOrderPage() {
     setSaving(true)
 
     const leadDays = parseInt(form.lead_days || '0', 10) || 0
-    let orderByDateValue: string | null = null
-
-    if (form.required_on_site_date) {
-      const requiredDate = new Date(form.required_on_site_date)
-      requiredDate.setDate(requiredDate.getDate() - leadDays)
-      orderByDateValue = requiredDate.toISOString().slice(0, 10)
-    }
 
     const { error } = await supabase
       .from('procurement_items')
@@ -348,9 +332,7 @@ export default function EditOrderPage() {
         unit_cost: form.unit_cost ? parseFloat(form.unit_cost) : null,
         lead_days: leadDays,
         required_on_site_date: form.required_on_site_date || null,
-        order_by_date: orderByDateValue,
         status: form.status,
-        depends_on: form.depends_on,
         selection_reference: form.selection_reference.trim() || null,
         notes: form.notes.trim() || null,
         cost_code: form.cost_code.trim() || null,
@@ -475,22 +457,60 @@ export default function EditOrderPage() {
               <div ref={tradeRef} style={{ position: 'relative' }}>
                 <input
                   value={tradeSearch}
-                  onChange={(e) => { setTradeSearch(e.target.value); setTradeOpen(true) }}
+                  onChange={(e) => {
+                    setTradeSearch(e.target.value)
+                    setTradeOpen(true)
+                  }}
                   onFocus={() => setTradeOpen(true)}
-                  onBlur={() => { setTimeout(() => { setTradeOpen(false); setTradeSearch(form.trade) }, 150) }}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      setTradeOpen(false)
+                      setTradeSearch(form.trade)
+                    }, 150)
+                  }}
                   placeholder={loadingTrades ? 'Loading trades...' : 'Search trades...'}
                   disabled={loadingTrades}
                   autoComplete="off"
                   style={{ ...inp, opacity: loadingTrades ? 0.7 : 1 }}
                 />
                 {tradeOpen && displayTrades.length > 0 && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', marginTop: '4px', maxHeight: '220px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      zIndex: 50,
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '10px',
+                      marginTop: '4px',
+                      maxHeight: '220px',
+                      overflowY: 'auto',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                    }}
+                  >
                     {displayTrades.map((t) => (
                       <button
                         key={t.id}
                         type="button"
-                        onMouseDown={(e) => { e.preventDefault(); setField('trade', t.name); setTradeSearch(t.name); setTradeOpen(false) }}
-                        style={{ width: '100%', padding: '10px 12px', textAlign: 'left', border: 'none', borderBottom: '1px solid var(--border)', background: form.trade === t.name ? 'var(--blue-bg)' : 'transparent', color: form.trade === t.name ? 'var(--blue)' : 'var(--text)', cursor: 'pointer', fontSize: '15px' }}
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          setField('trade', t.name)
+                          setTradeSearch(t.name)
+                          setTradeOpen(false)
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          textAlign: 'left',
+                          border: 'none',
+                          borderBottom: '1px solid var(--border)',
+                          background: form.trade === t.name ? 'var(--blue-bg)' : 'transparent',
+                          color: form.trade === t.name ? 'var(--blue)' : 'var(--text)',
+                          cursor: 'pointer',
+                          fontSize: '15px',
+                        }}
                       >
                         {t.name}
                       </button>
@@ -551,32 +571,62 @@ export default function EditOrderPage() {
               <div ref={costCodeRef} style={{ position: 'relative' }}>
                 <input
                   value={costCodeSearch}
-                  onChange={(e) => { setCostCodeSearch(e.target.value); setCostCodeOpen(true) }}
+                  onChange={(e) => {
+                    setCostCodeSearch(e.target.value)
+                    setCostCodeOpen(true)
+                  }}
                   onFocus={() => setCostCodeOpen(true)}
-                  onBlur={() => { setTimeout(() => { setCostCodeOpen(false); setCostCodeSearch(form.cost_code || '') }, 150) }}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      setCostCodeOpen(false)
+                      setCostCodeSearch(form.cost_code || '')
+                    }, 150)
+                  }}
                   placeholder={loadingCostCodes ? 'Loading cost codes...' : 'Search cost codes...'}
                   disabled={loadingCostCodes}
                   autoComplete="off"
                   style={{ ...inp, opacity: loadingCostCodes ? 0.7 : 1 }}
                 />
                 {costCodeOpen && displayCostCodes.length > 0 && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
-                    background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px',
-                    marginTop: '4px', maxHeight: '220px', overflowY: 'auto',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      zIndex: 50,
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '10px',
+                      marginTop: '4px',
+                      maxHeight: '220px',
+                      overflowY: 'auto',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                    }}
+                  >
                     {displayCostCodes.map((c) => (
-                      <button key={c.id} type="button"
+                      <button
+                        key={c.id}
+                        type="button"
                         onMouseDown={(e) => {
                           e.preventDefault()
                           setField('cost_code', c.cost_code)
                           setCostCodeSearch(c.title ? `${c.cost_code} — ${c.title}` : c.cost_code)
                           setCostCodeOpen(false)
                         }}
-                        style={{ width: '100%', padding: '10px 12px', textAlign: 'left', border: 'none',
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          textAlign: 'left',
+                          border: 'none',
                           borderBottom: '1px solid var(--border)',
-                          background: form.cost_code === c.cost_code ? 'var(--blue-bg)' : 'transparent',
+                          background:
+                            form.cost_code === c.cost_code ? 'var(--blue-bg)' : 'transparent',
                           color: form.cost_code === c.cost_code ? 'var(--blue)' : 'var(--text)',
-                          cursor: 'pointer', fontSize: '15px' }}>
+                          cursor: 'pointer',
+                          fontSize: '15px',
+                        }}
+                      >
                         {c.title ? `${c.cost_code} — ${c.title}` : c.cost_code}
                       </button>
                     ))}
@@ -673,21 +723,6 @@ export default function EditOrderPage() {
             </div>
 
             <div>
-              <label style={labelStyle()}>Depends On</label>
-              <select
-                value={form.depends_on}
-                onChange={(e) => setField('depends_on', e.target.value)}
-                style={inp}
-              >
-                {DEPENDENCY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
               <label style={labelStyle()}>Selection Reference</label>
               <input
                 value={form.selection_reference}
@@ -738,19 +773,6 @@ export default function EditOrderPage() {
                 <option value="client">Client Supplied</option>
                 <option value="no_tracking">No Tracking Required</option>
               </select>
-            </div>
-
-            <div
-              style={{
-                fontSize: '13px',
-                color: 'var(--text-muted)',
-                lineHeight: 1.5,
-              }}
-            >
-              Use internal procurement when Hendren is ordering. Use company supplied
-              when the assigned company is bringing materials. Use client supplied when
-              the owner is responsible. Use no tracking only when material timing does
-              not need active coordination.
             </div>
           </div>
         </div>
