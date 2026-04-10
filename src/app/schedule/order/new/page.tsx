@@ -50,6 +50,7 @@ function NewOrderForm() {
   const supabase = createClient()
 
   const [jobs, setJobs] = useState<any[]>([])
+  const [scheduleOptions, setScheduleOptions] = useState<any[]>([])
   const [trades, setTrades] = useState<TradeOption[]>([])
   const [tradeSearch, setTradeSearch] = useState('')
   const [tradeOpen, setTradeOpen] = useState(false)
@@ -110,6 +111,7 @@ function NewOrderForm() {
         .select('id, client_name, job_name, project_address, color')
         .eq('is_active', true)
         .order('created_at', { ascending: false })
+
       setJobs(data || [])
       setLoadingJobs(false)
     }
@@ -118,10 +120,12 @@ function NewOrderForm() {
       setLoadingTrades(true)
       const data = await fetchActiveTrades(supabase)
       setTrades(data)
+
       if (data.length > 0) {
         setForm((prev) => (prev.trade === '' ? { ...prev, trade: data[0].name } : prev))
         setTradeSearch((prev) => prev || data[0].name)
       }
+
       setLoadingTrades(false)
     }
 
@@ -136,6 +140,26 @@ function NewOrderForm() {
     loadTrades()
     loadCostCodes()
   }, [supabase])
+
+  useEffect(() => {
+    async function loadScheduleOptions() {
+      if (!form.job_id) {
+        setScheduleOptions([])
+        setForm((current) => ({ ...current, linked_schedule_id: '' }))
+        return
+      }
+
+      const { data } = await supabase
+        .from('sub_schedule')
+        .select('id, trade, sub_name, start_date')
+        .eq('job_id', form.job_id)
+        .order('start_date', { ascending: true, nullsFirst: false })
+
+      setScheduleOptions(data || [])
+    }
+
+    loadScheduleOptions()
+  }, [form.job_id, supabase])
 
   function setField(key: string, value: any) {
     setForm((current) => ({ ...current, [key]: value }))
@@ -261,7 +285,7 @@ function NewOrderForm() {
       <div style={{ marginBottom: '14px' }}>
         <button
           type="button"
-          onClick={() => router.push(form.job_id ? `/jobs/${form.job_id}` : '/schedule')}
+          onClick={() => router.push(form.job_id ? `/jobs/${form.job_id}?tab=orders` : '/schedule')}
           style={{
             border: 'none',
             background: 'none',
@@ -593,13 +617,27 @@ function NewOrderForm() {
             </div>
 
             <div>
-              <label style={labelStyle()}>Linked Schedule Item ID</label>
-              <input
+              <label style={labelStyle()}>Linked Schedule Item</label>
+              <select
                 style={inp}
                 value={form.linked_schedule_id}
                 onChange={(e) => setField('linked_schedule_id', e.target.value)}
-                placeholder="Optional schedule item id"
-              />
+                disabled={!form.job_id}
+              >
+                <option value="">{form.job_id ? 'None' : 'Select a job first'}</option>
+                {scheduleOptions.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.trade}
+                    {item.sub_name ? ` · ${item.sub_name}` : ''}
+                    {item.start_date
+                      ? ` · ${new Date(item.start_date).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                        })}`
+                      : ''}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
@@ -669,7 +707,7 @@ function NewOrderForm() {
         >
           <button
             type="button"
-            onClick={() => router.push(form.job_id ? `/jobs/${form.job_id}` : '/schedule')}
+            onClick={() => router.push(form.job_id ? `/jobs/${form.job_id}?tab=orders` : '/schedule')}
             style={{
               padding: '12px 16px',
               borderRadius: '10px',
