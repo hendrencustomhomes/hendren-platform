@@ -73,6 +73,7 @@ export type ProcurementItem = {
   is_client_supplied: boolean | null
   is_sub_supplied: boolean | null
   requires_tracking: boolean | null
+  buffer_working_days: number
 }
 
 export type JobWithDetails = Record<string, unknown> & {

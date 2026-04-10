@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { fetchActiveTrades, type TradeOption } from '@/lib/trades'
 import { fetchActiveCostCodes, type CostCodeOption } from '@/lib/cost-codes'
+import { getOrderByDatePreview } from '@/lib/schedule/procurement'
 
 const STATUS_OPTIONS = ['Pending', 'Ordered', 'Confirmed', 'Will Call', 'Delivered', 'Issue']
 
@@ -318,18 +319,11 @@ export default function EditOrderPage() {
         : 'internal'
 
   const orderByDate = useMemo(() => {
-    if (!form.required_on_site_date || !form.lead_days) return null
-
     const leadDays = parseInt(form.lead_days || '0', 10)
-    if (!Number.isFinite(leadDays)) return null
-
-    const requiredDate = new Date(form.required_on_site_date)
-    requiredDate.setDate(requiredDate.getDate() - leadDays)
-
-    return requiredDate.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-    })
+    return getOrderByDatePreview(
+      form.required_on_site_date || null,
+      Number.isFinite(leadDays) ? leadDays : null
+    )
   }, [form.required_on_site_date, form.lead_days])
 
   async function handleSave(e: FormEvent) {
