@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { fetchActiveTrades, type TradeOption } from '@/lib/trades'
@@ -55,6 +55,16 @@ function NewOrderForm() {
 
   const [jobs, setJobs] = useState<any[]>([])
   const [trades, setTrades] = useState<TradeOption[]>([])
+  const [tradeSearch, setTradeSearch] = useState('')
+  const [tradeOpen, setTradeOpen] = useState(false)
+  const tradeRef = useRef<HTMLDivElement>(null)
+
+  const displayTrades = useMemo(() => {
+    const q = tradeSearch.trim().toLowerCase()
+    if (!q) return trades
+    return trades.filter((t) => t.name.toLowerCase().includes(q))
+  }, [trades, tradeSearch])
+
   const [loading, setLoading] = useState(false)
   const [loadingJobs, setLoadingJobs] = useState(true)
   const [loadingTrades, setLoadingTrades] = useState(true)
@@ -102,6 +112,7 @@ function NewOrderForm() {
       setTrades(data)
       if (data.length > 0) {
         setForm((prev) => (prev.trade === '' ? { ...prev, trade: data[0].name } : prev))
+        setTradeSearch((prev) => prev || data[0].name)
       }
       setLoadingTrades(false)
     }
@@ -176,7 +187,7 @@ function NewOrderForm() {
     })
   }, [form.required_on_site_date, form.lead_days])
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
 
     if (!form.job_id || !form.description.trim()) {
@@ -291,19 +302,32 @@ function NewOrderForm() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
                 <label style={labelStyle()}>Trade</label>
-                <select
-                  style={{ ...inp, opacity: loadingTrades ? 0.7 : 1 }}
-                  value={form.trade}
-                  onChange={(e) => setField('trade', e.target.value)}
-                  disabled={loadingTrades}
-                >
-                  {loadingTrades && <option value="">Loading...</option>}
-                  {trades.map((t) => (
-                    <option key={t.id} value={t.name}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
+                <div ref={tradeRef} style={{ position: 'relative' }}>
+                  <input
+                    value={tradeSearch}
+                    onChange={(e) => { setTradeSearch(e.target.value); setTradeOpen(true) }}
+                    onFocus={() => setTradeOpen(true)}
+                    onBlur={() => { setTimeout(() => { setTradeOpen(false); setTradeSearch(form.trade) }, 150) }}
+                    placeholder={loadingTrades ? 'Loading trades...' : 'Search trades...'}
+                    disabled={loadingTrades}
+                    autoComplete="off"
+                    style={{ ...inp, opacity: loadingTrades ? 0.7 : 1 }}
+                  />
+                  {tradeOpen && displayTrades.length > 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', marginTop: '4px', maxHeight: '220px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}>
+                      {displayTrades.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onMouseDown={(e) => { e.preventDefault(); setField('trade', t.name); setTradeSearch(t.name); setTradeOpen(false) }}
+                          style={{ width: '100%', padding: '10px 12px', textAlign: 'left', border: 'none', borderBottom: '1px solid var(--border)', background: form.trade === t.name ? 'var(--blue-bg)' : 'transparent', color: form.trade === t.name ? 'var(--blue)' : 'var(--text)', cursor: 'pointer', fontSize: '15px' }}
+                        >
+                          {t.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { fetchActiveTrades, type TradeOption } from '@/lib/trades'
@@ -109,6 +109,19 @@ export default function EditOrderPage() {
   const [scheduleOptions, setScheduleOptions] = useState<any[]>([])
   const [trades, setTrades] = useState<TradeOption[]>([])
   const [loadingTrades, setLoadingTrades] = useState(true)
+  const [tradeSearch, setTradeSearch] = useState('')
+  const [tradeOpen, setTradeOpen] = useState(false)
+  const tradeRef = useRef<HTMLDivElement>(null)
+
+  const displayTrades = useMemo(() => {
+    let base = [...trades]
+    if (form.trade && !base.some((t) => t.name === form.trade)) {
+      base = [{ id: '__existing__', name: form.trade, sort_order: -1 }, ...base]
+    }
+    const q = tradeSearch.trim().toLowerCase()
+    if (!q) return base
+    return base.filter((t) => t.name.toLowerCase().includes(q))
+  }, [trades, form.trade, tradeSearch])
 
   const inp = useMemo(() => inputStyle(), [])
 
@@ -119,6 +132,7 @@ export default function EditOrderPage() {
       setTrades(data)
       if (data.length > 0) {
         setForm((prev) => (prev.trade === '' ? { ...prev, trade: data[0].name } : prev))
+        setTradeSearch((prev) => prev || data[0].name)
       }
       setLoadingTrades(false)
     }
@@ -186,6 +200,7 @@ export default function EditOrderPage() {
         is_sub_supplied: data.is_sub_supplied ?? false,
         requires_tracking: data.requires_tracking ?? true,
       })
+      setTradeSearch(data.trade || '')
 
       if (data.job_id) {
         const { data: scheduleItems } = await supabase
@@ -269,7 +284,7 @@ export default function EditOrderPage() {
     })
   }, [form.required_on_site_date, form.lead_days])
 
-  async function handleSave(e: React.FormEvent) {
+  async function handleSave(e: FormEvent) {
     e.preventDefault()
 
     if (!id) {
@@ -428,23 +443,32 @@ export default function EditOrderPage() {
           >
             <div>
               <label style={labelStyle()}>Trade</label>
-              <select
-                value={form.trade}
-                onChange={(e) => setField('trade', e.target.value)}
-                style={{ ...inp, opacity: loadingTrades ? 0.7 : 1 }}
-                disabled={loadingTrades}
-              >
-                {loadingTrades && <option value="">Loading...</option>}
-                {/* Keep existing value visible even if not in active trades */}
-                {form.trade && !trades.some((t) => t.name === form.trade) && (
-                  <option value={form.trade}>{form.trade}</option>
+              <div ref={tradeRef} style={{ position: 'relative' }}>
+                <input
+                  value={tradeSearch}
+                  onChange={(e) => { setTradeSearch(e.target.value); setTradeOpen(true) }}
+                  onFocus={() => setTradeOpen(true)}
+                  onBlur={() => { setTimeout(() => { setTradeOpen(false); setTradeSearch(form.trade) }, 150) }}
+                  placeholder={loadingTrades ? 'Loading trades...' : 'Search trades...'}
+                  disabled={loadingTrades}
+                  autoComplete="off"
+                  style={{ ...inp, opacity: loadingTrades ? 0.7 : 1 }}
+                />
+                {tradeOpen && displayTrades.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', marginTop: '4px', maxHeight: '220px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}>
+                    {displayTrades.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); setField('trade', t.name); setTradeSearch(t.name); setTradeOpen(false) }}
+                        style={{ width: '100%', padding: '10px 12px', textAlign: 'left', border: 'none', borderBottom: '1px solid var(--border)', background: form.trade === t.name ? 'var(--blue-bg)' : 'transparent', color: form.trade === t.name ? 'var(--blue)' : 'var(--text)', cursor: 'pointer', fontSize: '15px' }}
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
                 )}
-                {trades.map((t) => (
-                  <option key={t.id} value={t.name}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+              </div>
             </div>
 
             <div>
