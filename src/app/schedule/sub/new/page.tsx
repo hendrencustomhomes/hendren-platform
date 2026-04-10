@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { fetchActiveTrades, type TradeOption } from '@/lib/trades'
@@ -119,7 +119,7 @@ export default function NewSubSchedulePage() {
     }))
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
 
     if (!jobId) {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { fetchActiveTrades, type TradeOption } from '@/lib/trades'
@@ -221,7 +221,7 @@ export default function EditSubSchedulePage() {
     }))
   }
 
-  async function handleSave(e: React.FormEvent) {
+  async function handleSave(e: FormEvent) {
     e.preventDefault()
 
     if (!id) {
