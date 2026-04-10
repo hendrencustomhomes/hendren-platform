@@ -46,6 +46,14 @@ export type JobSubSchedule = {
   is_released: boolean | null
   release_date: string | null
   notification_window_days: number | null
+
+  // Schedule engine fields
+  confirmed_date?: string | null
+  duration_working_days?: number | null
+  buffer_working_days: number
+  include_saturday: boolean
+  include_sunday: boolean
+  is_locked: boolean
 }
 
 export type ProcurementItem = {
