@@ -244,7 +244,7 @@ function NewOrderForm() {
       return
     }
 
-    router.push(form.job_id ? `/jobs/${form.job_id}` : '/schedule')
+    router.push(form.job_id ? `/jobs/${form.job_id}?tab=orders` : '/schedule')
   }
 
   return (
