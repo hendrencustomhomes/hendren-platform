@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { checkEmailType, signInWithMagicLink, signInWithPassword } from './actions'
 
 type Step = 'email' | 'password' | 'magic_sent'
@@ -54,7 +54,7 @@ export default function LoginPage() {
 
   const inp = inputStyle()
 
-  async function handleEmailSubmit(e: React.FormEvent) {
+  async function handleEmailSubmit(e: FormEvent) {
     e.preventDefault()
     setError('')
     setLoading(true)
@@ -78,7 +78,7 @@ export default function LoginPage() {
     setStep('magic_sent')
   }
 
-  async function handlePasswordSubmit(e: React.FormEvent) {
+  async function handlePasswordSubmit(e: FormEvent) {
     e.preventDefault()
     setError('')
     setLoading(true)

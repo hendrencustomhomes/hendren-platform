@@ -1,6 +1,6 @@
 'use client';
  
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useState, useTransition, type FormEvent } from 'react';
 import { createJobWithClient } from './actions';
 
 type ContactFormRow = {
@@ -81,7 +81,7 @@ export default function JobForm() {
     });
   }
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
