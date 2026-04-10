@@ -194,7 +194,7 @@ export default function EditOrderPage() {
         .single()
 
       if (error || !data) {
-        setErrorMessage(error?.message || 'Procurement item not found')
+        setErrorMessage(error?.message || 'Material schedule not found')
         setLoading(false)
         return
       }
@@ -237,6 +237,34 @@ export default function EditOrderPage() {
 
     load()
   }, [id, supabase])
+
+  useEffect(() => {
+    async function loadScheduleOptions() {
+      if (!form.job_id) {
+        setScheduleOptions([])
+        return
+      }
+
+      const { data } = await supabase
+        .from('sub_schedule')
+        .select('id, trade, sub_name, start_date')
+        .eq('job_id', form.job_id)
+        .order('start_date', { ascending: true, nullsFirst: false })
+
+      setScheduleOptions(data || [])
+
+      if (
+        form.linked_schedule_id &&
+        !(data || []).some((d) => d.id === form.linked_schedule_id)
+      ) {
+        setForm((current) => ({ ...current, linked_schedule_id: '' }))
+      }
+    }
+
+    if (form.job_id) {
+      loadScheduleOptions()
+    }
+  }, [form.job_id, form.linked_schedule_id, supabase])
 
   function setField(key: keyof OrderFormState, value: string | boolean) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -308,7 +336,7 @@ export default function EditOrderPage() {
     e.preventDefault()
 
     if (!id) {
-      alert('Missing procurement item id')
+      alert('Missing material schedule id')
       return
     }
 
@@ -367,7 +395,7 @@ export default function EditOrderPage() {
           color: 'var(--text)',
         }}
       >
-        Loading procurement item...
+        Loading material schedule...
       </main>
     )
   }
@@ -384,7 +412,7 @@ export default function EditOrderPage() {
           color: 'var(--text)',
         }}
       >
-        <h1 style={{ marginBottom: '16px', fontSize: '28px' }}>Edit Procurement Item</h1>
+        <h1 style={{ marginBottom: '16px', fontSize: '28px' }}>Edit Material Schedule</h1>
         <div
           style={{
             ...pageCardStyle(),
@@ -427,7 +455,7 @@ export default function EditOrderPage() {
           ← Back
         </button>
 
-        <h1 style={{ margin: 0, fontSize: '28px' }}>Edit Procurement Item</h1>
+        <h1 style={{ margin: 0, fontSize: '28px' }}>Edit Material Schedule</h1>
         <div
           style={{
             marginTop: '4px',
@@ -435,14 +463,14 @@ export default function EditOrderPage() {
             color: 'var(--text-muted)',
           }}
         >
-          Update material timing, source, grouping, and company coordination details
+          Update material schedule timing, source, grouping, and company coordination details
         </div>
       </div>
 
       <form onSubmit={handleSave} style={{ display: 'grid', gap: '12px' }}>
         <div style={pageCardStyle()}>
           <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>
-            Procurement Details
+            Material Details
           </div>
 
           <div
@@ -579,7 +607,14 @@ export default function EditOrderPage() {
                   onBlur={() => {
                     setTimeout(() => {
                       setCostCodeOpen(false)
-                      setCostCodeSearch(form.cost_code || '')
+                      const selected = costCodes.find((c) => c.cost_code === form.cost_code)
+                      setCostCodeSearch(
+                        selected
+                          ? selected.title
+                            ? `${selected.cost_code} — ${selected.title}`
+                            : selected.cost_code
+                          : form.cost_code || ''
+                      )
                     }, 150)
                   }}
                   placeholder={loadingCostCodes ? 'Loading cost codes...' : 'Search cost codes...'}
@@ -636,7 +671,7 @@ export default function EditOrderPage() {
             </div>
 
             <div>
-              <label style={labelStyle()}>Linked Schedule Item</label>
+              <label style={labelStyle()}>Linked Labor Schedule</label>
               <select
                 value={form.linked_schedule_id}
                 onChange={(e) => setField('linked_schedule_id', e.target.value)}
@@ -834,7 +869,7 @@ export default function EditOrderPage() {
               fontSize: '14px',
             }}
           >
-            {saving ? 'Saving...' : 'Save Procurement Item'}
+            {saving ? 'Saving...' : 'Save Material Schedule'}
           </button>
         </div>
       </form>
