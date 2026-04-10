@@ -5,6 +5,13 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { fetchActiveTrades, type TradeOption } from '@/lib/trades'
 import { fetchActiveCostCodes, type CostCodeOption } from '@/lib/cost-codes'
+import {
+  normalizeFromStartAndEnd,
+  normalizeFromStartAndDuration,
+  applyWeekendInference,
+  formatDateToISO,
+  parseDateLocal,
+} from '@/lib/schedule/labor'
 
 const STATUS_OPTIONS = [
   { value: 'tentative', label: 'Tentative' },
@@ -78,6 +85,10 @@ export default function NewSubSchedulePage() {
     notification_window_days: 14,
     cost_code: '',
     status: 'tentative',
+    duration_working_days: 1,
+    include_saturday: false,
+    include_sunday: false,
+    buffer_working_days: 0,
   })
 
   useEffect(() => {
@@ -124,6 +135,92 @@ export default function NewSubSchedulePage() {
 
   function handleChange(key: string, value: string | number | boolean) {
     setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  function handleStartDateChange(value: string) {
+    if (!value) {
+      setForm((prev) => ({ ...prev, start_date: '', end_date: '', duration_working_days: 1 }))
+      return
+    }
+    const startDate = parseDateLocal(value)
+    setForm((prev) => {
+      const flags = applyWeekendInference(startDate, {
+        includeSaturday: prev.include_saturday,
+        includeSunday: prev.include_sunday,
+      })
+      const hasValidEnd = !!prev.end_date && parseDateLocal(prev.end_date) >= startDate
+      if (hasValidEnd) {
+        const { durationWorkingDays } = normalizeFromStartAndEnd(
+          startDate,
+          parseDateLocal(prev.end_date),
+          flags
+        )
+        return {
+          ...prev,
+          start_date: value,
+          duration_working_days: durationWorkingDays,
+          include_saturday: flags.includeSaturday,
+          include_sunday: flags.includeSunday,
+        }
+      }
+      return {
+        ...prev,
+        start_date: value,
+        end_date: value,
+        duration_working_days: 1,
+        include_saturday: flags.includeSaturday,
+        include_sunday: flags.includeSunday,
+      }
+    })
+  }
+
+  function handleEndDateChange(value: string) {
+    if (!value || !form.start_date) {
+      setForm((prev) => ({ ...prev, end_date: value }))
+      return
+    }
+    const startDate = parseDateLocal(form.start_date)
+    const endDate = parseDateLocal(value)
+    if (endDate < startDate) {
+      setForm((prev) => ({ ...prev, end_date: value }))
+      return
+    }
+    const flags = { includeSaturday: form.include_saturday, includeSunday: form.include_sunday }
+    const { durationWorkingDays } = normalizeFromStartAndEnd(startDate, endDate, flags)
+    setForm((prev) => ({ ...prev, end_date: value, duration_working_days: durationWorkingDays }))
+  }
+
+  function handleDurationChange(value: string) {
+    const duration = parseInt(value, 10)
+    if (!Number.isFinite(duration) || duration < 1) return
+    setForm((prev) => {
+      if (!prev.start_date) return { ...prev, duration_working_days: duration }
+      const startDate = parseDateLocal(prev.start_date)
+      const flags = { includeSaturday: prev.include_saturday, includeSunday: prev.include_sunday }
+      const { endDate } = normalizeFromStartAndDuration(startDate, duration, flags)
+      return {
+        ...prev,
+        duration_working_days: duration,
+        end_date: formatDateToISO(endDate),
+      }
+    })
+  }
+
+  function handleWeekendFlagChange(flag: 'include_saturday' | 'include_sunday', value: boolean) {
+    setForm((prev) => {
+      if (!prev.start_date) return { ...prev, [flag]: value }
+      const startDate = parseDateLocal(prev.start_date)
+      const newFlags = {
+        includeSaturday: flag === 'include_saturday' ? value : prev.include_saturday,
+        includeSunday: flag === 'include_sunday' ? value : prev.include_sunday,
+      }
+      const { endDate } = normalizeFromStartAndDuration(startDate, prev.duration_working_days, newFlags)
+      return {
+        ...prev,
+        [flag]: value,
+        end_date: formatDateToISO(endDate),
+      }
+    })
   }
 
   function handleReleaseToggle(checked: boolean) {
@@ -174,6 +271,10 @@ export default function NewSubSchedulePage() {
       status: form.status,
       confirmed_date:
         form.status === 'confirmed' ? new Date().toISOString() : null,
+      duration_working_days: form.duration_working_days,
+      buffer_working_days: form.buffer_working_days,
+      include_saturday: form.include_saturday,
+      include_sunday: form.include_sunday,
     }
 
     const { error } = await supabase.from('sub_schedule').insert([payload])
@@ -338,7 +439,7 @@ export default function NewSubSchedulePage() {
                 <input
                   type="date"
                   value={form.start_date}
-                  onChange={(e) => handleChange('start_date', e.target.value)}
+                  onChange={(e) => handleStartDateChange(e.target.value)}
                   style={inp}
                 />
               </div>
@@ -348,10 +449,73 @@ export default function NewSubSchedulePage() {
                 <input
                   type="date"
                   value={form.end_date}
-                  onChange={(e) => handleChange('end_date', e.target.value)}
+                  onChange={(e) => handleEndDateChange(e.target.value)}
                   style={inp}
                 />
               </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={labelStyle()}>Duration (Working Days)</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={form.duration_working_days}
+                  onChange={(e) => handleDurationChange(e.target.value)}
+                  style={inp}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle()}>Buffer (Working Days)</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  value={form.buffer_working_days}
+                  onChange={(e) => handleChange('buffer_working_days', Number(e.target.value || 0))}
+                  style={inp}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '14px',
+                  color: 'var(--text)',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.include_saturday}
+                  onChange={(e) => handleWeekendFlagChange('include_saturday', e.target.checked)}
+                  style={{ width: '16px', height: '16px' }}
+                />
+                Include Saturdays
+              </label>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '14px',
+                  color: 'var(--text)',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.include_sunday}
+                  onChange={(e) => handleWeekendFlagChange('include_sunday', e.target.checked)}
+                  style={{ width: '16px', height: '16px' }}
+                />
+                Include Sundays
+              </label>
             </div>
 
             <div>
