@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from '
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { fetchActiveTrades, type TradeOption } from '@/lib/trades'
+import { fetchActiveCostCodes, type CostCodeOption } from '@/lib/cost-codes'
 
 const STATUS_OPTIONS = ['Pending', 'Ordered', 'Confirmed', 'Delivered', 'Issue']
 const DEPENDENCY_OPTIONS = [
@@ -58,12 +59,25 @@ function NewOrderForm() {
   const [tradeSearch, setTradeSearch] = useState('')
   const [tradeOpen, setTradeOpen] = useState(false)
   const tradeRef = useRef<HTMLDivElement>(null)
+  const [costCodes, setCostCodes] = useState<CostCodeOption[]>([])
+  const [loadingCostCodes, setLoadingCostCodes] = useState(true)
+  const [costCodeSearch, setCostCodeSearch] = useState('')
+  const [costCodeOpen, setCostCodeOpen] = useState(false)
+  const costCodeRef = useRef<HTMLDivElement>(null)
 
   const displayTrades = useMemo(() => {
     const q = tradeSearch.trim().toLowerCase()
     if (!q) return trades
     return trades.filter((t) => t.name.toLowerCase().includes(q))
   }, [trades, tradeSearch])
+
+  const displayCostCodes = useMemo(() => {
+    const q = costCodeSearch.trim().toLowerCase()
+    if (!q) return costCodes
+    return costCodes.filter(
+      (c) => c.cost_code.toLowerCase().includes(q) || c.title.toLowerCase().includes(q)
+    )
+  }, [costCodes, costCodeSearch])
 
   const [loading, setLoading] = useState(false)
   const [loadingJobs, setLoadingJobs] = useState(true)
@@ -117,8 +131,16 @@ function NewOrderForm() {
       setLoadingTrades(false)
     }
 
+    async function loadCostCodes() {
+      setLoadingCostCodes(true)
+      const data = await fetchActiveCostCodes(supabase)
+      setCostCodes(data)
+      setLoadingCostCodes(false)
+    }
+
     loadJobs()
     loadTrades()
+    loadCostCodes()
   }, [supabase])
 
   function setField(key: string, value: any) {
@@ -416,12 +438,41 @@ function NewOrderForm() {
 
             <div>
               <label style={labelStyle()}>Cost Code</label>
-              <input
-                style={inp}
-                value={form.cost_code}
-                onChange={(e) => setField('cost_code', e.target.value)}
-                placeholder="ex: framing_material"
-              />
+              <div ref={costCodeRef} style={{ position: 'relative' }}>
+                <input
+                  value={costCodeSearch}
+                  onChange={(e) => { setCostCodeSearch(e.target.value); setCostCodeOpen(true) }}
+                  onFocus={() => setCostCodeOpen(true)}
+                  onBlur={() => { setTimeout(() => { setCostCodeOpen(false); setCostCodeSearch(form.cost_code || '') }, 150) }}
+                  placeholder={loadingCostCodes ? 'Loading cost codes...' : 'Search cost codes...'}
+                  disabled={loadingCostCodes}
+                  autoComplete="off"
+                  style={{ ...inp, opacity: loadingCostCodes ? 0.7 : 1 }}
+                />
+                {costCodeOpen && displayCostCodes.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                    background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px',
+                    marginTop: '4px', maxHeight: '220px', overflowY: 'auto',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}>
+                    {displayCostCodes.map((c) => (
+                      <button key={c.id} type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          setField('cost_code', c.cost_code)
+                          setCostCodeSearch(c.title ? `${c.cost_code} — ${c.title}` : c.cost_code)
+                          setCostCodeOpen(false)
+                        }}
+                        style={{ width: '100%', padding: '10px 12px', textAlign: 'left', border: 'none',
+                          borderBottom: '1px solid var(--border)',
+                          background: form.cost_code === c.cost_code ? 'var(--blue-bg)' : 'transparent',
+                          color: form.cost_code === c.cost_code ? 'var(--blue)' : 'var(--text)',
+                          cursor: 'pointer', fontSize: '15px' }}>
+                        {c.title ? `${c.cost_code} — ${c.title}` : c.cost_code}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
