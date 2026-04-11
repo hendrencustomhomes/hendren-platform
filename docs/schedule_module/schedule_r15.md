@@ -1,7 +1,7 @@
 # Schedule Module — R15 Deliverables
 
 **Date:** 2026-04-11
-**Branch:** `claude/audit-schedule-module-WJyaY`
+**Branch:** `dev`
 **Files changed:**
 - `src/app/schedule/actions.ts` (new)
 - `src/app/schedule/ScheduleEditClient.tsx` (new)
@@ -207,14 +207,23 @@ No-filter path: same tables as before, minus resolved hints (which were only sho
 
 ## J. TypeScript Errors Encountered
 
-All errors are pre-existing environment errors from missing `node_modules`:
+All errors are pre-existing environment errors from missing `node_modules`.
 
+**`src/app/schedule/actions.ts`:**
+```
+error TS2307: Cannot find module 'next/cache' or its corresponding type declarations.
+```
+Same root cause as all other files importing from `next/*`. No new errors introduced.
+
+**`src/app/schedule/ScheduleEditClient.tsx`:**
 ```
 src/app/schedule/ScheduleEditClient.tsx(3,50): error TS2307: Cannot find module 'react'
 src/app/schedule/ScheduleEditClient.tsx(4,18): error TS2307: Cannot find module 'next/link'
 ```
+JSX element errors and `Parameter 'prev' implicitly has an 'any' type` at line 189 cascade from the missing `react` types — `React.Dispatch` cannot be resolved so the `setDraftOverrides` updater parameter loses its type. Identical pattern across all client components in the codebase (`JobTabs.tsx`, etc.). No new errors introduced.
 
-JSX element errors and `Parameter implicitly has type 'any'` errors cascade from the missing `react` types. Identical pattern across all client components in the codebase (`JobTabs.tsx`, etc.). No new errors introduced.
+**`src/app/schedule/page.tsx`:**
+Pre-existing `next/link` and `next/navigation` import errors, unchanged from before R15. No new errors introduced by the R15 edits.
 
 ---
 
