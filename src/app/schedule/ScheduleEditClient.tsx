@@ -256,25 +256,38 @@ export default function ScheduleEditClient({
         }}
       >
         {baselineStatus === true ? (
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '7px 14px',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: 600,
-              background: 'rgba(22, 163, 74, 0.1)',
-              color: '#16a34a',
-              border: '1px solid rgba(22, 163, 74, 0.25)',
-              cursor: 'default',
-              userSelect: 'none',
-            }}
-          >
-            <span style={{ fontSize: '10px' }}>●</span>
-            Baseline Active
-          </span>
+          <>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '7px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 600,
+                background: 'rgba(22, 163, 74, 0.1)',
+                color: '#16a34a',
+                border: '1px solid rgba(22, 163, 74, 0.25)',
+                cursor: 'default',
+                userSelect: 'none',
+              }}
+            >
+              <span style={{ fontSize: '10px' }}>●</span>
+              Baseline Active
+            </span>
+            <Link
+              href={`/schedule/baseline?job=${jobId}`}
+              style={{
+                fontSize: '13px',
+                color: 'var(--blue)',
+                textDecoration: 'none',
+                fontWeight: 500,
+              }}
+            >
+              View Baseline
+            </Link>
+          </>
         ) : baselineStatus === false ? (
           <button
             onClick={() => {
