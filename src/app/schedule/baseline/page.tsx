@@ -21,6 +21,33 @@ type BaselineRow = {
   jobs?: { client_name: string | null; color: string | null } | null
 }
 
+// Describes the comparability of a single baseline/current date pair.
+//
+// On a job with an active baseline, a DB trigger auto-populates baseline_start_date
+// and baseline_end_date for every newly inserted sub_schedule row from its initial
+// dates. Therefore:
+//   - 'ok'           — both dates present; variance can be computed
+//   - 'no-current'   — current date is null; item has no scheduled dates yet
+//   - 'no-baseline'  — baseline date is null but current date is set; this is an
+//                      incomplete-baseline-data anomaly (trigger did not fire or
+//                      row was inserted before trigger existed)
+//   - 'no-dates'     — both dates are null; no comparison possible
+//
+// 'no-baseline' is NOT a normal "added after baseline" state. Items added after
+// baseline activation should have baseline dates auto-populated equal to their
+// initial dates (0-day variance).
+type DatePairState = 'ok' | 'no-current' | 'no-baseline' | 'no-dates'
+
+function classifyDatePair(
+  baselineDate: string | null,
+  currentDate: string | null
+): DatePairState {
+  if (baselineDate && currentDate) return 'ok'
+  if (!baselineDate && currentDate) return 'no-baseline'
+  if (baselineDate && !currentDate) return 'no-current'
+  return 'no-dates'
+}
+
 function parseDateLocal(iso: string): Date {
   const [y, m, d] = iso.split('-').map(Number)
   return new Date(y, m - 1, d)
@@ -258,9 +285,7 @@ export default async function BaselinePage({
               <span style={{ fontSize: '9px' }}>●</span>
               Baseline Active
             </span>
-            <span
-              style={{ fontSize: '13px', color: 'var(--text-muted)' }}
-            >
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
               Set {baselineCreatedAt}
             </span>
           </div>
@@ -281,63 +306,110 @@ export default async function BaselinePage({
               No labor schedule items for this job.
             </div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  {[
-                    'Trade',
-                    'Company',
-                    'Baseline Start',
-                    'Current Start',
-                    'Start Variance',
-                    'Baseline End',
-                    'Current End',
-                    'End Variance',
-                  ].map((h) => (
-                    <th key={h} style={thStyle()}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const flags: WeekendFlags = {
-                    includeSaturday: row.include_saturday,
-                    includeSunday: row.include_sunday,
-                  }
+            <>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    {[
+                      'Trade',
+                      'Company',
+                      'Baseline Start',
+                      'Current Start',
+                      'Start Variance',
+                      'Baseline End',
+                      'Current End',
+                      'End Variance',
+                    ].map((h) => (
+                      <th key={h} style={thStyle()}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const flags: WeekendFlags = {
+                      includeSaturday: row.include_saturday,
+                      includeSunday: row.include_sunday,
+                    }
 
-                  const startVariance =
-                    row.baseline_start_date && row.start_date
-                      ? workingDayVariance(row.baseline_start_date, row.start_date, flags)
-                      : null
+                    const startState = classifyDatePair(row.baseline_start_date, row.start_date)
+                    const endState = classifyDatePair(row.baseline_end_date, row.end_date)
 
-                  const endVariance =
-                    row.baseline_end_date && row.end_date
-                      ? workingDayVariance(row.baseline_end_date, row.end_date, flags)
-                      : null
+                    const startVariance =
+                      startState === 'ok'
+                        ? workingDayVariance(row.baseline_start_date!, row.start_date!, flags)
+                        : null
 
-                  return (
-                    <tr key={row.id}>
-                      <td style={tdStyle()}>{row.trade}</td>
-                      <td style={tdStyle()}>{row.sub_name || '—'}</td>
+                    const endVariance =
+                      endState === 'ok'
+                        ? workingDayVariance(row.baseline_end_date!, row.end_date!, flags)
+                        : null
 
-                      <td style={tdStyle()}>{fmtDate(row.baseline_start_date)}</td>
-                      <td style={tdStyle()}>{fmtDate(row.start_date)}</td>
-                      <td style={{ ...tdStyle(), fontWeight: 600, color: startVariance !== null ? varianceColor(startVariance) : 'var(--text-muted)' }}>
-                        {startVariance !== null ? fmtVariance(startVariance) : '—'}
-                      </td>
+                    return (
+                      <tr key={row.id}>
+                        <td style={tdStyle()}>{row.trade}</td>
+                        <td style={tdStyle()}>{row.sub_name || '—'}</td>
 
-                      <td style={tdStyle()}>{fmtDate(row.baseline_end_date)}</td>
-                      <td style={tdStyle()}>{fmtDate(row.end_date)}</td>
-                      <td style={{ ...tdStyle(), fontWeight: 600, color: endVariance !== null ? varianceColor(endVariance) : 'var(--text-muted)' }}>
-                        {endVariance !== null ? fmtVariance(endVariance) : '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                        <td style={tdStyle()}>
+                          {fmtDate(row.baseline_start_date)}
+                          {startState === 'no-baseline' && (
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                              Incomplete
+                            </div>
+                          )}
+                        </td>
+                        <td style={tdStyle()}>{fmtDate(row.start_date)}</td>
+                        <td
+                          style={{
+                            ...tdStyle(),
+                            fontWeight: 600,
+                            color:
+                              startVariance !== null
+                                ? varianceColor(startVariance)
+                                : 'var(--text-muted)',
+                          }}
+                        >
+                          {startVariance !== null ? fmtVariance(startVariance) : '—'}
+                        </td>
+
+                        <td style={tdStyle()}>
+                          {fmtDate(row.baseline_end_date)}
+                          {endState === 'no-baseline' && (
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                              Incomplete
+                            </div>
+                          )}
+                        </td>
+                        <td style={tdStyle()}>{fmtDate(row.end_date)}</td>
+                        <td
+                          style={{
+                            ...tdStyle(),
+                            fontWeight: 600,
+                            color:
+                              endVariance !== null
+                                ? varianceColor(endVariance)
+                                : 'var(--text-muted)',
+                          }}
+                        >
+                          {endVariance !== null ? fmtVariance(endVariance) : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              <div
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  marginTop: '12px',
+                  paddingLeft: '2px',
+                }}
+              >
+                — Comparison unavailable (dates not set or incomplete baseline data)
+              </div>
+            </>
           )}
         </div>
       </main>
