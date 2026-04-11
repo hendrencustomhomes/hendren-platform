@@ -109,6 +109,7 @@ export type CompanyRow = {
   coi_wc_expires: string | null
   w9_received_at: string | null
   general_contract_signed_at: string | null
+  created_at: string | null
 }
 
 function daysBetween(a: string, b: string): number {
@@ -267,7 +268,8 @@ export async function getCompanies(
       coi_gl_expires,
       coi_wc_expires,
       w9_received_at,
-      general_contract_signed_at
+      general_contract_signed_at,
+      created_at
     `
     )
     .order('name')
