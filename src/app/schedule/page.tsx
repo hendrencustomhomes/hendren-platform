@@ -5,12 +5,12 @@ import Nav from '@/components/Nav'
 import {
   getOrderRiskLevel,
   getScheduleRiskLevel,
+  getScheduleDependencies,
   type ProcurementItem,
   type JobSubSchedule,
 } from '@/lib/db'
-import { getResolvedScheduleGraph } from '@/lib/schedule/resolver'
-import type { ScheduleNode } from '@/lib/schedule/nodes'
 import { createClient } from '@/utils/supabase/server'
+import ScheduleEditClient from './ScheduleEditClient'
 
 type JobRef = {
   id: string
@@ -167,30 +167,6 @@ function getProcurementSource(item: ProcurementRow) {
   return 'Internal'
 }
 
-function resolvedHint(storedDate: string | null, resolvedDate: string | null) {
-  const changed = storedDate !== resolvedDate
-  return (
-    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-      Resolved: {fmtDate(resolvedDate)}
-      {changed && (
-        <span
-          style={{
-            marginLeft: '5px',
-            display: 'inline-block',
-            padding: '1px 6px',
-            borderRadius: '999px',
-            fontSize: '11px',
-            fontWeight: 600,
-            background: 'rgba(234, 88, 12, 0.1)',
-            color: '#ea580c',
-          }}
-        >
-          Shifted
-        </span>
-      )}
-    </div>
-  )
-}
 
 export default async function SchedulePage({
   searchParams,
@@ -239,15 +215,9 @@ export default async function SchedulePage({
   const scheduleList: ScheduleRow[] = (scheduleItems || []) as ScheduleRow[]
   const procurementList: ProcurementRow[] = (procurementItems || []) as ProcurementRow[]
 
-  let resolvedNodes: Record<string, ScheduleNode> | null = null
-  if (jobFilter) {
-    try {
-      const graph = await getResolvedScheduleGraph(supabase, jobFilter)
-      resolvedNodes = graph.resolvedNodes
-    } catch {
-      // Graceful fallback — engine errors do not break the page
-    }
-  }
+  const dependencies = jobFilter
+    ? await getScheduleDependencies(supabase, jobFilter).catch(() => [])
+    : []
 
   const alerts = [
     ...scheduleList.map(buildScheduleAlert),
@@ -395,242 +365,249 @@ export default async function SchedulePage({
         </section>
       )}
 
-      <section style={pageCardStyle()}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '12px',
-            flexWrap: 'wrap',
-            marginBottom: '12px',
-          }}
-        >
-          <div>
-            <h2 style={{ margin: 0, fontSize: '20px' }}>Labor Schedule</h2>
-            <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-              {scheduleList.length} entries
+      {jobFilter ? (
+        <ScheduleEditClient
+          jobId={jobFilter}
+          jobClientName={scheduleList[0]?.jobs?.client_name ?? procurementList[0]?.jobs?.client_name ?? null}
+          jobColor={scheduleList[0]?.jobs?.color ?? procurementList[0]?.jobs?.color ?? null}
+          scheduleItems={scheduleList}
+          procurementItems={procurementList}
+          dependencies={dependencies}
+        />
+      ) : (
+        <>
+          <section style={pageCardStyle()}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'wrap',
+                marginBottom: '12px',
+              }}
+            >
+              <div>
+                <h2 style={{ margin: 0, fontSize: '20px' }}>Labor Schedule</h2>
+                <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+                  {scheduleList.length} entries
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {scheduleList.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-            <div style={{ marginBottom: '6px' }}>No schedule items yet</div>
-            <div>Add schedule items from a job or click + Schedule Item above</div>
-          </div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                {[
-                  'Job',
-                  'Trade',
-                  'Company',
-                  'Status',
-                  'Release',
-                  'Start',
-                  'End',
-                  'Cost Code',
-                  'Notes',
-                  '',
-                ].map((heading) => (
-                  <th key={heading} style={thStyle()}>
-                    {heading}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-
-            <tbody>
-              {scheduleList.map((item) => {
-                const risk = getScheduleRiskLevel(item)
-                const jobColor = item.jobs?.color || '#e5e7eb'
-                const resolvedNode: ScheduleNode | undefined =
-                  resolvedNodes?.[`schedule:${item.id}`]
-
-                return (
-                  <tr key={item.id}>
-                    <td style={tdStyle()}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span
-                          style={{
-                            width: '10px',
-                            height: '10px',
-                            borderRadius: '999px',
-                            background: jobColor,
-                            display: 'inline-block',
-                          }}
-                        />
-                        <span>{item.jobs?.client_name || '—'}</span>
-                      </div>
-                    </td>
-
-                    <td style={tdStyle()}>{item.trade}</td>
-                    <td style={tdStyle()}>{item.sub_name || '—'}</td>
-
-                    <td style={tdStyle()}>
-                      <span style={badgeStyle(STATUS_COLORS[item.status])}>{item.status}</span>
-                    </td>
-
-                    <td style={tdStyle()}>
-                      <span style={badgeStyle(undefined, !item.is_released)}>
-                        {item.is_released ? 'Released' : 'Draft'}
-                      </span>
-                    </td>
-
-                    <td style={tdStyle()}>
-                      {risk === 'overdue' && (
-                        <span style={{ color: 'var(--red)', marginRight: '6px' }}>●</span>
-                      )}
-                      {risk === 'soon' && (
-                        <span style={{ color: 'var(--amber)', marginRight: '6px' }}>⚠️</span>
-                      )}
-                      {fmtDate(item.start_date)}
-                      {resolvedNode &&
-                        resolvedHint(item.start_date, resolvedNode.start_date)}
-                    </td>
-
-                    <td style={tdStyle()}>
-                      {fmtDate(item.end_date)}
-                      {resolvedNode &&
-                        resolvedHint(item.end_date, resolvedNode.end_date)}
-                    </td>
-                    <td style={tdStyle()}>{item.cost_code || '—'}</td>
-                    <td style={tdStyle()}>{item.notes || '—'}</td>
-
-                    <td style={tdStyle()}>
-                      <Link
-                        href={`/schedule/sub/${item.id}/edit`}
-                        style={{ color: 'var(--blue)', textDecoration: 'none', fontWeight: 600 }}
-                      >
-                        Edit
-                      </Link>
-                    </td>
+            {scheduleList.length === 0 ? (
+              <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+                <div style={{ marginBottom: '6px' }}>No schedule items yet</div>
+                <div>Add schedule items from a job or click + Schedule Item above</div>
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    {[
+                      'Job',
+                      'Trade',
+                      'Company',
+                      'Status',
+                      'Release',
+                      'Start',
+                      'End',
+                      'Cost Code',
+                      'Notes',
+                      '',
+                    ].map((heading) => (
+                      <th key={heading} style={thStyle()}>
+                        {heading}
+                      </th>
+                    ))}
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
-      </section>
+                </thead>
 
-      <section style={pageCardStyle()}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '12px',
-            flexWrap: 'wrap',
-            marginBottom: '12px',
-          }}
-        >
-          <div>
-            <h2 style={{ margin: 0, fontSize: '20px' }}>Material Schedule</h2>
-            <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-              {procurementList.length} items
+                <tbody>
+                  {scheduleList.map((item) => {
+                    const risk = getScheduleRiskLevel(item)
+                    const jobColor = item.jobs?.color || '#e5e7eb'
+
+                    return (
+                      <tr key={item.id}>
+                        <td style={tdStyle()}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span
+                              style={{
+                                width: '10px',
+                                height: '10px',
+                                borderRadius: '999px',
+                                background: jobColor,
+                                display: 'inline-block',
+                              }}
+                            />
+                            <span>{item.jobs?.client_name || '—'}</span>
+                          </div>
+                        </td>
+
+                        <td style={tdStyle()}>{item.trade}</td>
+                        <td style={tdStyle()}>{item.sub_name || '—'}</td>
+
+                        <td style={tdStyle()}>
+                          <span style={badgeStyle(STATUS_COLORS[item.status])}>{item.status}</span>
+                        </td>
+
+                        <td style={tdStyle()}>
+                          <span style={badgeStyle(undefined, !item.is_released)}>
+                            {item.is_released ? 'Released' : 'Draft'}
+                          </span>
+                        </td>
+
+                        <td style={tdStyle()}>
+                          {risk === 'overdue' && (
+                            <span style={{ color: 'var(--red)', marginRight: '6px' }}>●</span>
+                          )}
+                          {risk === 'soon' && (
+                            <span style={{ color: 'var(--amber)', marginRight: '6px' }}>⚠️</span>
+                          )}
+                          {fmtDate(item.start_date)}
+                        </td>
+
+                        <td style={tdStyle()}>{fmtDate(item.end_date)}</td>
+                        <td style={tdStyle()}>{item.cost_code || '—'}</td>
+                        <td style={tdStyle()}>{item.notes || '—'}</td>
+
+                        <td style={tdStyle()}>
+                          <Link
+                            href={`/schedule/sub/${item.id}/edit`}
+                            style={{
+                              color: 'var(--blue)',
+                              textDecoration: 'none',
+                              fontWeight: 600,
+                            }}
+                          >
+                            Edit
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </section>
+
+          <section style={pageCardStyle()}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'wrap',
+                marginBottom: '12px',
+              }}
+            >
+              <div>
+                <h2 style={{ margin: 0, fontSize: '20px' }}>Material Schedule</h2>
+                <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+                  {procurementList.length} items
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {procurementList.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-            <div style={{ marginBottom: '6px' }}>No procurement items yet</div>
-            <div>Add procurement items from a job or click + Procurement Item above</div>
-          </div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                {[
-                  'Job',
-                  'Trade',
-                  'Item',
-                  'Group',
-                  'Company',
-                  'Need By',
-                  'Order By',
-                  'Lead',
-                  'Status',
-                  'Source',
-                  '',
-                ].map((heading) => (
-                  <th key={heading} style={thStyle()}>
-                    {heading}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-
-            <tbody>
-              {procurementList.map((item) => {
-                const risk = getOrderRiskLevel(item)
-                const jobColor = item.jobs?.color || '#e5e7eb'
-                const source = getProcurementSource(item)
-                const resolvedNode: ScheduleNode | undefined =
-                  resolvedNodes?.[`procurement:${item.id}`]
-
-                return (
-                  <tr key={item.id}>
-                    <td style={tdStyle()}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span
-                          style={{
-                            width: '10px',
-                            height: '10px',
-                            borderRadius: '999px',
-                            background: jobColor,
-                            display: 'inline-block',
-                          }}
-                        />
-                        <span>{item.jobs?.client_name || '—'}</span>
-                      </div>
-                    </td>
-
-                    <td style={tdStyle()}>{item.trade}</td>
-                    <td style={tdStyle()}>{item.description}</td>
-                    <td style={tdStyle()}>{item.procurement_group || '—'}</td>
-                    <td style={tdStyle()}>{item.vendor || '—'}</td>
-                    <td style={tdStyle()}>
-                      {fmtDate(item.required_on_site_date)}
-                      {resolvedNode &&
-                        resolvedHint(item.required_on_site_date, resolvedNode.start_date)}
-                    </td>
-
-                    <td style={tdStyle()}>
-                      {risk === 'overdue' && (
-                        <span style={{ color: 'var(--red)', marginRight: '6px' }}>●</span>
-                      )}
-                      {risk === 'soon' && (
-                        <span style={{ color: 'var(--amber)', marginRight: '6px' }}>⚠️</span>
-                      )}
-                      {fmtDate(item.order_by_date)}
-                    </td>
-
-                    <td style={tdStyle()}>{item.lead_days ?? 0}d</td>
-
-                    <td style={tdStyle()}>
-                      <span style={badgeStyle(STATUS_COLORS[item.status])}>{item.status}</span>
-                    </td>
-
-                    <td style={tdStyle()}>{source}</td>
-
-                    <td style={tdStyle()}>
-                      <Link
-                        href={`/schedule/order/${item.id}/edit`}
-                        style={{ color: 'var(--blue)', textDecoration: 'none', fontWeight: 600 }}
-                      >
-                        Edit
-                      </Link>
-                    </td>
+            {procurementList.length === 0 ? (
+              <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+                <div style={{ marginBottom: '6px' }}>No procurement items yet</div>
+                <div>Add procurement items from a job or click + Procurement Item above</div>
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    {[
+                      'Job',
+                      'Trade',
+                      'Item',
+                      'Group',
+                      'Company',
+                      'Need By',
+                      'Order By',
+                      'Lead',
+                      'Status',
+                      'Source',
+                      '',
+                    ].map((heading) => (
+                      <th key={heading} style={thStyle()}>
+                        {heading}
+                      </th>
+                    ))}
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
-      </section>
+                </thead>
+
+                <tbody>
+                  {procurementList.map((item) => {
+                    const risk = getOrderRiskLevel(item)
+                    const jobColor = item.jobs?.color || '#e5e7eb'
+                    const source = getProcurementSource(item)
+
+                    return (
+                      <tr key={item.id}>
+                        <td style={tdStyle()}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span
+                              style={{
+                                width: '10px',
+                                height: '10px',
+                                borderRadius: '999px',
+                                background: jobColor,
+                                display: 'inline-block',
+                              }}
+                            />
+                            <span>{item.jobs?.client_name || '—'}</span>
+                          </div>
+                        </td>
+
+                        <td style={tdStyle()}>{item.trade}</td>
+                        <td style={tdStyle()}>{item.description}</td>
+                        <td style={tdStyle()}>{item.procurement_group || '—'}</td>
+                        <td style={tdStyle()}>{item.vendor || '—'}</td>
+                        <td style={tdStyle()}>{fmtDate(item.required_on_site_date)}</td>
+
+                        <td style={tdStyle()}>
+                          {risk === 'overdue' && (
+                            <span style={{ color: 'var(--red)', marginRight: '6px' }}>●</span>
+                          )}
+                          {risk === 'soon' && (
+                            <span style={{ color: 'var(--amber)', marginRight: '6px' }}>⚠️</span>
+                          )}
+                          {fmtDate(item.order_by_date)}
+                        </td>
+
+                        <td style={tdStyle()}>{item.lead_days ?? 0}d</td>
+
+                        <td style={tdStyle()}>
+                          <span style={badgeStyle(STATUS_COLORS[item.status])}>{item.status}</span>
+                        </td>
+
+                        <td style={tdStyle()}>{source}</td>
+
+                        <td style={tdStyle()}>
+                          <Link
+                            href={`/schedule/order/${item.id}/edit`}
+                            style={{
+                              color: 'var(--blue)',
+                              textDecoration: 'none',
+                              fontWeight: 600,
+                            }}
+                          >
+                            Edit
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </section>
+        </>
+      )}
       </main>
     </>
   )
