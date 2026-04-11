@@ -210,7 +210,12 @@ export async function getJobWithDetails(
         cost_code,
         is_released,
         release_date,
-        notification_window_days
+        notification_window_days,
+        duration_working_days,
+        buffer_working_days,
+        include_saturday,
+        include_sunday,
+        is_locked
       ),
       procurement_items(
         id,
@@ -226,7 +231,8 @@ export async function getJobWithDetails(
         linked_schedule_id,
         is_client_supplied,
         is_sub_supplied,
-        requires_tracking
+        requires_tracking,
+        buffer_working_days
       )
     `
     )
