@@ -2,10 +2,10 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
 import Nav from '@/components/Nav'
-import { createClient } from '@/utils/supabase/server'
 import { getJobBaseline } from '@/lib/schedule/baseline'
 import { workingDayDiff } from '@/lib/schedule/engine'
 import type { WeekendFlags } from '@/lib/schedule/engine'
+import { createClient } from '@/utils/supabase/server'
 
 type BaselineRow = {
   id: string
@@ -18,7 +18,7 @@ type BaselineRow = {
   baseline_end_date: string | null
   include_saturday: boolean
   include_sunday: boolean
-  jobs?: { client_name: string | null; color: string | null } | null
+  jobs?: { client_name: string | null; color: string | null }[] | null
 }
 
 // Describes the comparability of a single baseline/current date pair.
@@ -68,7 +68,10 @@ function workingDayVariance(
 
 function fmtDate(value: string | null) {
   if (!value) return '—'
-  return new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return new Date(value).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  })
 }
 
 function fmtVariance(v: number): string {
@@ -225,8 +228,8 @@ export default async function BaselinePage({
     )
   }
 
-  const rows = (scheduleData ?? []) as BaselineRow[]
-  const jobClientName = rows[0]?.jobs?.client_name ?? null
+  const rows = ((scheduleData ?? []) as unknown) as BaselineRow[]
+  const jobClientName = rows[0]?.jobs?.[0]?.client_name ?? null
 
   const baselineCreatedAt = new Date(baseline.created_at).toLocaleDateString('en-US', {
     month: 'short',
@@ -247,7 +250,6 @@ export default async function BaselinePage({
           color: 'var(--text)',
         }}
       >
-        {/* Header */}
         <div style={{ marginBottom: '20px' }}>
           <div style={{ marginBottom: '8px' }}>
             <Link
@@ -291,7 +293,6 @@ export default async function BaselinePage({
           </div>
         </div>
 
-        {/* Table */}
         <div
           style={{
             background: 'var(--surface)',
@@ -333,17 +334,31 @@ export default async function BaselinePage({
                       includeSunday: row.include_sunday,
                     }
 
-                    const startState = classifyDatePair(row.baseline_start_date, row.start_date)
-                    const endState = classifyDatePair(row.baseline_end_date, row.end_date)
+                    const startState = classifyDatePair(
+                      row.baseline_start_date,
+                      row.start_date
+                    )
+                    const endState = classifyDatePair(
+                      row.baseline_end_date,
+                      row.end_date
+                    )
 
                     const startVariance =
                       startState === 'ok'
-                        ? workingDayVariance(row.baseline_start_date!, row.start_date!, flags)
+                        ? workingDayVariance(
+                            row.baseline_start_date!,
+                            row.start_date!,
+                            flags
+                          )
                         : null
 
                     const endVariance =
                       endState === 'ok'
-                        ? workingDayVariance(row.baseline_end_date!, row.end_date!, flags)
+                        ? workingDayVariance(
+                            row.baseline_end_date!,
+                            row.end_date!,
+                            flags
+                          )
                         : null
 
                     return (
@@ -354,7 +369,13 @@ export default async function BaselinePage({
                         <td style={tdStyle()}>
                           {fmtDate(row.baseline_start_date)}
                           {startState === 'no-baseline' && (
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            <div
+                              style={{
+                                fontSize: '11px',
+                                color: 'var(--text-muted)',
+                                marginTop: '2px',
+                              }}
+                            >
                               Incomplete
                             </div>
                           )}
@@ -376,7 +397,13 @@ export default async function BaselinePage({
                         <td style={tdStyle()}>
                           {fmtDate(row.baseline_end_date)}
                           {endState === 'no-baseline' && (
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            <div
+                              style={{
+                                fontSize: '11px',
+                                color: 'var(--text-muted)',
+                                marginTop: '2px',
+                              }}
+                            >
                               Incomplete
                             </div>
                           )}
