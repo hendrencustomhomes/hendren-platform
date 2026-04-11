@@ -220,8 +220,10 @@ export default async function SchedulePage({
     ? await getScheduleDependencies(supabase, jobFilter).catch(() => [])
     : []
 
-  const hasBaseline = jobFilter
-    ? await getJobBaseline(supabase, jobFilter).then((b) => b !== null).catch(() => false)
+  const baselineStatus: boolean | null = jobFilter
+    ? await getJobBaseline(supabase, jobFilter)
+        .then((b): boolean => b !== null)
+        .catch((): null => null)
     : false
 
   const alerts = [
@@ -378,7 +380,7 @@ export default async function SchedulePage({
           scheduleItems={scheduleList}
           procurementItems={procurementList}
           dependencies={dependencies}
-          hasBaseline={hasBaseline}
+          baselineStatus={baselineStatus}
         />
       ) : (
         <>

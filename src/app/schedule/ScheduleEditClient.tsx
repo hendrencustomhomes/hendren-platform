@@ -24,7 +24,7 @@ type Props = {
   scheduleItems: JobSubSchedule[]
   procurementItems: ProcurementItem[]
   dependencies: ScheduleItemDependency[]
-  hasBaseline: boolean
+  baselineStatus: boolean | null
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -137,7 +137,7 @@ export default function ScheduleEditClient({
   scheduleItems,
   procurementItems,
   dependencies,
-  hasBaseline,
+  baselineStatus,
 }: Props) {
   const [editMode, setEditMode] = useState(false)
   const [draftOverrides, setDraftOverrides] = useState<Record<string, ScheduleDraftOverride>>({})
@@ -255,7 +255,7 @@ export default function ScheduleEditClient({
           marginBottom: '12px',
         }}
       >
-        {hasBaseline ? (
+        {baselineStatus === true ? (
           <span
             style={{
               display: 'inline-flex',
@@ -275,7 +275,7 @@ export default function ScheduleEditClient({
             <span style={{ fontSize: '10px' }}>●</span>
             Baseline Active
           </span>
-        ) : (
+        ) : baselineStatus === false ? (
           <button
             onClick={() => {
               setBaselineError(null)
@@ -301,6 +301,24 @@ export default function ScheduleEditClient({
           >
             {baselinePending ? 'Setting Baseline…' : 'Set Baseline'}
           </button>
+        ) : (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '7px 14px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: 600,
+              background: 'rgba(217, 119, 6, 0.08)',
+              color: 'var(--amber, #b45309)',
+              border: '1px solid rgba(217, 119, 6, 0.25)',
+              cursor: 'default',
+              userSelect: 'none',
+            }}
+          >
+            Baseline unavailable
+          </span>
         )}
         {baselineError && (
           <span style={{ fontSize: '13px', color: 'var(--red)' }}>{baselineError}</span>
