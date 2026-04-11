@@ -12,6 +12,8 @@ export type DraftScheduleItemUpdate = {
   include_saturday: boolean
   include_sunday: boolean
   buffer_working_days: number
+  shift_reason_type: string | null
+  shift_reason_note: string | null
 }
 
 export type SaveDraftActionResult = {
@@ -60,6 +62,8 @@ export async function saveScheduleDraftAction(
           include_saturday: u.include_saturday,
           include_sunday: u.include_sunday,
           buffer_working_days: u.buffer_working_days,
+          shift_reason_type: u.shift_reason_type,
+          shift_reason_note: u.shift_reason_note,
         })
         .eq('id', u.id)
       if (error) throw error

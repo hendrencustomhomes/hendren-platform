@@ -15,7 +15,19 @@ type ScheduleDraftOverride = {
   include_saturday: boolean
   include_sunday: boolean
   buffer_working_days: number
+  shift_reason_type: string | null
+  shift_reason_note: string | null
 }
+
+const SHIFT_REASON_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: '— No reason' },
+  { value: 'weather', label: 'Weather' },
+  { value: 'owner_change', label: 'Owner change' },
+  { value: 'material_delay', label: 'Material delay' },
+  { value: 'trade_availability', label: 'Trade availability' },
+  { value: 'mis_entry', label: 'Mis-entry' },
+  { value: 'other', label: 'Other' },
+]
 
 type Props = {
   jobId: string
@@ -199,6 +211,8 @@ export default function ScheduleEditClient({
         include_saturday: original.include_saturday,
         include_sunday: original.include_sunday,
         buffer_working_days: original.buffer_working_days,
+        shift_reason_type: null,
+        shift_reason_note: null,
       }
       return { ...prev, [itemId]: { ...existing, [field]: value } }
     })
@@ -222,6 +236,8 @@ export default function ScheduleEditClient({
           include_saturday: override.include_saturday,
           include_sunday: override.include_sunday,
           buffer_working_days: override.buffer_working_days,
+          shift_reason_type: override.shift_reason_type,
+          shift_reason_note: override.shift_reason_note,
         }
       })
 
@@ -474,7 +490,7 @@ export default function ScheduleEditClient({
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['Job', 'Trade', 'Company', 'Status', 'Release', 'Start', 'End', 'Cost Code', 'Notes', ''].map(
+                {['Job', 'Trade', 'Company', 'Status', 'Release', 'Start', 'End', 'Cost Code', 'Notes', 'Shift Reason', ''].map(
                   (heading) => (
                     <th key={heading} style={thStyle()}>
                       {heading}
@@ -628,6 +644,58 @@ export default function ScheduleEditClient({
 
                     <td style={tdStyle()}>{item.cost_code || '—'}</td>
                     <td style={tdStyle()}>{item.notes || '—'}</td>
+
+                    <td style={tdStyle()}>
+                      {editMode ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <select
+                            value={override?.shift_reason_type ?? ''}
+                            onChange={(e) =>
+                              setOverrideField(
+                                item.id,
+                                'shift_reason_type',
+                                e.target.value || null
+                              )
+                            }
+                            style={{
+                              fontSize: '13px',
+                              padding: '4px 6px',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border)',
+                              background: 'var(--surface)',
+                              color: 'var(--text)',
+                            }}
+                          >
+                            {SHIFT_REASON_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            value={override?.shift_reason_note ?? ''}
+                            placeholder="Note (optional)"
+                            onChange={(e) =>
+                              setOverrideField(
+                                item.id,
+                                'shift_reason_note',
+                                e.target.value || null
+                              )
+                            }
+                            style={{
+                              fontSize: '13px',
+                              padding: '4px 6px',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border)',
+                              background: 'var(--surface)',
+                              color: 'var(--text)',
+                              width: '140px',
+                            }}
+                          />
+                        </div>
+                      ) : null}
+                    </td>
 
                     <td style={tdStyle()}>
                       <Link
