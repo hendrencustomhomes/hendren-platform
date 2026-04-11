@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/utils/supabase/server'
 import { runScheduleApplyPipeline } from '@/lib/schedule/runApplyPipeline'
+import { setJobBaseline } from '@/lib/schedule/baseline'
 
 export type DraftScheduleItemUpdate = {
   id: string
@@ -16,6 +17,30 @@ export type DraftScheduleItemUpdate = {
 export type SaveDraftActionResult = {
   ok: boolean
   error?: string
+}
+
+export type ActivateBaselineResult = {
+  ok: boolean
+  error?: string
+}
+
+export async function activateBaselineAction(
+  jobId: string
+): Promise<ActivateBaselineResult> {
+  const supabase = await createClient()
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    await setJobBaseline(supabase, jobId, user?.id ?? null)
+
+    revalidatePath('/schedule')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Baseline activation failed' }
+  }
 }
 
 export async function saveScheduleDraftAction(

@@ -10,6 +10,7 @@ import {
   type JobSubSchedule,
 } from '@/lib/db'
 import { createClient } from '@/utils/supabase/server'
+import { getJobBaseline } from '@/lib/schedule/baseline'
 import ScheduleEditClient from './ScheduleEditClient'
 
 type JobRef = {
@@ -219,6 +220,10 @@ export default async function SchedulePage({
     ? await getScheduleDependencies(supabase, jobFilter).catch(() => [])
     : []
 
+  const hasBaseline = jobFilter
+    ? await getJobBaseline(supabase, jobFilter).then((b) => b !== null).catch(() => false)
+    : false
+
   const alerts = [
     ...scheduleList.map(buildScheduleAlert),
     ...procurementList.map(buildProcurementAlert),
@@ -373,6 +378,7 @@ export default async function SchedulePage({
           scheduleItems={scheduleList}
           procurementItems={procurementList}
           dependencies={dependencies}
+          hasBaseline={hasBaseline}
         />
       ) : (
         <>

@@ -6,7 +6,7 @@ import type { JobSubSchedule, ProcurementItem, ScheduleItemDependency } from '@/
 import { getScheduleRiskLevel, getOrderRiskLevel } from '@/lib/db'
 import { buildScheduleNodes } from '@/lib/schedule/nodes'
 import { resolveScheduleGraph } from '@/lib/schedule/engine'
-import { saveScheduleDraftAction } from './actions'
+import { saveScheduleDraftAction, activateBaselineAction } from './actions'
 import type { DraftScheduleItemUpdate } from './actions'
 
 type ScheduleDraftOverride = {
@@ -24,6 +24,7 @@ type Props = {
   scheduleItems: JobSubSchedule[]
   procurementItems: ProcurementItem[]
   dependencies: ScheduleItemDependency[]
+  hasBaseline: boolean
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -136,11 +137,14 @@ export default function ScheduleEditClient({
   scheduleItems,
   procurementItems,
   dependencies,
+  hasBaseline,
 }: Props) {
   const [editMode, setEditMode] = useState(false)
   const [draftOverrides, setDraftOverrides] = useState<Record<string, ScheduleDraftOverride>>({})
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [baselineError, setBaselineError] = useState<string | null>(null)
+  const [baselinePending, startBaselineTransition] = useTransition()
 
   const isDirty = Object.keys(draftOverrides).length > 0
 
@@ -242,6 +246,67 @@ export default function ScheduleEditClient({
 
   return (
     <>
+      {/* Baseline toolbar */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          marginBottom: '12px',
+        }}
+      >
+        {hasBaseline ? (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 14px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: 600,
+              background: 'rgba(22, 163, 74, 0.1)',
+              color: '#16a34a',
+              border: '1px solid rgba(22, 163, 74, 0.25)',
+              cursor: 'default',
+              userSelect: 'none',
+            }}
+          >
+            <span style={{ fontSize: '10px' }}>●</span>
+            Baseline Active
+          </span>
+        ) : (
+          <button
+            onClick={() => {
+              setBaselineError(null)
+              startBaselineTransition(async () => {
+                const result = await activateBaselineAction(jobId)
+                if (!result.ok) {
+                  setBaselineError(result.error ?? 'Baseline activation failed')
+                }
+              })
+            }}
+            disabled={baselinePending}
+            style={{
+              background: 'var(--surface)',
+              color: 'var(--text)',
+              border: '1px solid var(--border)',
+              padding: '7px 14px',
+              borderRadius: '8px',
+              fontWeight: 600,
+              fontSize: '13px',
+              cursor: baselinePending ? 'not-allowed' : 'pointer',
+              opacity: baselinePending ? 0.5 : 1,
+            }}
+          >
+            {baselinePending ? 'Setting Baseline…' : 'Set Baseline'}
+          </button>
+        )}
+        {baselineError && (
+          <span style={{ fontSize: '13px', color: 'var(--red)' }}>{baselineError}</span>
+        )}
+      </div>
+
       {/* Edit mode toolbar */}
       <div
         style={{
