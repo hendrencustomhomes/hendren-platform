@@ -10,15 +10,15 @@
 | From | To |
 |---|---|
 | `docs/schedule_audit.md` | `docs/schedule_module/schedule_audit.md` |
-| `docs/schedule_r1.md` | `docs/schedule_module/schedule_r1.md` |
-| `docs/schedule_r2.md` | `docs/schedule_module/schedule_r2.md` |
-| `docs/schedule_r3.md` | `docs/schedule_module/schedule_r3.md` |
-| `docs/schedule_r4.md` | `docs/schedule_module/schedule_r4.md` |
-| `docs/schedule_r5.md` | `docs/schedule_module/schedule_r5.md` |
-| `docs/schedule_r6.md` | `docs/schedule_module/schedule_r6.md` |
-| `docs/schedule_r7.md` | `docs/schedule_module/schedule_r7.md` |
-| `docs/schedule_r8.md` | `docs/schedule_module/schedule_r8.md` |
-| `docs/schedule_r9.md` | `docs/schedule_module/schedule_r9.md` |
+| `docs/schedule_r1.md` | `docs/schedule_module/schedule_r01.md` |
+| `docs/schedule_r2.md` | `docs/schedule_module/schedule_r02.md` |
+| `docs/schedule_r3.md` | `docs/schedule_module/schedule_r03.md` |
+| `docs/schedule_r4.md` | `docs/schedule_module/schedule_r04.md` |
+| `docs/schedule_r5.md` | `docs/schedule_module/schedule_r05.md` |
+| `docs/schedule_r6.md` | `docs/schedule_module/schedule_r06.md` |
+| `docs/schedule_r7.md` | `docs/schedule_module/schedule_r07.md` |
+| `docs/schedule_r8.md` | `docs/schedule_module/schedule_r08.md` |
+| `docs/schedule_r9.md` | `docs/schedule_module/schedule_r09.md` |
 
 10 files total. All moved via `git mv` to preserve history.
 
