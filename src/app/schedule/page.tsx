@@ -8,6 +8,8 @@ import {
   type ProcurementItem,
   type JobSubSchedule,
 } from '@/lib/db'
+import { getResolvedScheduleGraph } from '@/lib/schedule/resolver'
+import type { ScheduleNode } from '@/lib/schedule/nodes'
 import { createClient } from '@/utils/supabase/server'
 
 type JobRef = {
@@ -165,6 +167,31 @@ function getProcurementSource(item: ProcurementRow) {
   return 'Internal'
 }
 
+function resolvedHint(storedDate: string | null, resolvedDate: string | null) {
+  const changed = storedDate !== resolvedDate
+  return (
+    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+      Resolved: {fmtDate(resolvedDate)}
+      {changed && (
+        <span
+          style={{
+            marginLeft: '5px',
+            display: 'inline-block',
+            padding: '1px 6px',
+            borderRadius: '999px',
+            fontSize: '11px',
+            fontWeight: 600,
+            background: 'rgba(234, 88, 12, 0.1)',
+            color: '#ea580c',
+          }}
+        >
+          Shifted
+        </span>
+      )}
+    </div>
+  )
+}
+
 export default async function SchedulePage({
   searchParams,
 }: {
@@ -211,6 +238,16 @@ export default async function SchedulePage({
 
   const scheduleList: ScheduleRow[] = (scheduleItems || []) as ScheduleRow[]
   const procurementList: ProcurementRow[] = (procurementItems || []) as ProcurementRow[]
+
+  let resolvedNodes: Record<string, ScheduleNode> | null = null
+  if (jobFilter) {
+    try {
+      const graph = await getResolvedScheduleGraph(supabase, jobFilter)
+      resolvedNodes = graph.resolvedNodes
+    } catch {
+      // Graceful fallback — engine errors do not break the page
+    }
+  }
 
   const alerts = [
     ...scheduleList.map(buildScheduleAlert),
@@ -409,6 +446,8 @@ export default async function SchedulePage({
               {scheduleList.map((item) => {
                 const risk = getScheduleRiskLevel(item)
                 const jobColor = item.jobs?.color || '#e5e7eb'
+                const resolvedNode: ScheduleNode | undefined =
+                  resolvedNodes?.[`schedule:${item.id}`]
 
                 return (
                   <tr key={item.id}>
@@ -448,9 +487,15 @@ export default async function SchedulePage({
                         <span style={{ color: 'var(--amber)', marginRight: '6px' }}>⚠️</span>
                       )}
                       {fmtDate(item.start_date)}
+                      {resolvedNode &&
+                        resolvedHint(item.start_date, resolvedNode.start_date)}
                     </td>
 
-                    <td style={tdStyle()}>{fmtDate(item.end_date)}</td>
+                    <td style={tdStyle()}>
+                      {fmtDate(item.end_date)}
+                      {resolvedNode &&
+                        resolvedHint(item.end_date, resolvedNode.end_date)}
+                    </td>
                     <td style={tdStyle()}>{item.cost_code || '—'}</td>
                     <td style={tdStyle()}>{item.notes || '—'}</td>
 
@@ -523,6 +568,8 @@ export default async function SchedulePage({
                 const risk = getOrderRiskLevel(item)
                 const jobColor = item.jobs?.color || '#e5e7eb'
                 const source = getProcurementSource(item)
+                const resolvedNode: ScheduleNode | undefined =
+                  resolvedNodes?.[`procurement:${item.id}`]
 
                 return (
                   <tr key={item.id}>
@@ -545,7 +592,11 @@ export default async function SchedulePage({
                     <td style={tdStyle()}>{item.description}</td>
                     <td style={tdStyle()}>{item.procurement_group || '—'}</td>
                     <td style={tdStyle()}>{item.vendor || '—'}</td>
-                    <td style={tdStyle()}>{fmtDate(item.required_on_site_date)}</td>
+                    <td style={tdStyle()}>
+                      {fmtDate(item.required_on_site_date)}
+                      {resolvedNode &&
+                        resolvedHint(item.required_on_site_date, resolvedNode.start_date)}
+                    </td>
 
                     <td style={tdStyle()}>
                       {risk === 'overdue' && (
