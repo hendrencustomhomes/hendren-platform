@@ -8,6 +8,13 @@ import type {
   ScheduleItemDependency,
 } from '@/lib/db'
 import { getOrderRiskLevel, getScheduleRiskLevel } from '@/lib/db'
+import type { DependencyWriteInput, DependencyNodeRef } from '@/lib/schedule/dependencies'
+import {
+  attachNodeAfter,
+  attachNodeBefore,
+  insertNodeBetween,
+  removeNodeAndReconnect,
+} from '@/lib/schedule/operations'
 import { resolveScheduleGraph } from '@/lib/schedule/engine'
 import { buildScheduleNodes } from '@/lib/schedule/nodes'
 import { activateBaselineAction, saveScheduleDraftAction } from './actions'
@@ -153,6 +160,51 @@ function getProcurementSource(item: ProcurementItem) {
   return 'Internal'
 }
 
+function makeNodeKey(ref: DependencyNodeRef): string {
+  return `${ref.type}:${ref.id}`
+}
+
+function makeDependencyEdgeKey(dep: DependencyWriteInput): string {
+  return [
+    makeNodeKey(dep.predecessor),
+    makeNodeKey(dep.successor),
+    dep.referencePoint,
+    dep.offsetWorkingDays,
+  ].join('|')
+}
+
+function makeDraftDependencies(
+  dependencies: ScheduleItemDependency[]
+): DependencyWriteInput[] {
+  return dependencies.map((dep) => ({
+    predecessor: {
+      type: dep.predecessor_type,
+      id: dep.predecessor_id,
+    },
+    successor: {
+      type: dep.successor_type,
+      id: dep.successor_id,
+    },
+    referencePoint: dep.reference_point,
+    offsetWorkingDays: dep.offset_working_days,
+  }))
+}
+
+function dedupeDependencies(inputs: DependencyWriteInput[]): DependencyWriteInput[] {
+  const seen = new Set<string>()
+  const deduped: DependencyWriteInput[] = []
+
+  for (const input of inputs) {
+    const key = makeDependencyEdgeKey(input)
+    if (!seen.has(key)) {
+      seen.add(key)
+      deduped.push(input)
+    }
+  }
+
+  return deduped
+}
+
 export default function ScheduleEditClient({
   jobId,
   jobClientName,
@@ -162,8 +214,17 @@ export default function ScheduleEditClient({
   dependencies,
   baselineStatus,
 }: Props) {
+  const initialDependencyDrafts = useMemo(
+    () => makeDraftDependencies(dependencies),
+    [dependencies]
+  )
+
   const [editMode, setEditMode] = useState(false)
   const [draftOverrides, setDraftOverrides] = useState<Record<string, ScheduleDraftOverride>>({})
+  const [draftDependencies, setDraftDependencies] =
+    useState<DependencyWriteInput[]>(initialDependencyDrafts)
+  const [dependencyTargetByItem, setDependencyTargetByItem] = useState<Record<string, string>>({})
+  const [insertTargetByEdge, setInsertTargetByEdge] = useState<Record<string, string>>({})
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [baselineError, setBaselineError] = useState<string | null>(null)
@@ -172,7 +233,28 @@ export default function ScheduleEditClient({
   const [presenceError, setPresenceError] = useState<string | null>(null)
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const isDirty = Object.keys(draftOverrides).length > 0
+  const dependencyDirty =
+    JSON.stringify(draftDependencies) !== JSON.stringify(initialDependencyDrafts)
+
+  const isDirty = Object.keys(draftOverrides).length > 0 || dependencyDirty
+
+  const previewDependencyRows = useMemo(
+    () =>
+      draftDependencies.map(
+        (dep, index) =>
+          ({
+            id: `draft:${index}`,
+            job_id: jobId,
+            predecessor_type: dep.predecessor.type,
+            predecessor_id: dep.predecessor.id,
+            successor_type: dep.successor.type,
+            successor_id: dep.successor.id,
+            reference_point: dep.referencePoint,
+            offset_working_days: dep.offsetWorkingDays,
+          }) as ScheduleItemDependency
+      ),
+    [draftDependencies, jobId]
+  )
 
   const effectiveScheduleItems = useMemo(
     () =>
@@ -190,7 +272,7 @@ export default function ScheduleEditClient({
         subSchedule: effectiveScheduleItems,
         procurementItems,
       })
-      return resolveScheduleGraph({ nodes, dependencies })
+      return resolveScheduleGraph({ nodes, dependencies: previewDependencyRows })
     } catch {
       const nodes = buildScheduleNodes({
         subSchedule: effectiveScheduleItems,
@@ -198,7 +280,7 @@ export default function ScheduleEditClient({
       })
       return nodes
     }
-  }, [effectiveScheduleItems, procurementItems, dependencies])
+  }, [effectiveScheduleItems, procurementItems, previewDependencyRows])
 
   const confirmedShiftCount = useMemo(
     () =>
@@ -280,8 +362,84 @@ export default function ScheduleEditClient({
     })
   }
 
+  function getNodeLabel(ref: DependencyNodeRef): string {
+    if (ref.type === 'schedule') {
+      return scheduleItems.find((item) => item.id === ref.id)?.trade || 'Unknown schedule item'
+    }
+
+    return (
+      procurementItems.find((item) => item.id === ref.id)?.description ||
+      'Unknown procurement item'
+    )
+  }
+
+  function handleAttachAfter(itemId: string) {
+    const targetId = dependencyTargetByItem[itemId]
+    if (!targetId) return
+
+    setDraftDependencies((prev) =>
+      dedupeDependencies([
+        ...prev,
+        ...attachNodeAfter({
+          parent: { type: 'schedule', id: itemId },
+          newNode: { type: 'schedule', id: targetId },
+        }),
+      ])
+    )
+  }
+
+  function handleAttachBefore(itemId: string) {
+    const targetId = dependencyTargetByItem[itemId]
+    if (!targetId) return
+
+    setDraftDependencies((prev) =>
+      dedupeDependencies([
+        ...prev,
+        ...attachNodeBefore({
+          newNode: { type: 'schedule', id: itemId },
+          child: { type: 'schedule', id: targetId },
+        }),
+      ])
+    )
+  }
+
+  function handleDisconnectReconnect(itemId: string) {
+    setDraftDependencies((prev) =>
+      removeNodeAndReconnect({
+        nodeToRemove: { type: 'schedule', id: itemId },
+        dependencies: prev,
+      })
+    )
+  }
+
+  function handleInsertBetween(index: number, dep: DependencyWriteInput) {
+    const edgeKey = `${makeNodeKey(dep.predecessor)}->${makeNodeKey(dep.successor)}`
+    const targetId = insertTargetByEdge[edgeKey]
+    if (!targetId) return
+
+    setDraftDependencies((prev) =>
+      dedupeDependencies(
+        insertNodeBetween(
+          {
+            predecessor: dep.predecessor,
+            successor: dep.successor,
+            newNode: { type: 'schedule', id: targetId },
+          },
+          prev
+        )
+      )
+    )
+  }
+
+  function handleRemoveLink(index: number) {
+    setDraftDependencies((prev) => prev.filter((_, candidateIndex) => candidateIndex !== index))
+  }
+
   async function handleCancel() {
     setDraftOverrides({})
+    setDraftDependencies(initialDependencyDrafts)
+    setDependencyTargetByItem({})
+    setInsertTargetByEdge({})
     setEditMode(false)
     setSaveError(null)
     setOtherUsersEditing(0)
@@ -308,17 +466,20 @@ export default function ScheduleEditClient({
         }
       })
 
-    if (updates.length === 0) {
+    if (updates.length === 0 && !dependencyDirty) {
       setEditMode(false)
       return
     }
 
     setSaveError(null)
     startTransition(async () => {
-      const result = await saveScheduleDraftAction(jobId, updates)
+      const result = await saveScheduleDraftAction(jobId, updates, draftDependencies)
       if (result.ok) {
         await exitScheduleEditPresenceAction(jobId)
         setDraftOverrides({})
+        setDraftDependencies(initialDependencyDrafts)
+        setDependencyTargetByItem({})
+        setInsertTargetByEdge({})
         setEditMode(false)
         setOtherUsersEditing(0)
         setPresenceError(null)
@@ -461,7 +622,9 @@ export default function ScheduleEditClient({
             <span style={{ fontSize: '14px', color: 'var(--text-muted)', flex: 1 }}>
               Edit mode —{' '}
               {isDirty
-                ? `${Object.keys(draftOverrides).length} item(s) changed`
+                ? `${Object.keys(draftOverrides).length} item(s) changed${
+                    dependencyDirty ? ' + dependency edits' : ''
+                  }`
                 : 'no changes yet'}
             </span>
             {confirmedShiftCount > 0 && (
@@ -735,6 +898,94 @@ export default function ScheduleEditClient({
                             />
                             Shift dependencies
                           </label>
+
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '6px',
+                              marginTop: '8px',
+                              paddingTop: '8px',
+                              borderTop: '1px dashed var(--border)',
+                            }}
+                          >
+                            <select
+                              value={dependencyTargetByItem[item.id] ?? ''}
+                              onChange={(e) =>
+                                setDependencyTargetByItem((prev) => ({
+                                  ...prev,
+                                  [item.id]: e.target.value,
+                                }))
+                              }
+                              style={{
+                                fontSize: '12px',
+                                padding: '4px 6px',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--surface)',
+                                color: 'var(--text)',
+                              }}
+                            >
+                              <option value="">Select schedule item…</option>
+                              {scheduleItems
+                                .filter((candidate) => candidate.id !== item.id)
+                                .map((candidate) => (
+                                  <option key={candidate.id} value={candidate.id}>
+                                    {candidate.trade}
+                                  </option>
+                                ))}
+                            </select>
+
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleAttachAfter(item.id)}
+                                style={{
+                                  background: 'transparent',
+                                  color: 'var(--text)',
+                                  border: '1px solid var(--border)',
+                                  padding: '4px 8px',
+                                  borderRadius: '8px',
+                                  fontSize: '12px',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Attach after
+                              </button>
+
+                              <button
+                                type="button'
+                                onClick={() => handleAttachBefore(item.id)}
+                                style={{
+                                  background: 'transparent',
+                                  color: 'var(--text)',
+                                  border: '1px solid var(--border)',
+                                  padding: '4px 8px',
+                                  borderRadius: '8px',
+                                  fontSize: '12px',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Attach before
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDisconnectReconnect(item.id)}
+                                style={{
+                                  background: 'transparent',
+                                  color: '#dc2626',
+                                  border: '1px solid rgba(220, 38, 38, 0.25)',
+                                  padding: '4px 8px',
+                                  borderRadius: '8px',
+                                  fontSize: '12px',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Disconnect / reconnect
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       ) : (
                         <>
@@ -842,6 +1093,129 @@ export default function ScheduleEditClient({
               })}
             </tbody>
           </table>
+        )}
+      </section>
+
+      <section style={pageCardStyle()}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '12px',
+            flexWrap: 'wrap',
+            marginBottom: '12px',
+          }}
+        >
+          <div>
+            <h2 style={{ margin: 0, fontSize: '20px' }}>Dependencies</h2>
+            <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+              {draftDependencies.length} link{draftDependencies.length === 1 ? '' : 's'}
+            </div>
+          </div>
+        </div>
+
+        {draftDependencies.length === 0 ? (
+          <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+            No dependencies yet.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {draftDependencies.map((dep, index) => {
+              const edgeKey = `${makeNodeKey(dep.predecessor)}->${makeNodeKey(dep.successor)}`
+
+              return (
+                <div
+                  key={`${edgeKey}-${index}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    padding: '10px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '10px',
+                    background: 'var(--surface)',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <div style={{ fontSize: '14px' }}>
+                    {getNodeLabel(dep.predecessor)} → {getNodeLabel(dep.successor)}
+                    <span style={{ color: 'var(--text-muted)', marginLeft: '8px', fontSize: '12px' }}>
+                      {dep.referencePoint}, offset {dep.offsetWorkingDays}
+                    </span>
+                  </div>
+
+                  {editMode && (
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <select
+                        value={insertTargetByEdge[edgeKey] ?? ''}
+                        onChange={(e) =>
+                          setInsertTargetByEdge((prev) => ({
+                            ...prev,
+                            [edgeKey]: e.target.value,
+                          }))
+                        }
+                        style={{
+                          fontSize: '12px',
+                          padding: '4px 6px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border)',
+                          background: 'var(--surface)',
+                          color: 'var(--text)',
+                        }}
+                      >
+                        <option value="">Insert item…</option>
+                        {scheduleItems
+                          .filter(
+                            (candidate) =>
+                              candidate.id !== dep.predecessor.id &&
+                              candidate.id !== dep.successor.id
+                          )
+                          .map((candidate) => (
+                            <option key={candidate.id} value={candidate.id}>
+                              {candidate.trade}
+                            </option>
+                          ))}
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={() => handleInsertBetween(index, dep)}
+                        style={{
+                          background: 'transparent',
+                          color: 'var(--text)',
+                          border: '1px solid var(--border)',
+                          padding: '6px 10px',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Insert between
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveLink(index)}
+                        style={{
+                          background: 'transparent',
+                          color: '#dc2626',
+                          border: '1px solid rgba(220, 38, 38, 0.25)',
+                          padding: '6px 10px',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Remove link
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
       </section>
 
