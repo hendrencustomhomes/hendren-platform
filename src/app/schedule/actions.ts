@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { getScheduleDependencies } from '@/lib/db'
 import { createLinkedLog } from '@/lib/logs'
+import type { DependencyWriteInput } from '@/lib/schedule/dependencies'
+import { replaceScheduleDependenciesForJob } from '@/lib/schedule/dependencies'
 import { setJobBaseline } from '@/lib/schedule/baseline'
 import { resetBaselineForItemIfMisEntry } from '@/lib/schedule/baselineReset'
 import {
@@ -74,7 +76,8 @@ export async function activateBaselineAction(
 
 export async function saveScheduleDraftAction(
   jobId: string,
-  updates: DraftScheduleItemUpdate[]
+  updates: DraftScheduleItemUpdate[],
+  dependencyInputs?: DependencyWriteInput[]
 ): Promise<SaveDraftActionResult> {
   const supabase = await createClient()
 
@@ -85,16 +88,45 @@ export async function saveScheduleDraftAction(
 
     const ids = updates.map((u) => u.id)
 
-    const { data: originalRows, error: fetchError } = await supabase
-      .from('sub_schedule')
-      .select(
-        'id, start_date, duration_working_days, include_saturday, include_sunday, buffer_working_days'
-      )
-      .in('id', ids)
+    const originalMap = new Map<string, {
+      id: string
+      start_date: string | null
+      duration_working_days: number | null
+      include_saturday: boolean
+      include_sunday: boolean
+      buffer_working_days: number
+    }>()
 
-    if (fetchError) throw fetchError
+    if (ids.length > 0) {
+      const { data: originalRows, error: fetchError } = await supabase
+        .from('sub_schedule')
+        .select(
+          'id, start_date, duration_working_days, include_saturday, include_sunday, buffer_working_days'
+        )
+        .in('id', ids)
 
-    const originalMap = new Map((originalRows ?? []).map((row) => [row.id, row]))
+      if (fetchError) throw fetchError
+
+      for (const row of originalRows ?? []) {
+        originalMap.set(row.id, row)
+      }
+    }
+
+    if (dependencyInputs) {
+      await replaceScheduleDependenciesForJob(supabase, jobId, dependencyInputs)
+
+      await createLinkedLog(supabase, {
+        ownerType: 'job',
+        ownerId: jobId,
+        jobId,
+        logType: 'schedule_change',
+        note: `Dependencies updated (${dependencyInputs.length} link${
+          dependencyInputs.length === 1 ? '' : 's'
+        })`,
+        createdBy: user?.id ?? null,
+      })
+    }
+
     const dependencies = await getScheduleDependencies(supabase, jobId)
 
     for (const u of updates) {
@@ -203,7 +235,10 @@ export async function saveScheduleDraftAction(
         reasonParts.push('Shift dependencies: No')
       }
 
-      const note = [changes.length > 0 ? changes.join(' | ') : null, reasonParts.join(' | ') || null]
+      const note = [
+        changes.length > 0 ? changes.join(' | ') : null,
+        reasonParts.join(' | ') || null,
+      ]
         .filter(Boolean)
         .join('\n')
 
