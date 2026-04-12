@@ -1,26 +1,28 @@
+You’re right.
+
 docs/schedule_module/schedule_r27.md
 
 Schedule Module — R27 Deliverables
 
 Date: 2026-04-11
 Branch: dev
-Scope: Multi-user edit presence wired into schedule edit UI (warning only, no locks)
+Scope: Multi-user edit presence warning wired into the schedule edit UI
 
 ⸻
 
 A. Summary
 
-R27 wires the already-built edit presence layer into the live schedule edit experience.
+R27 connects the previously built schedule edit presence layer to the live schedule edit experience.
 
-This makes concurrent editing visible to the user without introducing:
+This round makes concurrent editing visible to the user without introducing:
 	•	locks
 	•	blocked edits
 	•	merge workflows
 	•	save restrictions
 
-The system now warns when another user is editing the same job schedule and continues to allow editing normally.
+The schedule editor now shows a warning when another user is editing the same job schedule, while still allowing full editing and save behavior.
 
-This matches the product rule:
+This preserves the product rule:
 
 Warn, do not restrict.
 
@@ -42,9 +44,10 @@ Exports
 
 enterScheduleEditPresenceAction(jobId)
 Behavior:
+	•	creates server Supabase client
 	•	gets current authenticated user
-	•	upserts presence row via setScheduleEditPresence(...)
-	•	returns current count of other users editing via getScheduleEditPresence(...)
+	•	writes or refreshes that user’s presence row for the job
+	•	returns count of other users currently editing
 
 Return shape:
 
@@ -54,23 +57,18 @@ Return shape:
   error?: string
 }
 
-
-⸻
-
 refreshScheduleEditPresenceAction(jobId)
 Behavior:
 	•	same auth lookup
-	•	refreshes last_seen_at through another upsert
-	•	returns current count of other users editing
+	•	re-upserts presence row
+	•	returns updated count of other users editing
 
-This is used for periodic keepalive / presence refresh during edit mode.
-
-⸻
+This is used for keepalive refresh while edit mode remains open.
 
 exitScheduleEditPresenceAction(jobId)
 Behavior:
 	•	gets current authenticated user
-	•	deletes presence row via clearScheduleEditPresence(...)
+	•	clears that user’s presence row for the job
 
 Return shape:
 
@@ -82,58 +80,30 @@ Return shape:
 
 ⸻
 
-D. UI Wiring in ScheduleEditClient
-
-New imports
-
-The client component now imports:
-	•	useEffect
-	•	useRef
-	•	presence actions:
-	•	enterScheduleEditPresenceAction
-	•	refreshScheduleEditPresenceAction
-	•	exitScheduleEditPresenceAction
-
-New local state
-
-Added:
-
-const [otherUsersEditing, setOtherUsersEditing] = useState<number>(0)
-const [presenceError, setPresenceError] = useState<string | null>(null)
-const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-These track:
-	•	how many other editors are active
-	•	whether presence lookup/refresh failed
-	•	active refresh timer while in edit mode
-
-⸻
-
-E. Presence Lifecycle Behavior
+D. Presence Lifecycle in the Client
 
 Enter edit mode
 
 When the user clicks Edit Schedule:
 	•	editMode becomes true
-	•	presence effect begins
-	•	enterScheduleEditPresenceAction(jobId) runs
-	•	current other-editor count is loaded
+	•	client calls enterScheduleEditPresenceAction(jobId)
+	•	returned otherUsersEditing count is stored in local state
 
 While edit mode is active
 
-The component refreshes presence every 15 seconds using:
+A repeating 15-second timer calls:
 
 refreshScheduleEditPresenceAction(jobId)
 
 This:
-	•	keeps the current user’s presence alive
-	•	updates the count of other users editing
+	•	refreshes the current user’s presence
+	•	updates the count of other active editors
 
 Exit edit mode
 
-On edit-mode cleanup:
-	•	timer is cleared
-	•	exitScheduleEditPresenceAction(jobId) runs
+On cleanup:
+	•	refresh timer is cleared
+	•	client calls exitScheduleEditPresenceAction(jobId)
 
 This happens through:
 	•	effect cleanup
@@ -142,9 +112,9 @@ This happens through:
 
 ⸻
 
-F. Exact User-Facing UI Behavior
+E. Exact UI Behavior Added
 
-1. Concurrent editor warning banner
+1. Concurrent editor warning
 
 Shown only when:
 	•	editMode === true
@@ -157,16 +127,15 @@ Another user is editing this schedule. Your changes may interfere.
 Behavior:
 	•	warning only
 	•	no blocking
-	•	no disabled save button
-	•	no lock behavior
+	•	save still allowed
+	•	cancel still allowed
+	•	edit mode remains active
 
-⸻
-
-2. Presence failure banner
+2. Presence failure warning
 
 Shown only when:
 	•	editMode === true
-	•	presence system returned an error
+	•	presence calls fail
 
 Banner text:
 
@@ -174,134 +143,148 @@ Edit presence unavailable: {error}
 
 Behavior:
 	•	informational only
-	•	editing remains allowed
-	•	save remains allowed
+	•	editing still allowed
+	•	save still allowed
 
-This keeps the platform resilient even if presence lookup fails.
+This preserves usability even if presence tracking is temporarily unavailable.
 
 ⸻
 
-G. Save / Cancel Behavior
+F. Changes Inside ScheduleEditClient.tsx
 
-Cancel
+New imports
+
+Added:
+	•	useEffect
+	•	useRef
+	•	presence actions from ./presenceActions
+
+New local state
+
+Added:
+
+const [otherUsersEditing, setOtherUsersEditing] = useState<number>(0)
+const [presenceError, setPresenceError] = useState<string | null>(null)
+const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+New effect
+
+A useEffect tied to [editMode, jobId] now:
+	•	enters presence on edit start
+	•	refreshes every 15 seconds
+	•	clears timer on cleanup
+	•	exits presence on cleanup
+
+Edit button change
+
+Clicking Edit Schedule now:
+	•	clears stale presence error
+	•	resets other-editor count
+	•	enters edit mode
+
+Cancel behavior
 
 handleCancel() now:
-	1.	clears draft state
-	2.	exits edit mode
-	3.	clears local presence state
-	4.	explicitly calls exitScheduleEditPresenceAction(jobId)
+	•	clears draft state
+	•	exits edit mode
+	•	clears local presence state
+	•	explicitly calls exitScheduleEditPresenceAction(jobId)
 
-Save success
+Save success behavior
 
 On successful save:
-	1.	presence row is cleared
-	2.	draft state is cleared
-	3.	edit mode exits
-	4.	presence counters/errors reset
-
-This avoids leaving a stale active-editor row after a normal save.
+	•	presence row is explicitly cleared
+	•	draft state is reset
+	•	edit mode exits
+	•	presence state is cleared
 
 ⸻
 
-H. Important Design Constraints Preserved
+G. What Did Not Change
 
-No locks
+R27 does not:
+	•	lock the record
+	•	block saves when another user is present
+	•	show usernames of other editors
+	•	show timestamps in UI
+	•	change pipeline behavior
+	•	change baseline behavior
+	•	change dependency logic
+	•	change task creation logic
 
-Users are never blocked from:
-	•	entering edit mode
-	•	saving changes
-	•	cancelling
-	•	editing while another user is present
-
-No authority
-
-Presence affects:
-	•	warning UI only
-
-Presence does not affect:
-	•	pipeline execution
-	•	dependency resolution
-	•	baseline behavior
-	•	task creation
-	•	save permissions
-
-Last write wins
-
-Conflict behavior remains unchanged:
-	•	whichever save lands last still wins
-
-This round adds awareness, not conflict resolution.
+This is awareness only.
 
 ⸻
 
-I. Assumptions Made
-	1.	profiles.id aligns with the authenticated user id returned from Supabase auth and can be used in schedule_edit_presence.user_id.
-	2.	A 15-second refresh interval is sufficient for schedule editing presence without creating excessive load.
-	3.	Explicit cleanup on save/cancel plus effect cleanup is acceptable even if exitScheduleEditPresenceAction(...) is called redundantly. Deleting an already-cleared row is harmless.
-	4.	Warning users with only a count of other editors is enough for v1. No names or timestamps are required yet.
+H. Assumptions Made
+	1.	The authenticated user id returned by Supabase auth is the correct id to use with schedule_edit_presence.user_id.
+	2.	A 15-second refresh interval is frequent enough to keep presence useful without creating excessive write load.
+	3.	Redundant cleanup is acceptable.
+exitScheduleEditPresenceAction(...) may be called both from explicit handlers and from effect cleanup. This is safe.
+	4.	A count of other editors is sufficient for v1.
+No names or identity details are needed yet.
 
 ⸻
 
-J. Edge Cases Intentionally Deferred
+I. Edge Cases Intentionally Deferred
 
-1. Stale presence from abrupt disconnect
+1. Stale presence after abrupt disconnect
 
-If a user closes the browser or loses connection unexpectedly, a presence row may remain until a later cleanup strategy is added. This is acceptable for a warning-only system.
+If a user closes the browser or loses connection unexpectedly, their presence row may remain temporarily. This is acceptable for a warning-only system.
 
 2. Multiple tabs by same user
 
-Presence currently collapses by (job_id, user_id) at the DB level, which is acceptable. No tab-specific behavior is tracked.
+Multiple tabs from the same user on the same job are not separately distinguished in the UI.
 
-3. Save failure after explicit exit attempt
+3. Route-change / unload sophistication
 
-If save fails, edit mode remains active and the presence effect continues refreshing. This is acceptable and correct for now.
+No special browser unload or route-transition handling was added beyond component cleanup.
 
 4. User identity display
 
-The warning does not show who else is editing. This is intentionally deferred to avoid premature UI complexity.
+The warning does not yet show who else is editing. This is deferred to avoid premature UI complexity.
 
-5. Cross-page cleanup
+5. Presence timeout cleanup
 
-This round does not add route-change or browser unload cleanup beyond normal component unmount / effect cleanup.
+This round does not add server-side stale-row expiration logic. That can be added later if stale warnings become noisy.
 
 ⸻
 
-K. Relationship to Architecture
+J. Relationship to Architecture
 
-R27 completes the first operational version of the product rule:
+R27 implements the product decision:
 
-If two users edit at the same time, show a warning that their changes may interfere. Do not lock.
+If two users edit the same schedule at the same time, show a warning only. No locks.
 
-This keeps the platform aligned with the broader scheduling philosophy:
+This keeps the system aligned with the broader platform philosophy:
 	•	minimal restriction
 	•	visible risk
 	•	user control preserved
+	•	no “stupid software” lock frustration
 
 ⸻
 
-L. Status
+K. Status
 
 The schedule editor now has:
 	•	edit presence tracking
 	•	concurrent-edit warning
 	•	graceful degradation when presence fails
 
-This closes the basic multi-user awareness gap without making the system heavy-handed.
+This closes the first multi-user awareness gap without making the system rigid.
 
 ⸻
 
-M. Next Recommended Work
+L. Next Recommended Work
 
 R28 — dependency editing UI
 
-Expose:
+Expose the dependency operations that already exist in the backend:
 	•	attach before
 	•	attach after
 	•	insert between
-	•	remove/reconnect
-
-The backend support already exists. The next step is making it usable in the actual schedule editor.
+	•	remove / reconnect
 
 R29 — logs foundation
 
-Start recording schedule change history so the system gains operational intelligence, not just current-state correctness.
+Begin capturing schedule changes as operational history so the system improves over time, not just in current-state correctness.
