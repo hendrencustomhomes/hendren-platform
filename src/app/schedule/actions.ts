@@ -1,11 +1,16 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/utils/supabase/server'
-import { runScheduleApplyPipeline } from '@/lib/schedule/runApplyPipeline'
+import { getScheduleDependencies } from '@/lib/db'
+import { createLinkedLog } from '@/lib/logs'
 import { setJobBaseline } from '@/lib/schedule/baseline'
 import { resetBaselineForItemIfMisEntry } from '@/lib/schedule/baselineReset'
-import { createLinkedLog } from '@/lib/logs'
+import {
+  applyManualShiftDependencyAdjustments,
+  computeManualShiftDependencyAdjustments,
+} from '@/lib/schedule/manualShift'
+import { runScheduleApplyPipeline } from '@/lib/schedule/runApplyPipeline'
+import { createClient } from '@/utils/supabase/server'
 
 export type DraftScheduleItemUpdate = {
   id: string
@@ -16,6 +21,8 @@ export type DraftScheduleItemUpdate = {
   buffer_working_days: number
   shift_reason_type: string | null
   shift_reason_note: string | null
+  shift_dependencies: boolean
+  old_start_date: string | null
 }
 
 export type SaveDraftActionResult = {
@@ -38,7 +45,22 @@ export async function activateBaselineAction(
       data: { user },
     } = await supabase.auth.getUser()
 
-    await setJobBaseline(supabase, jobId, user?.id ?? null)
+    const result = await setJobBaseline(supabase, jobId, user?.id ?? null)
+
+    await createLinkedLog(supabase, {
+      ownerType: 'job',
+      ownerId: jobId,
+      jobId,
+      logType: 'note',
+      note: `Baseline activated${
+        result.updatedScheduleIds.length > 0
+          ? ` (${result.updatedScheduleIds.length} schedule item${
+              result.updatedScheduleIds.length === 1 ? '' : 's'
+            } snapshotted)`
+          : ''
+      }`,
+      createdBy: user?.id ?? null,
+    })
 
     revalidatePath('/schedule')
     return { ok: true }
@@ -61,7 +83,6 @@ export async function saveScheduleDraftAction(
       data: { user },
     } = await supabase.auth.getUser()
 
-    // STEP 1 — fetch original rows (for diff + logging)
     const ids = updates.map((u) => u.id)
 
     const { data: originalRows, error: fetchError } = await supabase
@@ -73,11 +94,9 @@ export async function saveScheduleDraftAction(
 
     if (fetchError) throw fetchError
 
-    const originalMap = new Map(
-      (originalRows ?? []).map((r) => [r.id, r])
-    )
+    const originalMap = new Map((originalRows ?? []).map((row) => [row.id, row]))
+    const dependencies = await getScheduleDependencies(supabase, jobId)
 
-    // STEP 2 — write updates + baseline reset
     for (const u of updates) {
       const { error } = await supabase
         .from('sub_schedule')
@@ -94,14 +113,36 @@ export async function saveScheduleDraftAction(
 
       if (error) throw error
 
-      await resetBaselineForItemIfMisEntry(
-        supabase,
-        u.id,
-        u.shift_reason_type
-      )
+      await resetBaselineForItemIfMisEntry(supabase, u.id, u.shift_reason_type)
+
+      if (u.shift_dependencies === false) {
+        const adjustments = computeManualShiftDependencyAdjustments({
+          movedItemId: u.id,
+          oldStartDate: u.old_start_date,
+          newStartDate: u.start_date,
+          dependencies,
+        })
+
+        const updatedDependencyIds = await applyManualShiftDependencyAdjustments(
+          supabase,
+          adjustments
+        )
+
+        if (updatedDependencyIds.length > 0) {
+          await createLinkedLog(supabase, {
+            ownerType: 'schedule_item',
+            ownerId: u.id,
+            jobId,
+            logType: 'schedule_change',
+            note: `Manual move preserved downstream dates by rewriting ${updatedDependencyIds.length} dependenc${
+              updatedDependencyIds.length === 1 ? 'y' : 'ies'
+            }.`,
+            createdBy: user?.id ?? null,
+          })
+        }
+      }
     }
 
-    // STEP 3 — create logs (before pipeline mutates anything)
     for (const u of updates) {
       const original = originalMap.get(u.id)
       if (!original) continue
@@ -109,9 +150,7 @@ export async function saveScheduleDraftAction(
       const changes: string[] = []
 
       if (original.start_date !== u.start_date) {
-        changes.push(
-          `Start: ${original.start_date ?? '—'} → ${u.start_date ?? '—'}`
-        )
+        changes.push(`Start: ${original.start_date ?? '—'} → ${u.start_date ?? '—'}`)
       }
 
       if (original.duration_working_days !== u.duration_working_days) {
@@ -146,7 +185,6 @@ export async function saveScheduleDraftAction(
         )
       }
 
-      // Skip logging if nothing meaningful changed
       if (changes.length === 0 && !u.shift_reason_type && !u.shift_reason_note) {
         continue
       }
@@ -161,10 +199,11 @@ export async function saveScheduleDraftAction(
         reasonParts.push(`Note: ${u.shift_reason_note}`)
       }
 
-      const note = [
-        changes.length > 0 ? changes.join(' | ') : null,
-        reasonParts.length > 0 ? reasonParts.join(' | ') : null,
-      ]
+      if (u.shift_dependencies === false) {
+        reasonParts.push('Shift dependencies: No')
+      }
+
+      const note = [changes.length > 0 ? changes.join(' | ') : null, reasonParts.join(' | ') || null]
         .filter(Boolean)
         .join('\n')
 
@@ -178,7 +217,6 @@ export async function saveScheduleDraftAction(
       })
     }
 
-    // STEP 4 — run pipeline
     await runScheduleApplyPipeline(supabase, jobId)
 
     revalidatePath('/schedule')
