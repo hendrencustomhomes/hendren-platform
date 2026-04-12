@@ -1,12 +1,16 @@
 'use client'
 
-import { useState, useMemo, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
-import type { JobSubSchedule, ProcurementItem, ScheduleItemDependency } from '@/lib/db'
-import { getScheduleRiskLevel, getOrderRiskLevel } from '@/lib/db'
-import { buildScheduleNodes } from '@/lib/schedule/nodes'
+import type {
+  JobSubSchedule,
+  ProcurementItem,
+  ScheduleItemDependency,
+} from '@/lib/db'
+import { getOrderRiskLevel, getScheduleRiskLevel } from '@/lib/db'
 import { resolveScheduleGraph } from '@/lib/schedule/engine'
-import { saveScheduleDraftAction, activateBaselineAction } from './actions'
+import { buildScheduleNodes } from '@/lib/schedule/nodes'
+import { activateBaselineAction, saveScheduleDraftAction } from './actions'
 import type { DraftScheduleItemUpdate } from './actions'
 
 type ScheduleDraftOverride = {
@@ -17,6 +21,8 @@ type ScheduleDraftOverride = {
   buffer_working_days: number
   shift_reason_type: string | null
   shift_reason_note: string | null
+  shift_dependencies: boolean
+  old_start_date: string | null
 }
 
 const SHIFT_REASON_OPTIONS: { value: string; label: string }[] = [
@@ -178,7 +184,6 @@ export default function ScheduleEditClient({
       })
       return resolveScheduleGraph({ nodes, dependencies })
     } catch {
-      // Cycle or resolution error — fall back to unresolved nodes
       const nodes = buildScheduleNodes({
         subSchedule: effectiveScheduleItems,
         procurementItems,
@@ -213,6 +218,8 @@ export default function ScheduleEditClient({
         buffer_working_days: original.buffer_working_days,
         shift_reason_type: null,
         shift_reason_note: null,
+        shift_dependencies: true,
+        old_start_date: original.start_date,
       }
       return { ...prev, [itemId]: { ...existing, [field]: value } }
     })
@@ -238,6 +245,8 @@ export default function ScheduleEditClient({
           buffer_working_days: override.buffer_working_days,
           shift_reason_type: override.shift_reason_type,
           shift_reason_note: override.shift_reason_note,
+          shift_dependencies: override.shift_dependencies,
+          old_start_date: override.old_start_date,
         }
       })
 
@@ -262,7 +271,6 @@ export default function ScheduleEditClient({
 
   return (
     <>
-      {/* Baseline toolbar */}
       <div
         style={{
           display: 'flex',
@@ -354,7 +362,6 @@ export default function ScheduleEditClient({
         )}
       </div>
 
-      {/* Edit mode toolbar */}
       <div
         style={{
           display: 'flex',
@@ -461,7 +468,6 @@ export default function ScheduleEditClient({
         </div>
       )}
 
-      {/* Labor Schedule */}
       <section style={pageCardStyle()}>
         <div
           style={{
@@ -490,13 +496,23 @@ export default function ScheduleEditClient({
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['Job', 'Trade', 'Company', 'Status', 'Release', 'Start', 'End', 'Cost Code', 'Notes', 'Shift Reason', ''].map(
-                  (heading) => (
-                    <th key={heading} style={thStyle()}>
-                      {heading}
-                    </th>
-                  )
-                )}
+                {[
+                  'Job',
+                  'Trade',
+                  'Company',
+                  'Status',
+                  'Release',
+                  'Start',
+                  'End',
+                  'Cost Code',
+                  'Notes',
+                  'Shift Reason',
+                  '',
+                ].map((heading) => (
+                  <th key={heading} style={thStyle()}>
+                    {heading}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -603,6 +619,29 @@ export default function ScheduleEditClient({
                               Sun
                             </label>
                           </div>
+                          <label
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              fontSize: '12px',
+                              color: 'var(--text-muted)',
+                              marginTop: '6px',
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={override?.shift_dependencies ?? true}
+                              onChange={(e) =>
+                                setOverrideField(
+                                  item.id,
+                                  'shift_dependencies',
+                                  e.target.checked
+                                )
+                              }
+                            />
+                            Shift dependencies
+                          </label>
                         </div>
                       ) : (
                         <>
@@ -713,7 +752,6 @@ export default function ScheduleEditClient({
         )}
       </section>
 
-      {/* Material Schedule */}
       <section style={pageCardStyle()}>
         <div
           style={{
