@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { createLinkedLog } from '@/lib/logs'
 import type { ConfirmedStartShiftImpact } from './impacts'
 
 export type CreateScheduleTriggeredTasksResult = {
@@ -28,11 +29,14 @@ export async function createScheduleTriggeredCallTasks(
     return { createdTaskIds: [], skippedExistingImpactScheduleIds: [] }
   }
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
   const createdTaskIds: string[] = []
   const skippedExistingImpactScheduleIds: string[] = []
 
   for (const impact of impacts) {
-    // Step B — check for an existing open matching task
     const { data: existing, error: queryError } = await supabase
       .from('job_tasks')
       .select('id, status')
@@ -46,16 +50,15 @@ export async function createScheduleTriggeredCallTasks(
       isOpenTaskStatus(t.status)
     )
 
-    // Step C — skip if open task already exists
     if (hasOpenTask) {
       skippedExistingImpactScheduleIds.push(impact.scheduleId)
       continue
     }
 
-    // Step D — create new task
     const title = buildCallTaskTitle(impact.companyName)
-    const description =
-      `Confirmed start date shifted: ${impact.oldStartDate ?? '—'} → ${impact.newStartDate ?? '—'}`
+    const description = `Confirmed start date shifted: ${
+      impact.oldStartDate ?? '—'
+    } → ${impact.newStartDate ?? '—'}`
 
     const payload: Record<string, unknown> = {
       job_id: impact.jobId,
@@ -77,7 +80,30 @@ export async function createScheduleTriggeredCallTasks(
       .single()
 
     if (insertError) throw insertError
-    if (created) createdTaskIds.push((created as { id: string }).id)
+    if (created) {
+      const createdTaskId = (created as { id: string }).id
+      createdTaskIds.push(createdTaskId)
+
+      await createLinkedLog(supabase, {
+        ownerType: 'task',
+        ownerId: createdTaskId,
+        jobId: impact.jobId,
+        logType: 'call_log',
+        note: `System-created call task for confirmed start shift on schedule item ${impact.scheduleId}. ${
+          impact.oldStartDate ?? '—'
+        } → ${impact.newStartDate ?? '—'}`,
+        createdBy: user?.id ?? null,
+      })
+
+      await createLinkedLog(supabase, {
+        ownerType: 'schedule_item',
+        ownerId: impact.scheduleId,
+        jobId: impact.jobId,
+        logType: 'schedule_change',
+        note: `Call task created: ${title}`,
+        createdBy: user?.id ?? null,
+      })
+    }
   }
 
   return { createdTaskIds, skippedExistingImpactScheduleIds }
