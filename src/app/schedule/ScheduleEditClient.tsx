@@ -954,7 +954,7 @@ export default function ScheduleEditClient({
                               </button>
 
                               <button
-                                type="button'
+                                type="button"
                                 onClick={() => handleAttachBefore(item.id)}
                                 style={{
                                   background: 'transparent',
