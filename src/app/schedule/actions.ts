@@ -1,10 +1,15 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/utils/supabase/server'
-import { runScheduleApplyPipeline } from '@/lib/schedule/runApplyPipeline'
+import { getScheduleDependencies } from '@/lib/db'
 import { setJobBaseline } from '@/lib/schedule/baseline'
 import { resetBaselineForItemIfMisEntry } from '@/lib/schedule/baselineReset'
+import {
+  applyManualShiftDependencyAdjustments,
+  computeManualShiftDependencyAdjustments,
+} from '@/lib/schedule/manualShift'
+import { runScheduleApplyPipeline } from '@/lib/schedule/runApplyPipeline'
+import { createClient } from '@/utils/supabase/server'
 
 export type DraftScheduleItemUpdate = {
   id: string
@@ -15,6 +20,8 @@ export type DraftScheduleItemUpdate = {
   buffer_working_days: number
   shift_reason_type: string | null
   shift_reason_note: string | null
+  shift_dependencies: boolean
+  old_start_date: string | null
 }
 
 export type SaveDraftActionResult = {
@@ -42,7 +49,11 @@ export async function activateBaselineAction(
     revalidatePath('/schedule')
     return { ok: true }
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'Baseline activation failed' }
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : 'Baseline activation failed',
+    }
   }
 }
 
@@ -53,34 +64,41 @@ export async function saveScheduleDraftAction(
   const supabase = await createClient()
 
   try {
-  // Write draft field changes to sub_schedule first
-  for (const u of updates) {
-    const { error } = await supabase
-      .from('sub_schedule')
-      .update({
-        start_date: u.start_date,
-        duration_working_days: u.duration_working_days,
-        include_saturday: u.include_saturday,
-        include_sunday: u.include_sunday,
-        buffer_working_days: u.buffer_working_days,
-        shift_reason_type: u.shift_reason_type,
-        shift_reason_note: u.shift_reason_note,
-      })
-      .eq('id', u.id)
+    const dependencies = await getScheduleDependencies(supabase, jobId)
 
-    if (error) throw error
+    for (const u of updates) {
+      const { error } = await supabase
+        .from('sub_schedule')
+        .update({
+          start_date: u.start_date,
+          duration_working_days: u.duration_working_days,
+          include_saturday: u.include_saturday,
+          include_sunday: u.include_sunday,
+          buffer_working_days: u.buffer_working_days,
+          shift_reason_type: u.shift_reason_type,
+          shift_reason_note: u.shift_reason_note,
+        })
+        .eq('id', u.id)
 
-    await resetBaselineForItemIfMisEntry(
-      supabase,
-      u.id,
-      u.shift_reason_type
-    )
-  }
+      if (error) throw error
 
-  // Run full resolve → impact-detect → apply → task-trigger pipeline
-  await runScheduleApplyPipeline(supabase, jobId)
+      await resetBaselineForItemIfMisEntry(supabase, u.id, u.shift_reason_type)
 
-  revalidatePath('/schedule')
+      if (u.shift_dependencies === false) {
+        const adjustments = computeManualShiftDependencyAdjustments({
+          movedItemId: u.id,
+          oldStartDate: u.old_start_date,
+          newStartDate: u.start_date,
+          dependencies,
+        })
+
+        await applyManualShiftDependencyAdjustments(supabase, adjustments)
+      }
+    }
+
+    await runScheduleApplyPipeline(supabase, jobId)
+
+    revalidatePath('/schedule')
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Save failed' }
