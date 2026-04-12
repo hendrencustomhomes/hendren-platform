@@ -53,27 +53,34 @@ export async function saveScheduleDraftAction(
   const supabase = await createClient()
 
   try {
-    // Write draft field changes to sub_schedule first
-    for (const u of updates) {
-      const { error } = await supabase
-        .from('sub_schedule')
-        .update({
-          start_date: u.start_date,
-          duration_working_days: u.duration_working_days,
-          include_saturday: u.include_saturday,
-          include_sunday: u.include_sunday,
-          buffer_working_days: u.buffer_working_days,
-          shift_reason_type: u.shift_reason_type,
-          shift_reason_note: u.shift_reason_note,
-        })
-        .eq('id', u.id)
-      if (error) throw error
-    }
+  // Write draft field changes to sub_schedule first
+  for (const u of updates) {
+    const { error } = await supabase
+      .from('sub_schedule')
+      .update({
+        start_date: u.start_date,
+        duration_working_days: u.duration_working_days,
+        include_saturday: u.include_saturday,
+        include_sunday: u.include_sunday,
+        buffer_working_days: u.buffer_working_days,
+        shift_reason_type: u.shift_reason_type,
+        shift_reason_note: u.shift_reason_note,
+      })
+      .eq('id', u.id)
 
-    // Run full resolve → impact-detect → apply → task-trigger pipeline
-    await runScheduleApplyPipeline(supabase, jobId)
+    if (error) throw error
 
-    revalidatePath('/schedule')
+    await resetBaselineForItemIfMisEntry(
+      supabase,
+      u.id,
+      u.shift_reason_type
+    )
+  }
+
+  // Run full resolve → impact-detect → apply → task-trigger pipeline
+  await runScheduleApplyPipeline(supabase, jobId)
+
+  revalidatePath('/schedule')
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Save failed' }
