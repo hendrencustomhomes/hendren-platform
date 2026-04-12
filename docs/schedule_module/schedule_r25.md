@@ -2,7 +2,7 @@ Schedule Module — R25 Deliverables
 
 Date: 2026-04-11
 Branch: dev
-Scope: Shift Dependencies toggle — manual shift behavior via lag adjustment
+Scope: Shift Dependencies toggle — manual shift behavior via dependency offset adjustment
 
 ⸻
 
@@ -16,7 +16,7 @@ This defines how the system behaves when a user:
 
 Instead of breaking dependencies or forcing cascade, the system:
 
-updates dependency lag values to preserve graph integrity
+updates dependency offsets to preserve graph integrity
 
 ⸻
 
@@ -26,7 +26,7 @@ When a schedule item is manually shifted and dependencies are not cascaded:
 	•	No other schedule items are moved
 	•	No dependencies are removed
 	•	The dependency graph remains intact
-	•	Lag days are recalculated to reflect the new relationship
+	•	offset_working_days values are recalculated to reflect the new relationship
 
 ⸻
 
@@ -50,7 +50,7 @@ Creates hidden mismatch → “out of sync” state
 
 ✅ Implemented Solution
 
-Convert manual movement into lag adjustment
+Convert manual movement into dependency offset adjustment
 
 This keeps:
 	•	graph valid
@@ -69,7 +69,6 @@ Function
 
 computeDependencyAdjustmentsForManualShift(...)
 
-
 ⸻
 
 E. Algorithm
@@ -80,11 +79,15 @@ Inputs
 	•	newStartDate
 	•	dependencies[]
 
-⸻
-
 Step 1 — Compute shift
 
-shiftDays = newStartDate - oldStartDate
+The function computes the working-day difference between:
+	•	previous start date
+	•	new start date
+
+using Mon–Fri working-day logic.
+
+shiftDays = diffInWorkingDays(oldStartDate, newStartDate)
 
 
 ⸻
@@ -93,23 +96,43 @@ Step 2 — Apply to dependencies
 
 For each dependency:
 
-Case 1 — Item is successor (A depends on something)
+Case 1 — Moved item is the successor
+Meaning:
+	•	dependency points into the moved item
+	•	the moved item depends on something else
 
-newLag = oldLag + shiftDays
+Match condition:
+
+dep.successor_type === 'schedule' &&
+dep.successor_id === movedItemId
+
+Adjustment:
+
+newOffsetWorkingDays = dep.offset_working_days + shiftDays
 
 Meaning:
-	•	A moved later → needs more lag from predecessor
-	•	A moved earlier → needs less lag
+	•	item moved later → needs more offset from predecessor
+	•	item moved earlier → needs less offset
 
 ⸻
 
-Case 2 — Item is predecessor (others depend on A)
+Case 2 — Moved item is the predecessor
+Meaning:
+	•	dependency points out of the moved item
+	•	other items depend on it
 
-newLag = oldLag - shiftDays
+Match condition:
+
+dep.predecessor_type === 'schedule' &&
+dep.predecessor_id === movedItemId
+
+Adjustment:
+
+newOffsetWorkingDays = dep.offset_working_days - shiftDays
 
 Meaning:
-	•	A moved later → successors now effectively closer → reduce lag
-	•	A moved earlier → successors further away → increase lag
+	•	item moved later → successors are now effectively closer → reduce offset
+	•	item moved earlier → successors are now effectively farther away → increase offset
 
 ⸻
 
@@ -117,7 +140,7 @@ Output
 
 DependencyAdjustment[] = {
   dependencyId,
-  newLagDays
+  newOffsetWorkingDays
 }
 
 
@@ -143,7 +166,9 @@ G. Example
 
 Original
 
-A → B (lag = 2)
+A → B
+offset_working_days = 2
+
 A = Day 1
 B = Day 3
 
@@ -151,14 +176,15 @@ User moves A to Day 5 (no cascade)
 
 shiftDays = +4
 
-Update:
+Update
 
-lag = 2 - 4 = -2
+If A is predecessor:
+
+newOffsetWorkingDays = 2 - 4 = -2
 
 Now:
-
-A = Day 5
-B = Day 3
+	•	A = Day 5
+	•	B = Day 3
 
 Graph still resolves correctly.
 
@@ -166,9 +192,10 @@ Graph still resolves correctly.
 
 H. Assumptions
 	1.	Dates are ISO strings (YYYY-MM-DD)
-	2.	lag_days defaults to 0 when null
+	2.	offset_working_days is always present on ScheduleItemDependency
 	3.	Dependencies are directional and valid
 	4.	Same-day comparisons are handled (shift = 0 → no change)
+	5.	Working-day shift calculation uses Mon–Fri logic for this adjustment step
 
 ⸻
 
@@ -177,24 +204,25 @@ I. Edge Cases
 1. Null dates
 
 If either oldStartDate or newStartDate is null:
-	•	No adjustments are made
-
-⸻
+	•	no adjustments are made
 
 2. Zero shift
 
 If no actual change:
-	•	No adjustments returned
+	•	no adjustments are returned
 
-⸻
-
-3. Negative lag
+3. Negative offsets
 
 Allowed.
 
 This is intentional:
-	•	Represents overlap / early successor start
-	•	Valid in real construction sequencing
+	•	represents overlap / early successor start
+	•	valid in real construction sequencing
+
+4. Non-schedule dependencies
+
+Only schedule-to-schedule dependency edges touching the moved item are adjusted.
+Other dependency types are ignored by this helper.
 
 ⸻
 
@@ -203,9 +231,9 @@ J. What This Does NOT Do
 This function:
 	•	does NOT write to DB
 	•	does NOT modify schedule items
-	•	does NOT trigger pipeline
+	•	does NOT trigger pipeline behavior
 
-It only computes adjustments.
+It only computes dependency offset adjustments.
 
 ⸻
 
@@ -215,7 +243,7 @@ This implements the rule defined earlier:
 
 “There should never be an out-of-sync state”
 
-By encoding manual shifts into lag:
+By encoding manual shifts into dependency offsets:
 	•	graph always resolves
 	•	UI always reflects reality
 	•	no hidden inconsistencies
@@ -228,14 +256,15 @@ Dependency behavior is now:
 	•	mathematically defined
 	•	deterministic
 	•	aligned with UX goals
+	•	corrected to the real schedule_item_dependencies schema
 
 ⸻
 
 M. Next Step
 
 R26 — Apply adjustments to DB
-	•	Wire into save flow
-	•	Add “Shift Dependencies?” checkbox
-	•	Persist updated lag values to schedule_item_dependencies
+	•	wire into save flow
+	•	add “Shift Dependencies?” checkbox
+	•	persist updated offset_working_days to schedule_item_dependencies
 
 This is where behavior becomes visible to users.
