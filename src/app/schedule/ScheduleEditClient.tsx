@@ -9,6 +9,7 @@ import type {
 } from '@/lib/db'
 import { getOrderRiskLevel, getScheduleRiskLevel } from '@/lib/db'
 import type { DependencyWriteInput, DependencyNodeRef } from '@/lib/schedule/dependencies'
+import { replaceScheduleDependenciesForJob } from '@/lib/schedule/dependencies'
 import {
   attachNodeAfter,
   attachNodeBefore,
@@ -292,6 +293,48 @@ export default function ScheduleEditClient({
     [scheduleItems, previewNodes]
   )
 
+  const dependencySummaryByScheduleId = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        dependsOn: { label: string; offset: number }[]
+        blocks: { label: string; offset: number }[]
+      }
+    >()
+
+    for (const item of scheduleItems) {
+      map.set(item.id, { dependsOn: [], blocks: [] })
+    }
+
+    const getScheduleLabel = (scheduleId: string) =>
+      scheduleItems.find((item) => item.id === scheduleId)?.trade || 'Unknown schedule item'
+
+    for (const dep of previewDependencyRows) {
+      if (
+        dep.predecessor_type === 'schedule' &&
+        dep.successor_type === 'schedule'
+      ) {
+        const predecessorEntry = map.get(dep.predecessor_id)
+        if (predecessorEntry) {
+          predecessorEntry.blocks.push({
+            label: getScheduleLabel(dep.successor_id),
+            offset: dep.offset_working_days,
+          })
+        }
+
+        const successorEntry = map.get(dep.successor_id)
+        if (successorEntry) {
+          successorEntry.dependsOn.push({
+            label: getScheduleLabel(dep.predecessor_id),
+            offset: dep.offset_working_days,
+          })
+        }
+      }
+    }
+
+    return map
+  }, [previewDependencyRows, scheduleItems])
+
   useEffect(() => {
     if (!editMode) {
       setOtherUsersEditing(0)
@@ -369,8 +412,12 @@ export default function ScheduleEditClient({
 
     return (
       procurementItems.find((item) => item.id === ref.id)?.description ||
-      'Unknown procurement item'
+      'Unknown material item'
     )
+  }
+
+  function formatOffset(offset: number): string {
+    return offset >= 0 ? `+${offset}d` : `${offset}d`
   }
 
   function handleAttachAfter(itemId: string) {
@@ -412,7 +459,7 @@ export default function ScheduleEditClient({
     )
   }
 
-  function handleInsertBetween(index: number, dep: DependencyWriteInput) {
+  function handleInsertBetween(dep: DependencyWriteInput) {
     const edgeKey = `${makeNodeKey(dep.predecessor)}->${makeNodeKey(dep.successor)}`
     const targetId = insertTargetByEdge[edgeKey]
     if (!targetId) return
@@ -781,6 +828,7 @@ export default function ScheduleEditClient({
                 const override = draftOverrides[item.id]
                 const effective = override ? { ...item, ...override } : item
                 const previewNode = previewNodes[`schedule:${item.id}`]
+                const dependencySummary = dependencySummaryByScheduleId.get(item.id)
 
                 return (
                   <tr key={item.id}>
@@ -1026,7 +1074,39 @@ export default function ScheduleEditClient({
                     </td>
 
                     <td style={tdStyle()}>{item.cost_code || '—'}</td>
-                    <td style={tdStyle()}>{item.notes || '—'}</td>
+
+                    <td style={tdStyle()}>
+                      <div>{item.notes || '—'}</div>
+                      {!editMode && dependencySummary && (
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            color: 'var(--text-muted)',
+                            marginTop: '6px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                          }}
+                        >
+                          <div>
+                            Depends on:{' '}
+                            {dependencySummary.dependsOn.length > 0
+                              ? dependencySummary.dependsOn
+                                  .map((entry) => `${entry.label} (${formatOffset(entry.offset)})`)
+                                  .join(', ')
+                              : '—'}
+                          </div>
+                          <div>
+                            Blocks:{' '}
+                            {dependencySummary.blocks.length > 0
+                              ? dependencySummary.blocks
+                                  .map((entry) => `${entry.label} (${formatOffset(entry.offset)})`)
+                                  .join(', ')
+                              : '—'}
+                          </div>
+                        </div>
+                      )}
+                    </td>
 
                     <td style={tdStyle()}>
                       {editMode ? (
@@ -1181,7 +1261,7 @@ export default function ScheduleEditClient({
 
                       <button
                         type="button"
-                        onClick={() => handleInsertBetween(index, dep)}
+                        onClick={() => handleInsertBetween(dep)}
                         style={{
                           background: 'transparent',
                           color: 'var(--text)',
@@ -1240,8 +1320,8 @@ export default function ScheduleEditClient({
 
         {procurementItems.length === 0 ? (
           <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-            <div style={{ marginBottom: '6px' }}>No procurement items yet</div>
-            <div>Add procurement items from a job or click + Procurement Item above</div>
+            <div style={{ marginBottom: '6px' }}>No material items yet</div>
+            <div>Add material items from a job or click + Material Item above</div>
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -1291,7 +1371,7 @@ export default function ScheduleEditClient({
 
                     <td style={tdStyle()}>{item.trade}</td>
                     <td style={tdStyle()}>{item.description}</td>
-                    <td style={tdStyle()}>{item.procurement_group || '—'}</td>
+                    <td style={tdStyle()}>{item.material_group || item.procurement_group || '—'}</td>
                     <td style={tdStyle()}>{item.vendor || '—'}</td>
                     <td style={tdStyle()}>
                       {fmtDate(item.required_on_site_date)}
