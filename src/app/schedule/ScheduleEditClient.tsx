@@ -332,7 +332,6 @@ export default function ScheduleEditClient({
 
   return (
     <>
-      {/* Baseline toolbar */}
       <div
         style={{
           display: 'flex',
@@ -424,7 +423,6 @@ export default function ScheduleEditClient({
         )}
       </div>
 
-      {/* Edit mode toolbar */}
       <div
         style={{
           display: 'flex',
@@ -567,7 +565,6 @@ export default function ScheduleEditClient({
         </div>
       )}
 
-      {/* Labor Schedule */}
       <section style={pageCardStyle()}>
         <div
           style={{
@@ -596,13 +593,23 @@ export default function ScheduleEditClient({
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['Job', 'Trade', 'Company', 'Status', 'Release', 'Start', 'End', 'Cost Code', 'Notes', 'Shift Reason', ''].map(
-                  (heading) => (
-                    <th key={heading} style={thStyle()}>
-                      {heading}
-                    </th>
-                  )
-                )}
+                {[
+                  'Job',
+                  'Trade',
+                  'Company',
+                  'Status',
+                  'Release',
+                  'Start',
+                  'End',
+                  'Cost Code',
+                  'Notes',
+                  'Shift Reason',
+                  '',
+                ].map((heading) => (
+                  <th key={heading} style={thStyle()}>
+                    {heading}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -621,7 +628,7 @@ export default function ScheduleEditClient({
                             width: '10px',
                             height: '10px',
                             borderRadius: '999px',
-                            background: dotColor,
+                            background: jobColor || '#e5e7eb',
                             display: 'inline-block',
                           }}
                         />
@@ -838,7 +845,6 @@ export default function ScheduleEditClient({
         )}
       </section>
 
-      {/* Material Schedule */}
       <section style={pageCardStyle()}>
         <div
           style={{
@@ -901,7 +907,7 @@ export default function ScheduleEditClient({
                             width: '10px',
                             height: '10px',
                             borderRadius: '999px',
-                            background: dotColor,
+                            background: jobColor || '#e5e7eb',
                             display: 'inline-block',
                           }}
                         />
