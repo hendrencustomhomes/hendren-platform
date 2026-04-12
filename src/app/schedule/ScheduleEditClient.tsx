@@ -1371,7 +1371,7 @@ export default function ScheduleEditClient({
 
                     <td style={tdStyle()}>{item.trade}</td>
                     <td style={tdStyle()}>{item.description}</td>
-                    <td style={tdStyle()}>{item.material_group || item.procurement_group || '—'}</td>
+                    <td style={tdStyle()}>{item.procurement_group || '—'}</td>
                     <td style={tdStyle()}>{item.vendor || '—'}</td>
                     <td style={tdStyle()}>
                       {fmtDate(item.required_on_site_date)}
