@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import type {
   JobSubSchedule,
@@ -12,6 +12,11 @@ import { resolveScheduleGraph } from '@/lib/schedule/engine'
 import { buildScheduleNodes } from '@/lib/schedule/nodes'
 import { activateBaselineAction, saveScheduleDraftAction } from './actions'
 import type { DraftScheduleItemUpdate } from './actions'
+import {
+  enterScheduleEditPresenceAction,
+  exitScheduleEditPresenceAction,
+  refreshScheduleEditPresenceAction,
+} from './presenceActions'
 
 type ScheduleDraftOverride = {
   start_date: string | null
@@ -163,6 +168,9 @@ export default function ScheduleEditClient({
   const [isPending, startTransition] = useTransition()
   const [baselineError, setBaselineError] = useState<string | null>(null)
   const [baselinePending, startBaselineTransition] = useTransition()
+  const [otherUsersEditing, setOtherUsersEditing] = useState<number>(0)
+  const [presenceError, setPresenceError] = useState<string | null>(null)
+  const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const isDirty = Object.keys(draftOverrides).length > 0
 
@@ -202,6 +210,53 @@ export default function ScheduleEditClient({
     [scheduleItems, previewNodes]
   )
 
+  useEffect(() => {
+    if (!editMode) {
+      setOtherUsersEditing(0)
+      setPresenceError(null)
+      return
+    }
+
+    let cancelled = false
+
+    async function enterAndRefresh() {
+      const result = await enterScheduleEditPresenceAction(jobId)
+      if (!cancelled) {
+        if (result.ok) {
+          setOtherUsersEditing(result.otherUsersEditing ?? 0)
+          setPresenceError(null)
+        } else {
+          setPresenceError(result.error ?? 'Presence unavailable')
+        }
+      }
+    }
+
+    void enterAndRefresh()
+
+    refreshTimerRef.current = setInterval(async () => {
+      const result = await refreshScheduleEditPresenceAction(jobId)
+      if (!cancelled) {
+        if (result.ok) {
+          setOtherUsersEditing(result.otherUsersEditing ?? 0)
+          setPresenceError(null)
+        } else {
+          setPresenceError(result.error ?? 'Presence unavailable')
+        }
+      }
+    }, 15000)
+
+    return () => {
+      cancelled = true
+
+      if (refreshTimerRef.current) {
+        clearInterval(refreshTimerRef.current)
+        refreshTimerRef.current = null
+      }
+
+      void exitScheduleEditPresenceAction(jobId)
+    }
+  }, [editMode, jobId])
+
   function setOverrideField<K extends keyof ScheduleDraftOverride>(
     itemId: string,
     field: K,
@@ -225,10 +280,13 @@ export default function ScheduleEditClient({
     })
   }
 
-  function handleCancel() {
+  async function handleCancel() {
     setDraftOverrides({})
     setEditMode(false)
     setSaveError(null)
+    setOtherUsersEditing(0)
+    setPresenceError(null)
+    await exitScheduleEditPresenceAction(jobId)
   }
 
   function handleSave() {
@@ -259,8 +317,11 @@ export default function ScheduleEditClient({
     startTransition(async () => {
       const result = await saveScheduleDraftAction(jobId, updates)
       if (result.ok) {
+        await exitScheduleEditPresenceAction(jobId)
         setDraftOverrides({})
         setEditMode(false)
+        setOtherUsersEditing(0)
+        setPresenceError(null)
       } else {
         setSaveError(result.error ?? 'Save failed')
       }
@@ -271,6 +332,7 @@ export default function ScheduleEditClient({
 
   return (
     <>
+      {/* Baseline toolbar */}
       <div
         style={{
           display: 'flex',
@@ -362,6 +424,7 @@ export default function ScheduleEditClient({
         )}
       </div>
 
+      {/* Edit mode toolbar */}
       <div
         style={{
           display: 'flex',
@@ -377,7 +440,11 @@ export default function ScheduleEditClient({
       >
         {!editMode ? (
           <button
-            onClick={() => setEditMode(true)}
+            onClick={() => {
+              setPresenceError(null)
+              setOtherUsersEditing(0)
+              setEditMode(true)
+            }}
             style={{
               background: 'var(--blue)',
               color: '#fff',
@@ -452,6 +519,38 @@ export default function ScheduleEditClient({
         )}
       </div>
 
+      {editMode && otherUsersEditing > 0 && (
+        <div
+          style={{
+            padding: '10px 14px',
+            borderRadius: '10px',
+            border: '1px solid rgba(217, 119, 6, 0.25)',
+            background: 'rgba(217, 119, 6, 0.08)',
+            color: 'var(--amber, #b45309)',
+            fontSize: '14px',
+            marginBottom: '16px',
+          }}
+        >
+          Another user is editing this schedule. Your changes may interfere.
+        </div>
+      )}
+
+      {editMode && presenceError && (
+        <div
+          style={{
+            padding: '10px 14px',
+            borderRadius: '10px',
+            border: '1px solid rgba(217, 119, 6, 0.25)',
+            background: 'rgba(217, 119, 6, 0.08)',
+            color: 'var(--amber, #b45309)',
+            fontSize: '14px',
+            marginBottom: '16px',
+          }}
+        >
+          Edit presence unavailable: {presenceError}
+        </div>
+      )}
+
       {saveError && (
         <div
           style={{
@@ -468,6 +567,7 @@ export default function ScheduleEditClient({
         </div>
       )}
 
+      {/* Labor Schedule */}
       <section style={pageCardStyle()}>
         <div
           style={{
@@ -496,23 +596,13 @@ export default function ScheduleEditClient({
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {[
-                  'Job',
-                  'Trade',
-                  'Company',
-                  'Status',
-                  'Release',
-                  'Start',
-                  'End',
-                  'Cost Code',
-                  'Notes',
-                  'Shift Reason',
-                  '',
-                ].map((heading) => (
-                  <th key={heading} style={thStyle()}>
-                    {heading}
-                  </th>
-                ))}
+                {['Job', 'Trade', 'Company', 'Status', 'Release', 'Start', 'End', 'Cost Code', 'Notes', 'Shift Reason', ''].map(
+                  (heading) => (
+                    <th key={heading} style={thStyle()}>
+                      {heading}
+                    </th>
+                  )
+                )}
               </tr>
             </thead>
             <tbody>
@@ -633,11 +723,7 @@ export default function ScheduleEditClient({
                               type="checkbox"
                               checked={override?.shift_dependencies ?? true}
                               onChange={(e) =>
-                                setOverrideField(
-                                  item.id,
-                                  'shift_dependencies',
-                                  e.target.checked
-                                )
+                                setOverrideField(item.id, 'shift_dependencies', e.target.checked)
                               }
                             />
                             Shift dependencies
@@ -752,6 +838,7 @@ export default function ScheduleEditClient({
         )}
       </section>
 
+      {/* Material Schedule */}
       <section style={pageCardStyle()}>
         <div
           style={{
