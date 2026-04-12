@@ -2,44 +2,20 @@ import type { ScheduleItemDependency } from '@/lib/db'
 
 export type DependencyAdjustment = {
   dependencyId: string
-  newOffsetWorkingDays: number
+  newLagDays: number
 }
 
-function parseDateLocal(iso: string): Date {
-  const [y, m, d] = iso.split('-').map(Number)
-  return new Date(y, m - 1, d)
+function diffDaysISO(a: string, b: string): number {
+  const [ay, am, ad] = a.split('-').map(Number)
+  const [by, bm, bd] = b.split('-').map(Number)
+
+  const d1 = new Date(ay, am - 1, ad)
+  const d2 = new Date(by, bm - 1, bd)
+
+  const ms = d2.getTime() - d1.getTime()
+  return Math.round(ms / (1000 * 60 * 60 * 24))
 }
 
-function isMonFri(date: Date): boolean {
-  const day = date.getDay()
-  return day !== 0 && day !== 6
-}
-
-function diffInWorkingDays(oldDate: string, newDate: string): number {
-  const oldD = parseDateLocal(oldDate)
-  const newD = parseDateLocal(newDate)
-
-  if (oldD.getTime() === newD.getTime()) return 0
-
-  const forward = newD > oldD
-  let current = new Date(oldD)
-  let count = 0
-
-  while (current.getTime() !== newD.getTime()) {
-    current.setDate(current.getDate() + (forward ? 1 : -1))
-    if (isMonFri(current)) {
-      count += forward ? 1 : -1
-    }
-  }
-
-  return count
-}
-
-/**
- * When a user moves item A without shifting dependencies,
- * we preserve the graph by rewriting dependency offsets
- * instead of cascading date changes.
- */
 export function computeDependencyAdjustmentsForManualShift(params: {
   movedItemId: string
   oldStartDate: string | null
@@ -48,33 +24,42 @@ export function computeDependencyAdjustmentsForManualShift(params: {
 }): DependencyAdjustment[] {
   const { movedItemId, oldStartDate, newStartDate, dependencies } = params
 
+  // Guards
   if (!oldStartDate || !newStartDate) return []
+  if (oldStartDate === newStartDate) return []
+  if (!dependencies.length) return []
 
-  const shiftDays = diffInWorkingDays(oldStartDate, newStartDate)
+  const shiftDays = diffDaysISO(oldStartDate, newStartDate)
+
   if (shiftDays === 0) return []
 
   const adjustments: DependencyAdjustment[] = []
 
   for (const dep of dependencies) {
-    if (
-      dep.successor_type === 'schedule' &&
-      dep.successor_id === movedItemId
-    ) {
-      adjustments.push({
-        dependencyId: dep.id,
-        newOffsetWorkingDays: dep.offset_working_days + shiftDays,
-      })
-      continue
+    const currentLag = dep.lag_days ?? 0
+
+    // Case 1 — moved item is successor
+    if (dep.successor_schedule_id === movedItemId) {
+      const newLag = currentLag + shiftDays
+
+      if (newLag !== currentLag) {
+        adjustments.push({
+          dependencyId: dep.id,
+          newLagDays: newLag,
+        })
+      }
     }
 
-    if (
-      dep.predecessor_type === 'schedule' &&
-      dep.predecessor_id === movedItemId
-    ) {
-      adjustments.push({
-        dependencyId: dep.id,
-        newOffsetWorkingDays: dep.offset_working_days - shiftDays,
-      })
+    // Case 2 — moved item is predecessor
+    if (dep.predecessor_schedule_id === movedItemId) {
+      const newLag = currentLag - shiftDays
+
+      if (newLag !== currentLag) {
+        adjustments.push({
+          dependencyId: dep.id,
+          newLagDays: newLag,
+        })
+      }
     }
   }
 
