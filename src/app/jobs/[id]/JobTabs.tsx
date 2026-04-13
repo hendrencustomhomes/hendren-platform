@@ -4,6 +4,8 @@ import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import FilesTab from '@/components/FilesTab'
 import { createClient } from '@/utils/supabase/client'
+import ProcurementTab from './ProcurementTab'
+import ScopeTab from './ScopeTab'
 
 const STATE_ABBREV: Record<string, string> = {
   'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
@@ -62,6 +64,7 @@ type JobTabProps = {
   // current naming
   scheduleItems?: any[]
   procurementItems?: any[]
+  scopeItems?: any[]
 
   // backward-compatible aliases
   subs?: any[]
@@ -272,11 +275,12 @@ export default function JobTabs(props: JobTabProps) {
 
   const openTaskCount = tasks.filter((t) => t.status === 'open' || t.status === 'in_progress').length
 
-  const TABS = ['info', 'pipeline', 'log', 'issues', 'tasks', 'schedule', 'procurement', 'files']
+  const TABS = ['info', 'pipeline', 'scope', 'log', 'issues', 'tasks', 'schedule', 'procurement', 'files']
 
   const TAB_LABELS: Record<string, string> = {
     info: 'Info',
     pipeline: 'Pipeline',
+    scope: 'Scope',
     log: 'Log',
     issues: openIssueCount ? `Issues (${openIssueCount})` : 'Issues',
     tasks: openTaskCount ? `Tasks (${openTaskCount})` : 'Tasks',
@@ -1405,6 +1409,7 @@ export default function JobTabs(props: JobTabProps) {
         </div>
       )}
 
+      {activeTab === 'scope' && <ScopeTab jobId={jobId} scopeItems={props.scopeItems ?? []} />}
       {activeTab === 'log' && (
         <div>
           <div style={{ ...surfaceCardStyle(), marginBottom: '10px' }}>
