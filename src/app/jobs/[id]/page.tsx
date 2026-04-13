@@ -184,6 +184,11 @@ export default async function JobDetailPage({
       .eq('job_id', id)
       .order('start_date', { ascending: true, nullsFirst: false }),
     supabase
+      .from('procurement_items')
+      .select('*')
+      .eq('job_id', id)
+      .order('order_by_date', { ascending: true, nullsFirst: false }),
+    supabase
       .from('job_scope_items')
       .select('id, scope_type, label, value_text, value_number, notes, sort_order, created_at')
       .eq('job_id', id)
