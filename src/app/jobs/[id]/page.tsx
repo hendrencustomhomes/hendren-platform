@@ -162,6 +162,7 @@ export default async function JobDetailPage({
     { data: logs, error: logsError },
     { data: scheduleItems, error: scheduleItemsError },
     { data: procurementItems, error: procurementItemsError },
+    { data: scopeItems, error: scopeItemsError },
     { data: jobClients, error: jobClientsError },
     { data: activeInternalUsers, error: activeInternalUsersError },
     { data: pmRoleAssignments, error: pmRoleAssignmentsError },
@@ -183,10 +184,11 @@ export default async function JobDetailPage({
       .eq('job_id', id)
       .order('start_date', { ascending: true, nullsFirst: false }),
     supabase
-      .from('procurement_items')
-      .select('*')
+      .from('job_scope_items')
+      .select('id, scope_type, label, value_text, value_number, notes, sort_order, created_at')
       .eq('job_id', id)
-      .order('order_by_date', { ascending: true, nullsFirst: false }),
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false }),
     supabase
       .from('job_clients')
       .select(`
@@ -234,6 +236,7 @@ export default async function JobDetailPage({
   if (logsError) console.error('Logs query failed:', logsError)
   if (scheduleItemsError) console.error('Schedule items query failed:', scheduleItemsError)
   if (procurementItemsError) console.error('Procurement items query failed:', procurementItemsError)
+  if (scopeItemsError) console.error('Scope items query failed:', scopeItemsError)
   if (jobClientsError) console.error('Job clients query failed:', jobClientsError)
   if (activeInternalUsersError) console.error('Active internal users query failed:', activeInternalUsersError)
   if (pmRoleAssignmentsError) console.error('PM role assignments query failed:', pmRoleAssignmentsError)
@@ -627,6 +630,7 @@ export default async function JobDetailPage({
           logs={logs || []}
           scheduleItems={scheduleItems || []}
           procurementItems={procurementItems || []}
+          scopeItems={scopeItems || []}
           stages={STAGES}
           stageLabels={STAGE_LABELS}
           stageIcons={STAGE_ICONS}
