@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import FilesTab from '@/components/FilesTab'
 import { createClient } from '@/utils/supabase/client'
 import ScopeTab from './ScopeTab'
@@ -180,6 +180,8 @@ export default function JobTabs(props: JobTabProps) {
   } = props
 
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const requestedTab = searchParams.get('tab')
   const supabase = createClient()
 
   const scheduleItems = useMemo(
@@ -192,7 +194,9 @@ export default function JobTabs(props: JobTabProps) {
     [props.procurementItems, props.orders]
   )
 
-  const [activeTab, setActiveTab] = useState('info')
+  const [activeTab, setActiveTab] = useState(
+  requestedTab && TABS.includes(requestedTab) ? requestedTab : 'info'
+)
   const [checked, setChecked] = useState<Record<string, boolean>>(initialCheckedMap)
   const [stageStateMap, setStageStateMap] = useState<Record<string, string>>(initialStateMap)
 
@@ -288,6 +292,15 @@ export default function JobTabs(props: JobTabProps) {
   procurement: 'Procurement',
   files: 'Files',
 }
+
+useEffect(() => {
+  if (requestedTab && TABS.includes(requestedTab)) {
+    setActiveTab(requestedTab)
+    return
+  }
+
+  setActiveTab('info')
+}, [requestedTab])
 
   function beginInfoEdit() {
     const parsed = parseAddress(job.project_address)
