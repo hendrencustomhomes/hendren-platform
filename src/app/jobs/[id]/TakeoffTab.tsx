@@ -5,8 +5,9 @@ import { createClient } from '@/utils/supabase/client'
 
 type TakeoffItem = {
   id: string
-  name: string
-  quantity: number
+  trade: string
+  description: string
+  qty?: number | null
   unit?: string | null
   notes?: string | null
   sort_order?: number | null
