@@ -4,7 +4,6 @@ import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import FilesTab from '@/components/FilesTab'
 import { createClient } from '@/utils/supabase/client'
-import ProcurementTab from './ProcurementTab'
 import ScopeTab from './ScopeTab'
 
 const STATE_ABBREV: Record<string, string> = {
