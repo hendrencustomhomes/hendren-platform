@@ -49,9 +49,9 @@ export default function TakeoffTab({ jobId, takeoffItems }: TakeoffTabProps) {
 
   const [items, setItems] = useState<TakeoffItem[]>(takeoffItems)
   const [trade, setTrade] = useState('')
-const [description, setDescription] = useState('')
-const [quantity, setQuantity] = useState('1')
-const [unit, setUnit] = useState('')
+  const [description, setDescription] = useState('')
+  const [quantity, setQuantity] = useState('1')
+  const [unit, setUnit] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -74,13 +74,13 @@ const [unit, setUnit] = useState('')
     setError(null)
 
     const payload = {
-  job_id: jobId,
-  trade: trade.trim(),
-  description: description.trim(),
-  qty: parseQuantity(quantity),
-  unit: unit.trim() || null,
-  sort_order: 0,
-}
+      job_id: jobId,
+      trade: trade.trim(),
+      description: description.trim(),
+      qty: parseQuantity(quantity),
+      unit: unit.trim() || null,
+      sort_order: 0,
+    }
 
     const { data, error: insertError } = await supabase
       .from('takeoff_items')
@@ -97,9 +97,9 @@ const [unit, setUnit] = useState('')
 
     setItems((current) => [data, ...current])
     setTrade('')
-setDescription('')
-setQuantity('1')
-setUnit('')
+    setDescription('')
+    setQuantity('1')
+    setUnit('')
   }
 
   async function updateItem(
@@ -159,21 +159,32 @@ setUnit('')
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '2fr 1fr 1fr auto',
+            gridTemplateColumns: '1fr 2fr 1fr 1fr auto',
             gap: '8px',
             alignItems: 'end',
           }}
         >
           <div>
             <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}>
-              Name
+              Trade
             </div>
-            <input value={name} onChange={(e) => setName(e.target.value)} style={inp} />
+            <input value={trade} onChange={(e) => setTrade(e.target.value)} style={inp} />
           </div>
 
           <div>
             <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}>
-              Quantity
+              Description
+            </div>
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              style={inp}
+            />
+          </div>
+
+          <div>
+            <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+              Qty
             </div>
             <input
               value={quantity}
@@ -192,7 +203,7 @@ setUnit('')
 
           <button
             onClick={addItem}
-            disabled={saving || !name.trim()}
+            disabled={saving || !trade.trim() || !description.trim()}
             style={{
               padding: '10px 12px',
               border: 'none',
@@ -201,7 +212,8 @@ setUnit('')
               color: 'var(--bg)',
               fontSize: '12px',
               fontWeight: '700',
-              cursor: saving || !name.trim() ? 'not-allowed' : 'pointer',
+              cursor:
+                saving || !trade.trim() || !description.trim() ? 'not-allowed' : 'pointer',
             }}
           >
             {saving ? 'Saving...' : 'Add'}
@@ -243,14 +255,36 @@ setUnit('')
                   <div
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: '2fr 1fr 1fr',
+                      gridTemplateColumns: '1fr 2fr 1fr 1fr',
                       gap: '8px',
                       marginBottom: '8px',
                     }}
                   >
                     <div>
-                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                        Name
+                      <div
+                        style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}
+                      >
+                        Trade
+                      </div>
+                      <input
+                        defaultValue={item.trade}
+                        disabled={disabled}
+                        style={inp}
+                        onBlur={(e) => {
+                          const next = e.target.value.trim()
+                          if (next && next !== item.trade) updateItem(item.id, { trade: next })
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <div
+                        style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}
+                      >
+                        Description
                       </div>
                       <input
                         defaultValue={item.description}
@@ -258,7 +292,9 @@ setUnit('')
                         style={inp}
                         onBlur={(e) => {
                           const next = e.target.value.trim()
-                          if (next && next !== item.description) updateItem(item.id, { name: next })
+                          if (next && next !== item.description) {
+                            updateItem(item.id, { description: next })
+                          }
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
@@ -267,17 +303,19 @@ setUnit('')
                     </div>
 
                     <div>
-                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                        Quantity
+                      <div
+                        style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}
+                      >
+                        Qty
                       </div>
                       <input
-                        defaultValue={item.qty}
+                        defaultValue={item.qty ?? 1}
                         disabled={disabled}
                         inputMode="decimal"
                         style={inp}
                         onBlur={(e) => {
                           const next = parseQuantity(e.target.value)
-                          if (next !== item.qty) updateItem(item.id, { quantity: next })
+                          if (next !== (item.qty ?? 1)) updateItem(item.id, { qty: next })
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
@@ -286,7 +324,9 @@ setUnit('')
                     </div>
 
                     <div>
-                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                      <div
+                        style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}
+                      >
                         Unit
                       </div>
                       <input
