@@ -7,7 +7,7 @@ import { fetchActiveTrades, type TradeOption } from '@/lib/trades'
 import { fetchActiveCostCodes, type CostCodeOption } from '@/lib/cost-codes'
 import { getOrderByDatePreview } from '@/lib/schedule/procurement'
 
-const STATUS_OPTIONS = ['Pending', 'Ordered', 'Confirmed', 'Will Call', 'Delivered', 'Issue']
+const STATUS_OPTIONS = ['Pending', 'Ordered', 'Confirmed', 'Delivered', 'Issue']
 
 type OrderFormState = {
   job_id: string | null
