@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import FilesTab from '@/components/FilesTab'
 import { createClient } from '@/utils/supabase/client'
 import ScopeTab from './ScopeTab'
+import TakeoffTab from './TakeoffTab'
 
 const STATE_ABBREV: Record<string, string> = {
   'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
@@ -64,6 +65,7 @@ type JobTabProps = {
   scheduleItems?: any[]
   procurementItems?: any[]
   scopeItems?: any[]
+  takeoffItems?: any[]
 
   // backward-compatible aliases
   subs?: any[]
@@ -274,12 +276,13 @@ export default function JobTabs(props: JobTabProps) {
 
   const openTaskCount = tasks.filter((t) => t.status === 'open' || t.status === 'in_progress').length
 
-  const TABS = ['info', 'pipeline', 'scope', 'log', 'issues', 'tasks', 'schedule', 'procurement', 'files']
+  const TABS = ['info', 'pipeline', 'scope', 'takeoff', 'log', 'issues', 'tasks', 'schedule', 'procurement', 'files']
 
   const TAB_LABELS: Record<string, string> = {
     info: 'Info',
     pipeline: 'Pipeline',
     scope: 'Scope',
+    takeoff: 'Takeoff',
     log: 'Log',
     issues: openIssueCount ? `Issues (${openIssueCount})` : 'Issues',
     tasks: openTaskCount ? `Tasks (${openTaskCount})` : 'Tasks',
@@ -1409,6 +1412,7 @@ export default function JobTabs(props: JobTabProps) {
       )}
 
       {activeTab === 'scope' && <ScopeTab jobId={jobId} scopeItems={props.scopeItems ?? []} />}
+      {activeTab === 'takeoff' && <TakeoffTab jobId={jobId} takeoffItems={props.takeoffItems ?? []} />}
       {activeTab === 'log' && (
         <div>
           <div style={{ ...surfaceCardStyle(), marginBottom: '10px' }}>
