@@ -9,27 +9,77 @@ import TakeoffTab from './TakeoffTab'
 import SelectionsTab from './SelectionsTab'
 
 const STATE_ABBREV: Record<string, string> = {
-  Alabama: 'AL', Alaska: 'AK', Arizona: 'AZ', Arkansas: 'AR', California: 'CA',
-  Colorado: 'CO', Connecticut: 'CT', Delaware: 'DE', Florida: 'FL', Georgia: 'GA',
-  Hawaii: 'HI', Idaho: 'ID', Illinois: 'IL', Indiana: 'IN', Iowa: 'IA',
-  Kansas: 'KS', Kentucky: 'KY', Louisiana: 'LA', Maine: 'ME', Maryland: 'MD',
-  Massachusetts: 'MA', Michigan: 'MI', Minnesota: 'MN', Mississippi: 'MS', Missouri: 'MO',
-  Montana: 'MT', Nebraska: 'NE', Nevada: 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
-  'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', Ohio: 'OH',
-  Oklahoma: 'OK', Oregon: 'OR', Pennsylvania: 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
-  'South Dakota': 'SD', Tennessee: 'TN', Texas: 'TX', Utah: 'UT', Vermont: 'VT',
-  Virginia: 'VA', Washington: 'WA', 'West Virginia': 'WV', Wisconsin: 'WI', Wyoming: 'WY',
+  Alabama: 'AL',
+  Alaska: 'AK',
+  Arizona: 'AZ',
+  Arkansas: 'AR',
+  California: 'CA',
+  Colorado: 'CO',
+  Connecticut: 'CT',
+  Delaware: 'DE',
+  Florida: 'FL',
+  Georgia: 'GA',
+  Hawaii: 'HI',
+  Idaho: 'ID',
+  Illinois: 'IL',
+  Indiana: 'IN',
+  Iowa: 'IA',
+  Kansas: 'KS',
+  Kentucky: 'KY',
+  Louisiana: 'LA',
+  Maine: 'ME',
+  Maryland: 'MD',
+  Massachusetts: 'MA',
+  Michigan: 'MI',
+  Minnesota: 'MN',
+  Mississippi: 'MS',
+  Missouri: 'MO',
+  Montana: 'MT',
+  Nebraska: 'NE',
+  Nevada: 'NV',
+  'New Hampshire': 'NH',
+  'New Jersey': 'NJ',
+  'New Mexico': 'NM',
+  'New York': 'NY',
+  'North Carolina': 'NC',
+  'North Dakota': 'ND',
+  Ohio: 'OH',
+  Oklahoma: 'OK',
+  Oregon: 'OR',
+  Pennsylvania: 'PA',
+  'Rhode Island': 'RI',
+  'South Carolina': 'SC',
+  'South Dakota': 'SD',
+  Tennessee: 'TN',
+  Texas: 'TX',
+  Utah: 'UT',
+  Vermont: 'VT',
+  Virginia: 'VA',
+  Washington: 'WA',
+  'West Virginia': 'WV',
+  Wisconsin: 'WI',
+  Wyoming: 'WY',
 }
 
 function parseAddress(addr: string | null) {
   if (!addr) return { street: '', city: '', state: '', zip: '' }
   const m = addr.match(/^(.+?),\s*(.+?),?\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/)
-  if (m) return { street: m[1].trim(), city: m[2].trim(), state: m[3].trim(), zip: m[4].split('-')[0] }
+  if (m) {
+    return {
+      street: m[1].trim(),
+      city: m[2].trim(),
+      state: m[3].trim(),
+      zip: m[4].split('-')[0],
+    }
+  }
   return { street: addr.trim(), city: '', state: '', zip: '' }
 }
 
 function composeAddress(street: string, city: string, state: string, zip: string): string | null {
-  const s = street.trim(), c = city.trim(), st = state.trim(), z = zip.trim()
+  const s = street.trim()
+  const c = city.trim()
+  const st = state.trim()
+  const z = zip.trim()
   const cityStateZip = [c, [st, z].filter(Boolean).join(' ')].filter(Boolean).join(', ')
   return [s, cityStateZip].filter(Boolean).join(', ') || null
 }
@@ -159,6 +209,31 @@ function getRelatedProfile(value: any) {
   return Array.isArray(value) ? value[0] || null : value
 }
 
+function getScheduleItemName(item: any) {
+  return item?.sub_name?.trim() || item?.trade?.trim() || 'Unnamed Schedule Item'
+}
+
+function getScheduleTimingRank(item: any) {
+  if (item?.status === 'on_site') return 0
+  if (item?.status === 'confirmed') return 1
+  if (item?.status === 'scheduled') return 2
+  if (item?.status === 'tentative') return 3
+  if (item?.status === 'complete') return 5
+  if (item?.status === 'cancelled') return 6
+  return 4
+}
+
+function getScheduleEndDateDistance(item: any) {
+  if (!item?.end_date) return Number.MAX_SAFE_INTEGER
+  const target = new Date(item.end_date).getTime()
+  if (Number.isNaN(target)) return Number.MAX_SAFE_INTEGER
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const diffDays = Math.round((target - today.getTime()) / 86400000)
+  if (diffDays >= 0) return diffDays
+  return 100000 + Math.abs(diffDays)
+}
+
 export default function JobTabs(props: JobTabProps) {
   const {
     jobId,
@@ -184,12 +259,12 @@ export default function JobTabs(props: JobTabProps) {
   const requestedTab = searchParams.get('tab')
   const supabase = createClient()
 
-  const scheduleItems = useMemo(
+  const initialScheduleItems = useMemo(
     () => props.scheduleItems ?? props.subs ?? [],
     [props.scheduleItems, props.subs]
   )
 
-  const procurementItems = useMemo(
+  const initialProcurementItems = useMemo(
     () => props.procurementItems ?? props.orders ?? [],
     [props.procurementItems, props.orders]
   )
@@ -200,8 +275,13 @@ export default function JobTabs(props: JobTabProps) {
 
   const [issues, setIssues] = useState<any[]>(initialIssues || [])
   const [logs, setLogs] = useState<any[]>(initialLogs || [])
-  const [schedule, setSchedule] = useState<any[]>(scheduleItems || [])
+  const [schedule, setSchedule] = useState<any[]>(initialScheduleItems || [])
+  const [procurement, setProcurement] = useState<any[]>(initialProcurementItems || [])
   const [actingScheduleId, setActingScheduleId] = useState<string | null>(null)
+  const [linkingProcurementId, setLinkingProcurementId] = useState<string | null>(null)
+  const [scheduleLinkQuery, setScheduleLinkQuery] = useState('')
+  const [linkSavingId, setLinkSavingId] = useState<string | null>(null)
+  const [linkError, setLinkError] = useState<string | null>(null)
 
   const [logText, setLogText] = useState('')
   const [logSaving, setLogSaving] = useState(false)
@@ -270,35 +350,86 @@ export default function JobTabs(props: JobTabProps) {
   const openIssueCount = issues.filter((issue) => !issue.resolved).length
   const releasedScheduleCount = schedule.filter((item) => item.is_released).length
   const confirmedScheduleCount = schedule.filter((item) => item.status === 'confirmed').length
-  const openProcurementCount = procurementItems.filter(
+  const openProcurementCount = procurement.filter(
     (item) => !['Delivered', 'Confirmed'].includes(item.status)
   ).length
-  const openTaskCount = tasks.filter((t) => t.status === 'open' || t.status === 'in_progress').length
+  const openTaskCount = tasks.filter(
+    (t) => t.status === 'open' || t.status === 'in_progress'
+  ).length
 
-  const TABS = ['info', 'pipeline', 'scope', 'takeoff', 'selections', 'log', 'issues', 'tasks', 'schedule', 'procurement', 'files']
+  const TABS = [
+    'info',
+    'pipeline',
+    'scope',
+    'takeoff',
+    'selections',
+    'log',
+    'issues',
+    'tasks',
+    'schedule',
+    'procurement',
+    'files',
+  ]
 
   const TAB_LABELS: Record<string, string> = {
-  info: 'Info',
-  pipeline: 'Pipeline',
-  scope: 'Scope',
-  takeoff: 'Takeoff',
-  selections: 'Selections',
-  log: 'Log',
-  issues: openIssueCount ? `Issues (${openIssueCount})` : 'Issues',
-  tasks: openTaskCount ? `Tasks (${openTaskCount})` : 'Tasks',
-  schedule: 'Schedule',
-  procurement: 'Procurement',
-  files: 'Files',
-}
-
-useEffect(() => {
-  if (requestedTab && TABS.includes(requestedTab)) {
-    setActiveTab(requestedTab)
-    return
+    info: 'Info',
+    pipeline: 'Pipeline',
+    scope: 'Scope',
+    takeoff: 'Takeoff',
+    selections: 'Selections',
+    log: 'Log',
+    issues: openIssueCount ? `Issues (${openIssueCount})` : 'Issues',
+    tasks: openTaskCount ? `Tasks (${openTaskCount})` : 'Tasks',
+    schedule: 'Schedule',
+    procurement: 'Procurement',
+    files: 'Files',
   }
 
-  setActiveTab('info')
-}, [requestedTab])
+  useEffect(() => {
+    if (requestedTab && TABS.includes(requestedTab)) {
+      setActiveTab(requestedTab)
+      return
+    }
+
+    setActiveTab('info')
+  }, [requestedTab])
+
+  const rankedScheduleOptions = useMemo(() => {
+    const activeProcurement = procurement.find((item) => item.id === linkingProcurementId)
+    const query = scheduleLinkQuery.trim().toLowerCase()
+
+    return [...schedule]
+      .filter((item) => {
+        if (!query) return true
+        return getScheduleItemName(item).toLowerCase().includes(query)
+      })
+      .sort((a, b) => {
+        const activeTrade = activeProcurement?.trade?.trim().toLowerCase() || ''
+        const procurementHasTrade = !!activeTrade
+
+        const aTrade = a?.trade?.trim().toLowerCase() || ''
+        const bTrade = b?.trade?.trim().toLowerCase() || ''
+
+        const aTradeRank = !procurementHasTrade ? 0 : aTrade === activeTrade ? 0 : 1
+        const bTradeRank = !procurementHasTrade ? 0 : bTrade === activeTrade ? 0 : 1
+        if (aTradeRank !== bTradeRank) return aTradeRank - bTradeRank
+
+        const aCompleteRank = ['complete', 'cancelled'].includes(a?.status) ? 1 : 0
+        const bCompleteRank = ['complete', 'cancelled'].includes(b?.status) ? 1 : 0
+        if (aCompleteRank !== bCompleteRank) return aCompleteRank - bCompleteRank
+
+        const aTimingRank = getScheduleTimingRank(a)
+        const bTimingRank = getScheduleTimingRank(b)
+        if (aTimingRank !== bTimingRank) return aTimingRank - bTimingRank
+
+        const aEndRank = getScheduleEndDateDistance(a)
+        const bEndRank = getScheduleEndDateDistance(b)
+        if (aEndRank !== bEndRank) return aEndRank - bEndRank
+
+        return getScheduleItemName(a).localeCompare(getScheduleItemName(b))
+      })
+      .slice(0, 12)
+  }, [linkingProcurementId, procurement, schedule, scheduleLinkQuery])
 
   function beginInfoEdit() {
     const parsed = parseAddress(job.project_address)
@@ -366,7 +497,10 @@ useEffect(() => {
   function handleAddrStreetChange(val: string) {
     setInfoDraft((d) => ({ ...d, addr_street: val }))
     if (addrTimer.current) clearTimeout(addrTimer.current)
-    if (val.trim().length < 4) { setAddrSuggestions([]); return }
+    if (val.trim().length < 4) {
+      setAddrSuggestions([])
+      return
+    }
     addrTimer.current = setTimeout(async () => {
       try {
         const res = await fetch(
@@ -399,7 +533,12 @@ useEffect(() => {
 
     const payload = {
       job_name: infoDraft.job_name.trim() || null,
-      project_address: composeAddress(infoDraft.addr_street, infoDraft.addr_city, infoDraft.addr_state, infoDraft.addr_zip),
+      project_address: composeAddress(
+        infoDraft.addr_street,
+        infoDraft.addr_city,
+        infoDraft.addr_state,
+        infoDraft.addr_zip
+      ),
       client_name: infoDraft.client_name.trim() || null,
       client_email: infoDraft.client_email.trim() || null,
       client_phone: infoDraft.client_phone.trim() || null,
@@ -435,7 +574,10 @@ useEffect(() => {
     const existingStateId = stageStateMap[itemId]
 
     if (existingStateId) {
-      await supabase.from('job_checklist_state').update({ is_checked: nextValue }).eq('id', existingStateId)
+      await supabase
+        .from('job_checklist_state')
+        .update({ is_checked: nextValue })
+        .eq('id', existingStateId)
       return
     }
 
@@ -528,9 +670,7 @@ useEffect(() => {
     }
 
     setIssues((current) =>
-      current.map((issue) =>
-        issue.id === issueId ? { ...issue, resolved: true } : issue
-      )
+      current.map((issue) => (issue.id === issueId ? { ...issue, resolved: true } : issue))
     )
   }
 
@@ -644,6 +784,40 @@ useEffect(() => {
     })
   }
 
+  async function linkProcurementToSchedule(procurementItemId: string, scheduleItemId: string) {
+    setLinkSavingId(procurementItemId)
+    setLinkError(null)
+
+    const { error } = await supabase
+      .from('procurement_items')
+      .update({
+        linked_schedule_id: scheduleItemId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', procurementItemId)
+
+    setLinkSavingId(null)
+
+    if (error) {
+      setLinkError('Failed to link schedule item. Please try again.')
+      return
+    }
+
+    setProcurement((current) =>
+      current.map((item) =>
+        item.id === procurementItemId
+          ? {
+              ...item,
+              linked_schedule_id: scheduleItemId,
+            }
+          : item
+      )
+    )
+
+    setLinkingProcurementId(null)
+    setScheduleLinkQuery('')
+  }
+
   return (
     <div>
       <div
@@ -744,13 +918,42 @@ useEffect(() => {
                       style={inp}
                     />
                     {addrSuggestions.length > 0 && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', marginTop: '4px', boxShadow: '0 4px 16px rgba(0,0,0,0.14)', overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          zIndex: 50,
+                          background: 'var(--surface)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '10px',
+                          marginTop: '4px',
+                          boxShadow: '0 4px 16px rgba(0,0,0,0.14)',
+                          overflow: 'hidden',
+                        }}
+                      >
                         {addrSuggestions.map((s, i) => (
                           <button
                             key={i}
                             type="button"
                             onMouseDown={() => applyAddrSuggestion(s)}
-                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', background: 'none', border: 'none', borderBottom: i < addrSuggestions.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', fontFamily: 'system-ui,-apple-system,sans-serif' }}
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              textAlign: 'left',
+                              padding: '10px 14px',
+                              background: 'none',
+                              border: 'none',
+                              borderBottom:
+                                i < addrSuggestions.length - 1
+                                  ? '1px solid var(--border)'
+                                  : 'none',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              color: 'var(--text)',
+                              fontFamily: 'system-ui,-apple-system,sans-serif',
+                            }}
                           >
                             {formatAddrSuggestion(s)}
                           </button>
@@ -758,10 +961,42 @@ useEffect(() => {
                       </div>
                     )}
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 60px 90px', gap: '8px' }}>
-                    <input value={infoDraft.addr_city} onChange={(e) => setInfoDraft((d) => ({ ...d, addr_city: e.target.value }))} placeholder="City" autoComplete="address-level2" style={inp} />
-                    <input value={infoDraft.addr_state} onChange={(e) => setInfoDraft((d) => ({ ...d, addr_state: e.target.value }))} placeholder="ST" maxLength={2} autoComplete="address-level1" style={inp} />
-                    <input value={infoDraft.addr_zip} onChange={(e) => setInfoDraft((d) => ({ ...d, addr_zip: e.target.value }))} placeholder="ZIP" inputMode="numeric" autoComplete="postal-code" style={inp} />
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '2fr 60px 90px',
+                      gap: '8px',
+                    }}
+                  >
+                    <input
+                      value={infoDraft.addr_city}
+                      onChange={(e) =>
+                        setInfoDraft((d) => ({ ...d, addr_city: e.target.value }))
+                      }
+                      placeholder="City"
+                      autoComplete="address-level2"
+                      style={inp}
+                    />
+                    <input
+                      value={infoDraft.addr_state}
+                      onChange={(e) =>
+                        setInfoDraft((d) => ({ ...d, addr_state: e.target.value }))
+                      }
+                      placeholder="ST"
+                      maxLength={2}
+                      autoComplete="address-level1"
+                      style={inp}
+                    />
+                    <input
+                      value={infoDraft.addr_zip}
+                      onChange={(e) =>
+                        setInfoDraft((d) => ({ ...d, addr_zip: e.target.value }))
+                      }
+                      placeholder="ZIP"
+                      inputMode="numeric"
+                      autoComplete="postal-code"
+                      style={inp}
+                    />
                   </div>
                 </div>
               )}
@@ -1419,7 +1654,7 @@ useEffect(() => {
 
       {activeTab === 'scope' && <ScopeTab jobId={jobId} scopeItems={props.scopeItems ?? []} />}
 
-            {activeTab === 'takeoff' && (
+      {activeTab === 'takeoff' && (
         <TakeoffTab
           jobId={jobId}
           takeoffItems={props.takeoffItems ?? []}
@@ -1429,23 +1664,33 @@ useEffect(() => {
       )}
 
       {activeTab === 'selections' && (
-        <SelectionsTab
-          jobId={jobId}
-          selections={props.selections ?? []}
-        />
+        <SelectionsTab jobId={jobId} selections={props.selections ?? []} />
       )}
 
       {activeTab === 'log' && (
         <div>
           <div style={{ ...surfaceCardStyle(), marginBottom: '10px' }}>
             {logError && (
-              <div style={{ marginBottom: '8px', padding: '8px 10px', background: 'var(--red-bg)', border: '1px solid var(--red)', borderRadius: '6px', fontSize: '12px', color: 'var(--red)' }}>
+              <div
+                style={{
+                  marginBottom: '8px',
+                  padding: '8px 10px',
+                  background: 'var(--red-bg)',
+                  border: '1px solid var(--red)',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  color: 'var(--red)',
+                }}
+              >
                 {logError}
               </div>
             )}
             <textarea
               value={logText}
-              onChange={(e) => { setLogText(e.target.value); if (logError) setLogError(null) }}
+              onChange={(e) => {
+                setLogText(e.target.value)
+                if (logError) setLogError(null)
+              }}
               placeholder="Add a log entry..."
               style={{ ...inp, minHeight: '70px', resize: 'vertical', marginBottom: '8px' }}
             />
@@ -1623,13 +1868,26 @@ useEffect(() => {
                 </div>
 
                 {issueError && (
-                  <div style={{ marginBottom: '8px', padding: '8px 10px', background: 'var(--red-bg)', border: '1px solid var(--red)', borderRadius: '6px', fontSize: '12px', color: 'var(--red)' }}>
+                  <div
+                    style={{
+                      marginBottom: '8px',
+                      padding: '8px 10px',
+                      background: 'var(--red-bg)',
+                      border: '1px solid var(--red)',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      color: 'var(--red)',
+                    }}
+                  >
                     {issueError}
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                   <button
-                    onClick={() => { setShowIssueForm(false); setIssueError(null) }}
+                    onClick={() => {
+                      setShowIssueForm(false)
+                      setIssueError(null)
+                    }}
                     style={{
                       padding: '6px 12px',
                       border: '1px solid var(--border)',
@@ -1647,13 +1905,15 @@ useEffect(() => {
                     disabled={issueSaving || !issueTitle.trim()}
                     style={{
                       padding: '6px 12px',
-                      background: issueSaving || !issueTitle.trim() ? 'var(--border)' : 'var(--text)',
+                      background:
+                        issueSaving || !issueTitle.trim() ? 'var(--border)' : 'var(--text)',
                       color: 'var(--bg)',
                       border: 'none',
                       borderRadius: '7px',
                       fontSize: '12px',
                       fontWeight: '600',
-                      cursor: issueSaving || !issueTitle.trim() ? 'not-allowed' : 'pointer',
+                      cursor:
+                        issueSaving || !issueTitle.trim() ? 'not-allowed' : 'pointer',
                     }}
                   >
                     {issueSaving ? 'Saving...' : 'Log Issue'}
@@ -1790,7 +2050,17 @@ useEffect(() => {
           </div>
 
           {scheduleError && (
-            <div style={{ margin: '10px 14px 0', padding: '8px 10px', background: 'var(--red-bg)', border: '1px solid var(--red)', borderRadius: '6px', fontSize: '12px', color: 'var(--red)' }}>
+            <div
+              style={{
+                margin: '10px 14px 0',
+                padding: '8px 10px',
+                background: 'var(--red-bg)',
+                border: '1px solid var(--red)',
+                borderRadius: '6px',
+                fontSize: '12px',
+                color: 'var(--red)',
+              }}
+            >
               {scheduleError}
             </div>
           )}
@@ -1991,7 +2261,23 @@ useEffect(() => {
             </a>
           </div>
 
-          {!procurementItems.length ? (
+          {linkError && (
+            <div
+              style={{
+                margin: '10px 14px 0',
+                padding: '8px 10px',
+                background: 'var(--red-bg)',
+                border: '1px solid var(--red)',
+                borderRadius: '6px',
+                fontSize: '12px',
+                color: 'var(--red)',
+              }}
+            >
+              {linkError}
+            </div>
+          )}
+
+          {!procurement.length ? (
             <div
               style={{
                 padding: '30px',
@@ -2003,7 +2289,7 @@ useEffect(() => {
               No procurement items yet
             </div>
           ) : (
-            procurementItems.map((item: any) => {
+            procurement.map((item: any) => {
               const daysToOrderBy = item.order_by_date
                 ? Math.round((new Date(item.order_by_date).getTime() - Date.now()) / 86400000)
                 : null
@@ -2018,89 +2304,366 @@ useEffect(() => {
                   : 'none'
 
               const sourceBadge = getProcurementSourceBadge(item)
+              const linkedSchedule = schedule.find((sched) => sched.id === item.linked_schedule_id)
+              const isPickerOpen = linkingProcurementId === item.id
+              const isLinkSaving = linkSavingId === item.id
 
               return (
-                <a
+                <div
                   key={item.id}
-                  href={`/schedule/order/${item.id}/edit?job=${jobId}`}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
                     padding: '10px 14px',
                     borderBottom: '1px solid var(--border)',
-                    textDecoration: 'none',
-                    color: 'inherit',
                   }}
                 >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '12px', fontWeight: '600' }}>{item.description}</div>
-
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {item.trade}
-                      {item.vendor ? ` · ${item.vendor}` : ''}
-                      {item.procurement_group ? ` · ${item.procurement_group}` : ''}
-                    </div>
-
+                  <div
+                    style={{
+                      display: 'grid',
+                      gap: '10px',
+                    }}
+                  >
                     <div
                       style={{
-                        display: 'flex',
-                        gap: '6px',
-                        alignItems: 'center',
-                        marginTop: '4px',
-                        flexWrap: 'wrap',
+                        display: 'grid',
+                        gap: '8px',
+                        gridTemplateColumns: 'minmax(0, 1.8fr) repeat(4, minmax(110px, 0.8fr))',
+                        alignItems: 'start',
                       }}
                     >
-                      <span
+                      <a
+                        href={`/schedule/order/${item.id}/edit?job=${jobId}`}
                         style={{
-                          fontSize: '10px',
-                          fontWeight: '600',
-                          padding: '2px 7px',
-                          borderRadius: '10px',
-                          background: `${statusColors[item.status] || 'var(--text-muted)'}22`,
-                          color: statusColors[item.status] || 'var(--text-muted)',
-                          border: `1px solid ${(statusColors[item.status] || 'var(--text-muted)')}44`,
+                          minWidth: 0,
+                          textDecoration: 'none',
+                          color: 'inherit',
                         }}
                       >
-                        {item.status}
-                      </span>
+                        <div style={{ fontSize: '12px', fontWeight: '600' }}>{item.description}</div>
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            marginTop: '2px',
+                          }}
+                        >
+                          {item.vendor || 'Vendor TBD'}
+                        </div>
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: '6px',
+                            alignItems: 'center',
+                            marginTop: '5px',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: '600',
+                              padding: '2px 7px',
+                              borderRadius: '10px',
+                              background: `${statusColors[item.status] || 'var(--text-muted)'}22`,
+                              color: statusColors[item.status] || 'var(--text-muted)',
+                              border: `1px solid ${(statusColors[item.status] || 'var(--text-muted)')}44`,
+                            }}
+                          >
+                            {item.status}
+                          </span>
 
-                      <span
-                        style={{
-                          fontSize: '10px',
-                          fontWeight: '600',
-                          padding: '2px 7px',
-                          borderRadius: '10px',
-                          border: `1px solid ${sourceBadge.color}`,
-                          color: sourceBadge.color,
-                        }}
-                      >
-                        {sourceBadge.label}
-                      </span>
-                    </div>
-                  </div>
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: '600',
+                              padding: '2px 7px',
+                              borderRadius: '10px',
+                              border: `1px solid ${sourceBadge.color}`,
+                              color: sourceBadge.color,
+                            }}
+                          >
+                            {sourceBadge.label}
+                          </span>
+                        </div>
+                      </a>
 
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    {item.order_by_date && (
+                      <div>
+                        <div
+                          style={{
+                            fontSize: '10px',
+                            color: 'var(--text-muted)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '.04em',
+                            fontFamily: 'ui-monospace,monospace',
+                            marginBottom: '3px',
+                          }}
+                        >
+                          Order By
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            fontFamily: 'ui-monospace,monospace',
+                            color:
+                              flag === 'overdue'
+                                ? 'var(--red)'
+                                : flag === 'soon'
+                                  ? 'var(--amber)'
+                                  : 'var(--text)',
+                          }}
+                        >
+                          {item.order_by_date ? formatShortDate(item.order_by_date) : '—'}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div
+                          style={{
+                            fontSize: '10px',
+                            color: 'var(--text-muted)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '.04em',
+                            fontFamily: 'ui-monospace,monospace',
+                            marginBottom: '3px',
+                          }}
+                        >
+                          Need On Site
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            fontFamily: 'ui-monospace,monospace',
+                            color: 'var(--text)',
+                          }}
+                        >
+                          {item.required_on_site_date
+                            ? formatShortDate(item.required_on_site_date)
+                            : '—'}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div
+                          style={{
+                            fontSize: '10px',
+                            color: 'var(--text-muted)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '.04em',
+                            fontFamily: 'ui-monospace,monospace',
+                            marginBottom: '3px',
+                          }}
+                        >
+                          Trade
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text)' }}>
+                          {item.trade || '—'}
+                        </div>
+                      </div>
+
                       <div
                         style={{
-                          fontSize: '10px',
-                          marginTop: '2px',
-                          fontFamily: 'ui-monospace,monospace',
-                          color:
-                            flag === 'overdue'
-                              ? 'var(--red)'
-                              : flag === 'soon'
-                                ? 'var(--amber)'
-                                : 'var(--text-muted)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'flex-start',
+                          gap: '6px',
                         }}
                       >
-                        {flag === 'overdue' ? '🔴 ' : flag === 'soon' ? '⚠️ ' : ''}
-                        Order by {formatShortDate(item.order_by_date)}
+                        <div
+                          style={{
+                            fontSize: '10px',
+                            color: 'var(--text-muted)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '.04em',
+                            fontFamily: 'ui-monospace,monospace',
+                          }}
+                        >
+                          Linked Schedule
+                        </div>
+
+                        {linkedSchedule && (
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {getScheduleItemName(linkedSchedule)}
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLinkError(null)
+                              setScheduleLinkQuery('')
+                              setLinkingProcurementId(isPickerOpen ? null : item.id)
+                            }}
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: '600',
+                              padding: '5px 8px',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border)',
+                              background: 'var(--surface)',
+                              color: 'var(--text)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {linkedSchedule ? 'Linked Schedule' : 'Link to Schedule'}
+                          </button>
+
+                          {linkedSchedule && (
+                            <a
+                              href={`/schedule/sub/${linkedSchedule.id}/edit?job=${jobId}`}
+                              style={{
+                                fontSize: '10px',
+                                fontWeight: '600',
+                                padding: '5px 8px',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border)',
+                                color: 'var(--text-muted)',
+                                textDecoration: 'none',
+                              }}
+                            >
+                              Open
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {isPickerOpen && (
+                      <div
+                        style={{
+                          border: '1px solid var(--border)',
+                          borderRadius: '8px',
+                          padding: '10px',
+                          background: 'var(--bg)',
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: '10px',
+                            color: 'var(--text-muted)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '.04em',
+                            fontFamily: 'ui-monospace,monospace',
+                            marginBottom: '6px',
+                          }}
+                        >
+                          Link to Schedule
+                        </div>
+
+                        <input
+                          value={scheduleLinkQuery}
+                          onChange={(e) => setScheduleLinkQuery(e.target.value)}
+                          placeholder="Search schedule item name..."
+                          style={{ ...inp, marginBottom: '8px' }}
+                        />
+
+                        {!rankedScheduleOptions.length ? (
+                          <div
+                            style={{
+                              fontSize: '12px',
+                              color: 'var(--text-muted)',
+                              padding: '6px 2px',
+                            }}
+                          >
+                            No matching schedule items.
+                          </div>
+                        ) : (
+                          <div style={{ display: 'grid', gap: '6px' }}>
+                            {rankedScheduleOptions.map((sched) => {
+                              const badge = getScheduleBadge(sched)
+                              return (
+                                <button
+                                  key={sched.id}
+                                  type="button"
+                                  disabled={isLinkSaving}
+                                  onClick={() => linkProcurementToSchedule(item.id, sched.id)}
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    padding: '8px 10px',
+                                    borderRadius: '7px',
+                                    border:
+                                      item.linked_schedule_id === sched.id
+                                        ? '1px solid var(--blue)'
+                                        : '1px solid var(--border)',
+                                    background:
+                                      item.linked_schedule_id === sched.id
+                                        ? 'var(--blue-bg)'
+                                        : 'var(--surface)',
+                                    color: 'var(--text)',
+                                    cursor: isLinkSaving ? 'not-allowed' : 'pointer',
+                                  }}
+                                >
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: '12px', fontWeight: '600' }}>
+                                      {getScheduleItemName(sched)}
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: '10px',
+                                        color: 'var(--text-muted)',
+                                        fontFamily: 'ui-monospace,monospace',
+                                        marginTop: '2px',
+                                      }}
+                                    >
+                                      {sched.trade || 'No trade'} · {formatShortDate(sched.end_date)}
+                                    </div>
+                                  </div>
+
+                                  <span
+                                    style={{
+                                      fontSize: '10px',
+                                      fontWeight: '600',
+                                      padding: '2px 7px',
+                                      borderRadius: '10px',
+                                      border: `1px solid ${badge.color}`,
+                                      color: badge.color,
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    {badge.label}
+                                  </span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            marginTop: '8px',
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLinkingProcurementId(null)
+                              setScheduleLinkQuery('')
+                              setLinkError(null)
+                            }}
+                            style={{
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              padding: '6px 10px',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border)',
+                              background: 'var(--surface)',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Close
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
-                </a>
+                </div>
               )
             })
           )}
@@ -2109,7 +2672,15 @@ useEffect(() => {
 
       {activeTab === 'tasks' && (
         <div>
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '12px 14px', marginBottom: '10px' }}>
+          <div
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: '10px',
+              padding: '12px 14px',
+              marginBottom: '10px',
+            }}
+          >
             {!showTaskForm ? (
               <button
                 onClick={() => setShowTaskForm(true)}
@@ -2128,9 +2699,26 @@ useEffect(() => {
               </button>
             ) : (
               <div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '8px',
+                    marginBottom: '8px',
+                  }}
+                >
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: 'ui-monospace,monospace' }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontSize: '10px',
+                        color: 'var(--text-muted)',
+                        marginBottom: '3px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '.04em',
+                        fontFamily: 'ui-monospace,monospace',
+                      }}
+                    >
                       Title *
                     </label>
                     <input
@@ -2143,7 +2731,17 @@ useEffect(() => {
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: 'ui-monospace,monospace' }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontSize: '10px',
+                        color: 'var(--text-muted)',
+                        marginBottom: '3px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '.04em',
+                        fontFamily: 'ui-monospace,monospace',
+                      }}
+                    >
                       Type
                     </label>
                     <select
@@ -2152,13 +2750,25 @@ useEffect(() => {
                       onChange={(e) => setTaskDraft((d) => ({ ...d, task_type: e.target.value }))}
                     >
                       {TASK_TYPE_OPTIONS.map((opt) => (
-                        <option key={opt} value={opt}>{opt.replace('_', ' ')}</option>
+                        <option key={opt} value={opt}>
+                          {opt.replace('_', ' ')}
+                        </option>
                       ))}
                     </select>
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: 'ui-monospace,monospace' }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontSize: '10px',
+                        color: 'var(--text-muted)',
+                        marginBottom: '3px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '.04em',
+                        fontFamily: 'ui-monospace,monospace',
+                      }}
+                    >
                       Due Date
                     </label>
                     <input
@@ -2170,7 +2780,17 @@ useEffect(() => {
                   </div>
 
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={{ display: 'block', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '.04em', fontFamily: 'ui-monospace,monospace' }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontSize: '10px',
+                        color: 'var(--text-muted)',
+                        marginBottom: '3px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '.04em',
+                        fontFamily: 'ui-monospace,monospace',
+                      }}
+                    >
                       Description
                     </label>
                     <textarea
@@ -2182,20 +2802,46 @@ useEffect(() => {
                   </div>
 
                   <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '16px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                      }}
+                    >
                       <input
                         type="checkbox"
                         checked={taskDraft.requires_file_upload}
-                        onChange={(e) => setTaskDraft((d) => ({ ...d, requires_file_upload: e.target.checked }))}
+                        onChange={(e) =>
+                          setTaskDraft((d) => ({
+                            ...d,
+                            requires_file_upload: e.target.checked,
+                          }))
+                        }
                         style={{ accentColor: 'var(--blue)', cursor: 'pointer' }}
                       />
                       Requires file upload
                     </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                      }}
+                    >
                       <input
                         type="checkbox"
                         checked={taskDraft.visible_to_external}
-                        onChange={(e) => setTaskDraft((d) => ({ ...d, visible_to_external: e.target.checked }))}
+                        onChange={(e) =>
+                          setTaskDraft((d) => ({
+                            ...d,
+                            visible_to_external: e.target.checked,
+                          }))
+                        }
                         style={{ accentColor: 'var(--blue)', cursor: 'pointer' }}
                       />
                       Visible to client
@@ -2204,13 +2850,27 @@ useEffect(() => {
                 </div>
 
                 {taskError && (
-                  <div style={{ marginBottom: '8px', padding: '8px 10px', background: 'var(--red-bg)', border: '1px solid var(--red)', borderRadius: '6px', fontSize: '12px', color: 'var(--red)' }}>
+                  <div
+                    style={{
+                      marginBottom: '8px',
+                      padding: '8px 10px',
+                      background: 'var(--red-bg)',
+                      border: '1px solid var(--red)',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      color: 'var(--red)',
+                    }}
+                  >
                     {taskError}
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                   <button
-                    onClick={() => { setShowTaskForm(false); resetTaskDraft(); setTaskError(null) }}
+                    onClick={() => {
+                      setShowTaskForm(false)
+                      resetTaskDraft()
+                      setTaskError(null)
+                    }}
                     style={{
                       padding: '6px 12px',
                       border: '1px solid var(--border)',
@@ -2244,9 +2904,22 @@ useEffect(() => {
             )}
           </div>
 
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px' }}>
+          <div
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: '10px',
+            }}
+          >
             {!tasks.length ? (
-              <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+              <div
+                style={{
+                  padding: '30px',
+                  textAlign: 'center',
+                  color: 'var(--text-muted)',
+                  fontSize: '12px',
+                }}
+              >
                 No tasks yet
               </div>
             ) : (
@@ -2265,31 +2938,78 @@ useEffect(() => {
                     }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '2px' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          flexWrap: 'wrap',
+                          marginBottom: '2px',
+                        }}
+                      >
                         <span style={{ fontSize: '12px', fontWeight: '600' }}>{task.title}</span>
                         {task.task_type && (
-                          <span style={{ fontSize: '9px', color: 'var(--text-faint)', fontFamily: 'ui-monospace,monospace', textTransform: 'uppercase' }}>
+                          <span
+                            style={{
+                              fontSize: '9px',
+                              color: 'var(--text-faint)',
+                              fontFamily: 'ui-monospace,monospace',
+                              textTransform: 'uppercase',
+                            }}
+                          >
                             {task.task_type.replace('_', ' ')}
                           </span>
                         )}
                         {task.requires_file_upload && (
-                          <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px', background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}>
+                          <span
+                            style={{
+                              fontSize: '9px',
+                              padding: '1px 4px',
+                              borderRadius: '3px',
+                              background: '#fef3c7',
+                              color: '#b45309',
+                              border: '1px solid #fde68a',
+                            }}
+                          >
                             file req
                           </span>
                         )}
                         {task.visible_to_external && (
-                          <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>
+                          <span
+                            style={{
+                              fontSize: '9px',
+                              padding: '1px 4px',
+                              borderRadius: '3px',
+                              background: '#eff6ff',
+                              color: '#2563eb',
+                              border: '1px solid #bfdbfe',
+                            }}
+                          >
                             client visible
                           </span>
                         )}
                       </div>
                       {task.description && (
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', lineHeight: '1.4' }}>
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            marginTop: '2px',
+                            lineHeight: '1.4',
+                          }}
+                        >
                           {task.description}
                         </div>
                       )}
                       {task.due_at && (
-                        <div style={{ fontSize: '10px', color: 'var(--text-faint)', marginTop: '3px', fontFamily: 'ui-monospace,monospace' }}>
+                        <div
+                          style={{
+                            fontSize: '10px',
+                            color: 'var(--text-faint)',
+                            marginTop: '3px',
+                            fontFamily: 'ui-monospace,monospace',
+                          }}
+                        >
                           Due {formatShortDate(task.due_at)}
                         </div>
                       )}
@@ -2306,7 +3026,7 @@ useEffect(() => {
                           padding: '3px 6px',
                           borderRadius: '5px',
                           border: `1px solid ${color}44`,
-                          background: color + '18',
+                          background: `${color}18`,
                           color,
                           cursor: isUpdating ? 'not-allowed' : 'pointer',
                           fontFamily: 'system-ui,-apple-system,sans-serif',
@@ -2314,7 +3034,9 @@ useEffect(() => {
                         }}
                       >
                         {TASK_STATUSES.map((s) => (
-                          <option key={s} value={s}>{s.replace('_', ' ')}</option>
+                          <option key={s} value={s}>
+                            {s.replace('_', ' ')}
+                          </option>
                         ))}
                       </select>
                     </div>
