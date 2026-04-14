@@ -8,16 +8,16 @@ import ScopeTab from './ScopeTab'
 import TakeoffTab from './TakeoffTab'
 
 const STATE_ABBREV: Record<string, string> = {
-  'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
-  'Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA',
-  'Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA',
-  'Kansas':'KS','Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD',
-  'Massachusetts':'MA','Michigan':'MI','Minnesota':'MN','Mississippi':'MS','Missouri':'MO',
-  'Montana':'MT','Nebraska':'NE','Nevada':'NV','New Hampshire':'NH','New Jersey':'NJ',
-  'New Mexico':'NM','New York':'NY','North Carolina':'NC','North Dakota':'ND','Ohio':'OH',
-  'Oklahoma':'OK','Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC',
-  'South Dakota':'SD','Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT',
-  'Virginia':'VA','Washington':'WA','West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY',
+  Alabama: 'AL', Alaska: 'AK', Arizona: 'AZ', Arkansas: 'AR', California: 'CA',
+  Colorado: 'CO', Connecticut: 'CT', Delaware: 'DE', Florida: 'FL', Georgia: 'GA',
+  Hawaii: 'HI', Idaho: 'ID', Illinois: 'IL', Indiana: 'IN', Iowa: 'IA',
+  Kansas: 'KS', Kentucky: 'KY', Louisiana: 'LA', Maine: 'ME', Maryland: 'MD',
+  Massachusetts: 'MA', Michigan: 'MI', Minnesota: 'MN', Mississippi: 'MS', Missouri: 'MO',
+  Montana: 'MT', Nebraska: 'NE', Nevada: 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
+  'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', Ohio: 'OH',
+  Oklahoma: 'OK', Oregon: 'OR', Pennsylvania: 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+  'South Dakota': 'SD', Tennessee: 'TN', Texas: 'TX', Utah: 'UT', Vermont: 'VT',
+  Virginia: 'VA', Washington: 'WA', 'West Virginia': 'WV', Wisconsin: 'WI', Wyoming: 'WY',
 }
 
 function parseAddress(addr: string | null) {
@@ -60,17 +60,14 @@ type JobTabProps = {
   stateMap: Record<string, string>
   issues: any[]
   logs: any[]
-
-  // current naming
   scheduleItems?: any[]
   procurementItems?: any[]
   scopeItems?: any[]
   takeoffItems?: any[]
-
-  // backward-compatible aliases
+  trades?: any[]
+  costCodes?: any[]
   subs?: any[]
   orders?: any[]
-
   stages: string[]
   stageLabels: Record<string, string>
   stageIcons: Record<string, string>
@@ -194,7 +191,6 @@ export default function JobTabs(props: JobTabProps) {
   )
 
   const [activeTab, setActiveTab] = useState('info')
-
   const [checked, setChecked] = useState<Record<string, boolean>>(initialCheckedMap)
   const [stageStateMap, setStageStateMap] = useState<Record<string, string>>(initialStateMap)
 
@@ -273,7 +269,6 @@ export default function JobTabs(props: JobTabProps) {
   const openProcurementCount = procurementItems.filter(
     (item) => !['Delivered', 'Confirmed'].includes(item.status)
   ).length
-
   const openTaskCount = tasks.filter((t) => t.status === 'open' || t.status === 'in_progress').length
 
   const TABS = ['info', 'pipeline', 'scope', 'takeoff', 'log', 'issues', 'tasks', 'schedule', 'procurement', 'files']
@@ -366,7 +361,9 @@ export default function JobTabs(props: JobTabProps) {
         )
         const data = await res.json()
         setAddrSuggestions(data.filter((s: any) => s.address?.road))
-      } catch { setAddrSuggestions([]) }
+      } catch {
+        setAddrSuggestions([])
+      }
     }, 500)
   }
 
@@ -408,7 +405,6 @@ export default function JobTabs(props: JobTabProps) {
     }
 
     const { error } = await supabase.from('jobs').update(payload).eq('id', job.id)
-
     setInfoSaving(false)
 
     if (error) {
@@ -422,14 +418,10 @@ export default function JobTabs(props: JobTabProps) {
 
   async function toggleCheck(itemId: string, nextValue: boolean) {
     setChecked((current) => ({ ...current, [itemId]: nextValue }))
-
     const existingStateId = stageStateMap[itemId]
 
     if (existingStateId) {
-      await supabase
-        .from('job_checklist_state')
-        .update({ is_checked: nextValue })
-        .eq('id', existingStateId)
+      await supabase.from('job_checklist_state').update({ is_checked: nextValue }).eq('id', existingStateId)
       return
     }
 
@@ -450,7 +442,6 @@ export default function JobTabs(props: JobTabProps) {
 
   async function addLog() {
     if (!logText.trim()) return
-
     setLogSaving(true)
     setLogError(null)
 
@@ -477,7 +468,6 @@ export default function JobTabs(props: JobTabProps) {
 
   async function addIssue() {
     if (!issueTitle.trim()) return
-
     setIssueSaving(true)
     setIssueError(null)
 
@@ -545,6 +535,7 @@ export default function JobTabs(props: JobTabProps) {
     if (!taskDraft.title.trim()) return
     setTaskSaving(true)
     setTaskError(null)
+
     const { data, error } = await supabase
       .from('job_tasks')
       .insert({
@@ -559,11 +550,14 @@ export default function JobTabs(props: JobTabProps) {
       })
       .select()
       .single()
+
     setTaskSaving(false)
+
     if (error || !data) {
       setTaskError('Failed to add task. Please try again.')
       return
     }
+
     setTasks((t) => [data, ...t])
     resetTaskDraft()
     setShowTaskForm(false)
@@ -610,7 +604,6 @@ export default function JobTabs(props: JobTabProps) {
 
   async function releaseScheduleItem(item: any) {
     const today = new Date().toISOString().slice(0, 10)
-
     await updateScheduleItem(item.id, {
       is_released: true,
       release_date: item.release_date || today,
@@ -629,7 +622,6 @@ export default function JobTabs(props: JobTabProps) {
 
   async function confirmScheduleItem(item: any) {
     const now = new Date().toISOString()
-
     await updateScheduleItem(item.id, {
       is_released: true,
       release_date: item.release_date || now.slice(0, 10),
@@ -738,13 +730,13 @@ export default function JobTabs(props: JobTabProps) {
                       style={inp}
                     />
                     {addrSuggestions.length > 0 && (
-                      <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:50, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', marginTop:'4px', boxShadow:'0 4px 16px rgba(0,0,0,0.14)', overflow:'hidden' }}>
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', marginTop: '4px', boxShadow: '0 4px 16px rgba(0,0,0,0.14)', overflow: 'hidden' }}>
                         {addrSuggestions.map((s, i) => (
                           <button
                             key={i}
                             type="button"
                             onMouseDown={() => applyAddrSuggestion(s)}
-                            style={{ display:'block', width:'100%', textAlign:'left', padding:'10px 14px', background:'none', border:'none', borderBottom: i < addrSuggestions.length - 1 ? '1px solid var(--border)' : 'none', cursor:'pointer', fontSize:'13px', color:'var(--text)', fontFamily:'system-ui,-apple-system,sans-serif' }}
+                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', background: 'none', border: 'none', borderBottom: i < addrSuggestions.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text)', fontFamily: 'system-ui,-apple-system,sans-serif' }}
                           >
                             {formatAddrSuggestion(s)}
                           </button>
@@ -1412,7 +1404,16 @@ export default function JobTabs(props: JobTabProps) {
       )}
 
       {activeTab === 'scope' && <ScopeTab jobId={jobId} scopeItems={props.scopeItems ?? []} />}
-      {activeTab === 'takeoff' && <TakeoffTab jobId={jobId} takeoffItems={props.takeoffItems ?? []} />}
+
+      {activeTab === 'takeoff' && (
+        <TakeoffTab
+          jobId={jobId}
+          takeoffItems={props.takeoffItems ?? []}
+          trades={props.trades ?? []}
+          costCodes={props.costCodes ?? []}
+        />
+      )}
+
       {activeTab === 'log' && (
         <div>
           <div style={{ ...surfaceCardStyle(), marginBottom: '10px' }}>
@@ -1786,7 +1787,6 @@ export default function JobTabs(props: JobTabProps) {
             </div>
           ) : (
             schedule.map((item: any) => {
-              const badge = getScheduleBadge(item)
               const isBusy = actingScheduleId === item.id
 
               return (
@@ -1984,9 +1984,7 @@ export default function JobTabs(props: JobTabProps) {
           ) : (
             procurementItems.map((item: any) => {
               const daysToOrderBy = item.order_by_date
-                ? Math.round(
-                    (new Date(item.order_by_date).getTime() - Date.now()) / 86400000
-                  )
+                ? Math.round((new Date(item.order_by_date).getTime() - Date.now()) / 86400000)
                 : null
 
               const flag =
