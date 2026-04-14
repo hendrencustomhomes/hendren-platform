@@ -48,9 +48,10 @@ export default function TakeoffTab({ jobId, takeoffItems }: TakeoffTabProps) {
   const inp = inputStyle()
 
   const [items, setItems] = useState<TakeoffItem[]>(takeoffItems)
-  const [name, setName] = useState('')
-  const [quantity, setQuantity] = useState('1')
-  const [unit, setUnit] = useState('')
+  const [trade, setTrade] = useState('')
+const [description, setDescription] = useState('')
+const [quantity, setQuantity] = useState('1')
+const [unit, setUnit] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -67,23 +68,24 @@ export default function TakeoffTab({ jobId, takeoffItems }: TakeoffTabProps) {
   }
 
   async function addItem() {
-    if (!name.trim()) return
+    if (!trade.trim() || !description.trim()) return
 
     setSaving(true)
     setError(null)
 
     const payload = {
-      job_id: jobId,
-      name: name.trim(),
-      quantity: parseQuantity(quantity),
-      unit: unit.trim() || null,
-      sort_order: 0,
-    }
+  job_id: jobId,
+  trade: trade.trim(),
+  description: description.trim(),
+  qty: parseQuantity(quantity),
+  unit: unit.trim() || null,
+  sort_order: 0,
+}
 
     const { data, error: insertError } = await supabase
       .from('takeoff_items')
       .insert(payload)
-      .select('id, name, quantity, unit, notes, sort_order, created_at')
+      .select('id, trade, description, qty, unit, notes, sort_order, created_at')
       .single()
 
     setSaving(false)
@@ -94,14 +96,15 @@ export default function TakeoffTab({ jobId, takeoffItems }: TakeoffTabProps) {
     }
 
     setItems((current) => [data, ...current])
-    setName('')
-    setQuantity('1')
-    setUnit('')
+    setTrade('')
+setDescription('')
+setQuantity('1')
+setUnit('')
   }
 
   async function updateItem(
     id: string,
-    patch: Partial<Pick<TakeoffItem, 'name' | 'quantity' | 'unit' | 'notes'>>
+    patch: Partial<Pick<TakeoffItem, 'trade' | 'description' | 'qty' | 'unit' | 'notes'>>
   ) {
     setEditingId(id)
     setError(null)
@@ -250,12 +253,12 @@ export default function TakeoffTab({ jobId, takeoffItems }: TakeoffTabProps) {
                         Name
                       </div>
                       <input
-                        defaultValue={item.name}
+                        defaultValue={item.description}
                         disabled={disabled}
                         style={inp}
                         onBlur={(e) => {
                           const next = e.target.value.trim()
-                          if (next && next !== item.name) updateItem(item.id, { name: next })
+                          if (next && next !== item.description) updateItem(item.id, { name: next })
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
@@ -268,13 +271,13 @@ export default function TakeoffTab({ jobId, takeoffItems }: TakeoffTabProps) {
                         Quantity
                       </div>
                       <input
-                        defaultValue={item.quantity}
+                        defaultValue={item.qty}
                         disabled={disabled}
                         inputMode="decimal"
                         style={inp}
                         onBlur={(e) => {
                           const next = parseQuantity(e.target.value)
-                          if (next !== item.quantity) updateItem(item.id, { quantity: next })
+                          if (next !== item.qty) updateItem(item.id, { quantity: next })
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
