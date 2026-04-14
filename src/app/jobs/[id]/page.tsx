@@ -162,6 +162,7 @@ export default async function JobDetailPage({
     { data: logs, error: logsError },
     { data: scheduleItems, error: scheduleItemsError },
     { data: procurementItems, error: procurementItemsError },
+    { data: selections, error: selectionsError },
     { data: scopeItems, error: scopeItemsError },
     { data: takeoffItems, error: takeoffItemsError },
     { data: trades, error: tradesError },
@@ -191,6 +192,12 @@ export default async function JobDetailPage({
       .select('*')
       .eq('job_id', id)
       .order('order_by_date', { ascending: true, nullsFirst: false }),
+    supabase
+      .from('job_selections')
+      .select('id, item_label, status, chosen_value, notes, sort_order, created_at')
+      .eq('job_id', id)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false }),
     supabase
       .from('job_scope_items')
       .select('id, scope_type, label, value_text, value_number, notes, sort_order, created_at')
@@ -262,6 +269,7 @@ export default async function JobDetailPage({
   if (logsError) console.error('Logs query failed:', logsError)
   if (scheduleItemsError) console.error('Schedule items query failed:', scheduleItemsError)
   if (procurementItemsError) console.error('Procurement items query failed:', procurementItemsError)
+  if (selectionsError) console.error('Selections query failed:', selectionsError)
   if (scopeItemsError) console.error('Scope items query failed:', scopeItemsError)
   if (takeoffItemsError) console.error('Takeoff items query failed:', takeoffItemsError)
   if (tradesError) console.error('Trades query failed:', tradesError)
@@ -661,6 +669,7 @@ export default async function JobDetailPage({
           procurementItems={procurementItems || []}
           scopeItems={scopeItems || []}
           takeoffItems={takeoffItems || []}
+          selections={selections || []}
           trades={trades || []}
           costCodes={costCodes || []}
           stages={STAGES}
