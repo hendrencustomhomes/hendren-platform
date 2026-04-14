@@ -95,7 +95,7 @@ export default function EditOrderPage() {
 
   const id = Array.isArray(params.id) ? params.id[0] : params.id
   const jobParam = searchParams.get('job')
-  const returnTo = jobParam ? `/jobs/${jobParam}?tab=orders` : '/schedule'
+  const returnTo = jobParam ? `/jobs/${jobParam}?tab=procurement` : '/schedule'
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
