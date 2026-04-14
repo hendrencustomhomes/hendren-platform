@@ -269,7 +269,7 @@ function NewOrderForm() {
       return
     }
 
-    router.push(form.job_id ? `/jobs/${form.job_id}?tab=orders` : '/schedule')
+        router.push(form.job_id ? `/jobs/${form.job_id}?tab=procurement` : '/schedule')
   }
 
   return (
@@ -715,7 +715,7 @@ function NewOrderForm() {
         >
           <button
             type="button"
-            onClick={() => router.push(form.job_id ? `/jobs/${form.job_id}?tab=orders` : '/schedule')}
+                onClick={() => router.push(form.job_id ? `/jobs/${form.job_id}?tab=procurement` : '/schedule')}
             style={{
               padding: '12px 16px',
               borderRadius: '10px',
