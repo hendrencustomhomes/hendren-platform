@@ -196,11 +196,11 @@ export default async function JobDetailPage({
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: false }),
     supabase
-      .from('takeoff_items')
-      .select('id, name, quantity, unit, notes, sort_order, created_at')
-      .eq('job_id', id)
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: false }),
+  .from('takeoff_items')
+  .select('id, trade, description, qty, unit, notes, sort_order, created_at')
+  .eq('job_id', id)
+  .order('sort_order', { ascending: true })
+  .order('created_at', { ascending: false }),
     supabase
       .from('job_clients')
       .select(`
