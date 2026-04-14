@@ -16,14 +16,17 @@ type TakeoffItem = {
 }
 
 type TradeOption = {
-  id?: string
+  id: string
   name: string
+  sort_order?: number | null
 }
 
 type CostCodeOption = {
-  id?: string
-  code?: string | null
-  name?: string | null
+  id: string
+  trade_id?: string | null
+  cost_code: string
+  title: string
+  sort_order?: number | null
 }
 
 type TakeoffTabProps = {
@@ -58,9 +61,7 @@ function inputStyle() {
 }
 
 function costCodeLabel(item: CostCodeOption) {
-  if (item.code && item.name) return `${item.code} - ${item.name}`
-  if (item.code) return item.code
-  return item.name || ''
+  return `${item.cost_code} - ${item.title}`
 }
 
 export default function TakeoffTab({
@@ -73,7 +74,7 @@ export default function TakeoffTab({
   const inp = inputStyle()
 
   const [items, setItems] = useState<TakeoffItem[]>(takeoffItems)
-  const [trade, setTrade] = useState(trades[0]?.name || '')
+  const [trade, setTrade] = useState('')
   const [description, setDescription] = useState('')
   const [costCode, setCostCode] = useState('')
   const [quantity, setQuantity] = useState('1')
@@ -123,7 +124,7 @@ export default function TakeoffTab({
     }
 
     setItems((current) => [data, ...current])
-    setTrade(trades[0]?.name || '')
+    setTrade('')
     setDescription('')
     setCostCode('')
     setQuantity('1')
@@ -132,7 +133,9 @@ export default function TakeoffTab({
 
   async function updateItem(
     id: string,
-    patch: Partial<Pick<TakeoffItem, 'trade' | 'description' | 'cost_code' | 'qty' | 'unit' | 'notes'>>
+    patch: Partial<
+      Pick<TakeoffItem, 'trade' | 'description' | 'cost_code' | 'qty' | 'unit' | 'notes'>
+    >
   ) {
     setEditingId(id)
     setError(null)
@@ -154,6 +157,9 @@ export default function TakeoffTab({
     )
   }
 
+  const tradeReady = trades.length > 0
+  const costCodeReady = costCodes.length > 0
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       {error && (
@@ -168,6 +174,25 @@ export default function TakeoffTab({
           }}
         >
           {error}
+        </div>
+      )}
+
+      {(!tradeReady || !costCodeReady) && (
+        <div
+          style={{
+            background: 'var(--amber-bg, #fff7ed)',
+            border: '1px solid var(--amber, #b45309)',
+            color: 'var(--amber, #b45309)',
+            borderRadius: '8px',
+            padding: '10px 12px',
+            fontSize: '12px',
+          }}
+        >
+          {!tradeReady && !costCodeReady
+            ? 'Trades and cost codes are not loading yet.'
+            : !tradeReady
+              ? 'Trades are not loading yet.'
+              : 'Cost codes are not loading yet.'}
         </div>
       )}
 
@@ -199,7 +224,7 @@ export default function TakeoffTab({
             <select value={trade} onChange={(e) => setTrade(e.target.value)} style={inp}>
               <option value="">Select trade</option>
               {trades.map((item) => (
-                <option key={item.id || item.name} value={item.name}>
+                <option key={item.id} value={item.name}>
                   {item.name}
                 </option>
               ))}
@@ -223,14 +248,11 @@ export default function TakeoffTab({
             </div>
             <select value={costCode} onChange={(e) => setCostCode(e.target.value)} style={inp}>
               <option value="">None</option>
-              {costCodes.map((item) => {
-                const label = costCodeLabel(item)
-                return (
-                  <option key={item.id || item.code || item.name} value={item.code || ''}>
-                    {label}
-                  </option>
-                )
-              })}
+              {costCodes.map((item) => (
+                <option key={item.id} value={item.cost_code}>
+                  {costCodeLabel(item)}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -255,7 +277,7 @@ export default function TakeoffTab({
 
           <button
             onClick={addItem}
-            disabled={saving || !trade.trim() || !description.trim()}
+            disabled={saving || !tradeReady || !trade.trim() || !description.trim()}
             style={{
               padding: '10px 12px',
               border: 'none',
@@ -265,7 +287,9 @@ export default function TakeoffTab({
               fontSize: '12px',
               fontWeight: '700',
               cursor:
-                saving || !trade.trim() || !description.trim() ? 'not-allowed' : 'pointer',
+                saving || !tradeReady || !trade.trim() || !description.trim()
+                  ? 'not-allowed'
+                  : 'pointer',
             }}
           >
             {saving ? 'Saving...' : 'Add'}
@@ -320,7 +344,7 @@ export default function TakeoffTab({
                       </div>
                       <select
                         defaultValue={item.trade}
-                        disabled={disabled}
+                        disabled={disabled || !tradeReady}
                         style={inp}
                         onBlur={(e) => {
                           const next = e.target.value.trim()
@@ -329,7 +353,7 @@ export default function TakeoffTab({
                       >
                         <option value="">Select trade</option>
                         {trades.map((tradeItem) => (
-                          <option key={tradeItem.id || tradeItem.name} value={tradeItem.name}>
+                          <option key={tradeItem.id} value={tradeItem.name}>
                             {tradeItem.name}
                           </option>
                         ))}
@@ -366,7 +390,7 @@ export default function TakeoffTab({
                       </div>
                       <select
                         defaultValue={item.cost_code ?? ''}
-                        disabled={disabled}
+                        disabled={disabled || !costCodeReady}
                         style={inp}
                         onBlur={(e) => {
                           const next = e.target.value || null
@@ -376,17 +400,11 @@ export default function TakeoffTab({
                         }}
                       >
                         <option value="">None</option>
-                        {costCodes.map((codeItem) => {
-                          const label = costCodeLabel(codeItem)
-                          return (
-                            <option
-                              key={codeItem.id || codeItem.code || codeItem.name}
-                              value={codeItem.code || ''}
-                            >
-                              {label}
-                            </option>
-                          )
-                        })}
+                        {costCodes.map((codeItem) => (
+                          <option key={codeItem.id} value={codeItem.cost_code}>
+                            {costCodeLabel(codeItem)}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
