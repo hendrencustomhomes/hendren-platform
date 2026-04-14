@@ -286,7 +286,7 @@ function NewOrderForm() {
       <div style={{ marginBottom: '14px' }}>
         <button
           type="button"
-          onClick={() => router.push(form.job_id ? `/jobs/${form.job_id}?tab=orders` : '/schedule')}
+          onClick={() => router.push(form.job_id ? `/jobs/${form.job_id}?tab=procurement` : '/schedule')}
           style={{
             border: 'none',
             background: 'none',
