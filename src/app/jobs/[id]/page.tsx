@@ -164,6 +164,8 @@ export default async function JobDetailPage({
     { data: procurementItems, error: procurementItemsError },
     { data: scopeItems, error: scopeItemsError },
     { data: takeoffItems, error: takeoffItemsError },
+    { data: trades, error: tradesError },
+    { data: costCodes, error: costCodesError },
     { data: jobClients, error: jobClientsError },
     { data: activeInternalUsers, error: activeInternalUsersError },
     { data: pmRoleAssignments, error: pmRoleAssignmentsError },
@@ -196,11 +198,23 @@ export default async function JobDetailPage({
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: false }),
     supabase
-  .from('takeoff_items')
-  .select('id, trade, description, qty, unit, notes, sort_order, created_at')
-  .eq('job_id', id)
-  .order('sort_order', { ascending: true })
-  .order('created_at', { ascending: false }),
+      .from('takeoff_items')
+      .select('id, trade, description, cost_code, qty, unit, notes, sort_order, created_at')
+      .eq('job_id', id)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('trades')
+      .select('id, name, sort_order')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true, nullsFirst: false })
+      .order('name', { ascending: true }),
+    supabase
+      .from('cost_codes')
+      .select('id, trade_id, cost_code, title, sort_order')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true, nullsFirst: false })
+      .order('title', { ascending: true }),
     supabase
       .from('job_clients')
       .select(`
@@ -250,6 +264,8 @@ export default async function JobDetailPage({
   if (procurementItemsError) console.error('Procurement items query failed:', procurementItemsError)
   if (scopeItemsError) console.error('Scope items query failed:', scopeItemsError)
   if (takeoffItemsError) console.error('Takeoff items query failed:', takeoffItemsError)
+  if (tradesError) console.error('Trades query failed:', tradesError)
+  if (costCodesError) console.error('Cost codes query failed:', costCodesError)
   if (jobClientsError) console.error('Job clients query failed:', jobClientsError)
   if (activeInternalUsersError) console.error('Active internal users query failed:', activeInternalUsersError)
   if (pmRoleAssignmentsError) console.error('PM role assignments query failed:', pmRoleAssignmentsError)
@@ -645,6 +661,8 @@ export default async function JobDetailPage({
           procurementItems={procurementItems || []}
           scopeItems={scopeItems || []}
           takeoffItems={takeoffItems || []}
+          trades={trades || []}
+          costCodes={costCodes || []}
           stages={STAGES}
           stageLabels={STAGE_LABELS}
           stageIcons={STAGE_ICONS}
