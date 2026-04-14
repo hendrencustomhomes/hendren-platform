@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import FilesTab from '@/components/FilesTab'
 import { createClient } from '@/utils/supabase/client'
@@ -194,9 +194,7 @@ export default function JobTabs(props: JobTabProps) {
     [props.procurementItems, props.orders]
   )
 
-  const [activeTab, setActiveTab] = useState(
-  requestedTab && TABS.includes(requestedTab) ? requestedTab : 'info'
-)
+  const [activeTab, setActiveTab] = useState('info')
   const [checked, setChecked] = useState<Record<string, boolean>>(initialCheckedMap)
   const [stageStateMap, setStageStateMap] = useState<Record<string, string>>(initialStateMap)
 
