@@ -1,0 +1,112 @@
+# Supabase Staging Deploy — Session Report
+# Round 1 (2026-04-15)
+
+## Summary
+
+Attempted to push local migrations to the staging Supabase project (`hendren-platform-staging`).
+The push failed because the staging database has no schema — it was created the same day and has
+never received the baseline table definitions that exist on production.
+
+---
+
+## Environment
+
+- Branch: `dev` (fast-forwarded from origin, pulled 108 files including full schedule module)
+- Working directory: `/workspaces/hendren-platform`
+- Supabase CLI: installed from GitHub releases to `~/bin/supabase`
+- Supabase CLI version: `2.90.0`
+
+---
+
+## Commands Run and Results
+
+### 1. `git checkout dev && git pull --rebase origin dev`
+- Already on `dev`
+- Fast-forwarded from `f30c2e0` → `86dcaaa`
+- 108 files changed, 20,083 insertions, 2,005 deletions
+- Notable additions: full schedule module, companies/trades/cost-codes pages, FilesTab, Supabase config + migrations skeleton
+
+### 2. Supabase CLI install
+- `supabase` was not on PATH
+- Downloaded `supabase_linux_amd64.tar.gz` from GitHub releases
+- Extracted to `/tmp/supabase`, copied to `~/bin/supabase`
+- Verified: `supabase --version` → `2.90.0`
+
+### 3. `supabase login --token sbp_...`
+- **Result:** `You are now logged in. Happy coding!`
+- Exit: 0
+
+### 4. `supabase link --project-ref bduokhmbblxgxgzppluf --password ...`
+- Staging project ref `bduokhmbblxgxgzppluf` was not in `supabase/config.toml` or the command
+  template; it was resolved via `mcp__claude_ai_Supabase__list_projects`
+- Project confirmed: `hendren-platform-staging`, region `us-east-2`, status `ACTIVE_HEALTHY`
+- Created: `2026-04-15T01:24:53Z` (same day — brand new)
+- **Result:** `Finished supabase link.`
+- Exit: 0
+
+### 5. `supabase migration list`
+```
+   Local          | Remote | Time (UTC)
+  ----------------|--------|---------------------
+   20260415041045 |        | 2026-04-15 04:10:45
+```
+- One local migration pending
+- `.gitkeep` skipped (not a valid migration filename)
+- Exit: 0
+
+### 6. `supabase db push`
+```
+Applying migration 20260415041045_baseline_validation_test.sql...
+ERROR: relation "jobs" does not exist (SQLSTATE 42P01)
+At statement: 0
+COMMENT ON TABLE jobs IS 'Hendren Platform - staging baseline validated'
+```
+- **Exit: 1 — FAILED**
+
+---
+
+## Root Cause
+
+The only migration in `supabase/migrations/` is a single-line smoke test:
+
+```sql
+COMMENT ON TABLE jobs IS 'Hendren Platform - staging baseline validated';
+```
+
+This assumes the `jobs` table already exists. It does not on staging. The staging database is a
+blank Postgres 17 instance with no schema applied.
+
+The full production schema (jobs, schedule, companies, trades, cost-codes, files, etc.) was never
+committed to `supabase/migrations/` as an initial migration. It exists only on the production
+project (`oiyujpkqfbqmjyxefwbj`).
+
+---
+
+## Projects
+
+| Name                       | Ref                    | Status         | Created               |
+|----------------------------|------------------------|----------------|-----------------------|
+| hendren-platform            | oiyujpkqfbqmjyxefwbj  | ACTIVE_HEALTHY | 2026-03-26            |
+| hendren-platform-staging    | bduokhmbblxgxgzppluf  | ACTIVE_HEALTHY | 2026-04-15 (new)      |
+
+---
+
+## What Needs to Happen Next
+
+1. **Dump the production schema** as an initial migration:
+   ```
+   supabase db dump --linked --schema public > supabase/migrations/20260415000000_initial_schema.sql
+   ```
+   (or use `pg_dump` against the production DB directly)
+
+2. **Commit that migration** to `dev` so it becomes the baseline for staging.
+
+3. **Re-run `supabase db push`** — staging will apply the full schema, then the smoke test
+   comment will succeed.
+
+4. **Delete or rename** `20260415041045_baseline_validation_test.sql` if it was only meant as a
+   connectivity probe and is not a real schema change.
+
+---
+
+## No Files Changed, No Commits Made

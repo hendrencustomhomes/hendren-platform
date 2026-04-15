@@ -1,121 +1,555 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { createClient } from '@/utils/supabase/client'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/utils/supabase/client'
 
-const JOB_COLORS = ['#3B8BD4','#1D9E75','#EF9F27','#D85A30','#7F77DD','#e11d48','#0891b2','#65a30d']
+const JOB_COLORS = [
+  '#3B8BD4',
+  '#1D9E75',
+  '#EF9F27',
+  '#D85A30',
+  '#7F77DD',
+  '#e11d48',
+  '#0891b2',
+  '#65a30d',
+]
+
+const STATE_ABBREV: Record<string, string> = {
+  'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
+  'Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA',
+  'Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA',
+  'Kansas':'KS','Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD',
+  'Massachusetts':'MA','Michigan':'MI','Minnesota':'MN','Mississippi':'MS','Missouri':'MO',
+  'Montana':'MT','Nebraska':'NE','Nevada':'NV','New Hampshire':'NH','New Jersey':'NJ',
+  'New Mexico':'NM','New York':'NY','North Carolina':'NC','North Dakota':'ND','Ohio':'OH',
+  'Oklahoma':'OK','Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC',
+  'South Dakota':'SD','Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT',
+  'Virginia':'VA','Washington':'WA','West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY',
+}
+
+function composeAddress(street: string, city: string, state: string, zip: string): string {
+  const s = street.trim(), c = city.trim(), st = state.trim(), z = zip.trim()
+  const cityStateZip = [c, [st, z].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+  return [s, cityStateZip].filter(Boolean).join(', ')
+}
+
+const NW_IN_ZIP_CITY: Record<string, string> = {
+  '46301':'Dyer','46303':'Griffith','46304':'Chesterton','46307':'Crown Point',
+  '46310':'Demotte','46311':'Dyer','46312':'East Chicago','46319':'Griffith',
+  '46320':'Hammond','46321':'Munster','46322':'Highland','46323':'Hammond',
+  '46324':'Hammond','46325':'Hammond','46327':'Hammond','46340':'Hammond',
+  '46341':'Highland','46356':'Lowell','46368':'Portage','46373':'St. John',
+  '46375':'Schererville','46383':'Valparaiso','46384':'Valparaiso','46385':'Valparaiso',
+  '46390':'Wanatah','46391':'Westville','46392':'Wheatfield',
+  '46401':'Gary','46402':'Gary','46403':'Gary','46404':'Gary','46405':'Gary',
+  '46406':'Gary','46407':'Gary','46408':'Gary','46409':'Gary',
+  '46410':'Merrillville','46411':'Merrillville',
+}
+
+function localityLabel(a: any): string {
+  const zip5 = (a.postcode || '').split('-')[0]
+  return a.city || a.town || a.municipality || a.village || a.suburb || a.hamlet
+    || NW_IN_ZIP_CITY[zip5] || a.county || ''
+}
+
+function rankResult(x: any, typedRoadPrefix: string): number {
+  let score = 0
+  const zip = x.address?.postcode || ''
+  if (zip === '46383' || zip === '46384' || zip === '46385') score += 40
+  else if (zip.startsWith('463')) score += 30
+  else if (zip.startsWith('464')) score += 20
+  else if (zip.startsWith('46')) score += 10
+  const road = (x.address?.road || '').toLowerCase()
+  if (typedRoadPrefix && road.startsWith(typedRoadPrefix)) score += 25
+  else if (typedRoadPrefix && road.includes(typedRoadPrefix)) score += 10
+  if (x.address?.house_number) score += 15
+  return score
+}
+
+function formatSuggestion(s: any): string {
+  const a = s.address || {}
+  const street = [a.house_number, a.road].filter(Boolean).join(' ')
+  const city = localityLabel(a)
+  const state = STATE_ABBREV[a.state] || a.state || ''
+  const zip = (a.postcode || '').split('-')[0]
+  return [street, city, [state, zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+}
+
+const REFERRAL_OPTIONS = [
+  'Past Client',
+  'Realtor',
+  'Architect',
+  'Designer',
+  'Website',
+  'Yard Sign',
+  'Other',
+]
+
+function cardStyle() {
+  return {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '12px',
+    padding: '16px',
+  }
+}
+
+function labelStyle() {
+  return {
+    display: 'block',
+    fontSize: '11px',
+    fontWeight: 700,
+    color: 'var(--text-muted)',
+    marginBottom: '6px',
+    fontFamily: 'ui-monospace,monospace',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '.04em',
+  }
+}
+
+function inputStyle() {
+  return {
+    width: '100%',
+    padding: '12px',
+    border: '1px solid var(--border)',
+    borderRadius: '10px',
+    fontSize: '16px',
+    fontFamily: 'system-ui,-apple-system,sans-serif',
+    boxSizing: 'border-box' as const,
+    outline: 'none',
+    color: 'var(--text)',
+    background: 'var(--surface)',
+  }
+}
 
 export default function NewJobPage() {
   const router = useRouter()
+  const supabase = createClient()
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
+
   const [form, setForm] = useState({
-    client_name: '', address: '', sqft: '', lot_sqft: '',
-    referral_source: 'Referral', scope_notes: ''
+    job_name: '',
+    client_name: '',
+    addr_street: '',
+    addr_city: '',
+    addr_state: '',
+    addr_zip: '',
+    client_email: '',
+    client_phone: '',
+    sqft: '',
+    lot_sqft: '',
+    referral_source: 'Past Client',
+    contract_type: 'fixed_price',
+    scope_notes: '',
   })
+  const [addrSuggestions, setAddrSuggestions] = useState<any[]>([])
+  const addrTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const inp = useMemo(() => inputStyle(), [])
 
   useEffect(() => {
-    createClient().auth.getUser().then(({ data }) => setUserId(data.user?.id || null))
-  }, [])
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id || null)
+    })
+  }, [supabase])
 
-  function set(field: string, value: string) {
-    setForm(f => ({ ...f, [field]: value }))
+  function setField(field: string, value: string) {
+    setForm((current) => ({ ...current, [field]: value }))
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleStreetChange(val: string) {
+    setField('addr_street', val)
+    if (addrTimer.current) clearTimeout(addrTimer.current)
+    if (val.trim().length < 4) { setAddrSuggestions([]); return }
+    addrTimer.current = setTimeout(async () => {
+      try {
+        const base = 'https://nominatim.openstreetmap.org/search'
+        const common = 'format=json&addressdetails=1&countrycodes=us&limit=6&viewbox=-87.41,41.72,-86.81,41.22'
+        const startsWithNum = /^\d/.test(val.trim())
+        // Parallel: (A) city-context query anchors partial road to Valparaiso,
+        //           (B) structured street= catches nearby non-Valparaiso addresses
+        const [cityCtx, structured] = await Promise.all([
+          startsWithNum
+            ? fetch(`${base}?q=${encodeURIComponent(val + ', Valparaiso, IN')}&${common}`, { headers: { 'Accept-Language': 'en' } }).then(r => r.json()).catch(() => [])
+            : Promise.resolve([]),
+          fetch(
+            startsWithNum
+              ? `${base}?street=${encodeURIComponent(val)}&state=Indiana&${common}`
+              : `${base}?q=${encodeURIComponent(val)}&${common}`,
+            { headers: { 'Accept-Language': 'en' } }
+          ).then(r => r.json()).catch(() => []),
+        ])
+        // Merge, deduplicate by osm_id, keep only results with a road
+        const seen = new Set<string>()
+        const merged: any[] = []
+        for (const r of [...cityCtx, ...structured]) {
+          const key = String(r.osm_id ?? r.place_id)
+          if (r.address?.road && !seen.has(key)) { seen.add(key); merged.push(r) }
+        }
+        // Road prefix: strip leading house number from typed input for scoring
+        const typedWords = val.trim().split(/\s+/)
+        const typedRoadPrefix = (startsWithNum ? typedWords.slice(1) : typedWords).join(' ').toLowerCase()
+        merged.sort((a, b) => rankResult(b, typedRoadPrefix) - rankResult(a, typedRoadPrefix))
+        setAddrSuggestions(merged.slice(0, 5))
+      } catch { setAddrSuggestions([]) }
+    }, 500)
+  }
+
+  function applyAddrSuggestion(s: any) {
+    const a = s.address || {}
+    setForm((f) => ({
+      ...f,
+      addr_street: [a.house_number, a.road].filter(Boolean).join(' '),
+      addr_city: localityLabel(a),
+      addr_state: STATE_ABBREV[a.state] || a.state || '',
+      addr_zip: (a.postcode || '').split('-')[0],
+    }))
+    setAddrSuggestions([])
+  }
+
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!form.client_name || !form.address) {
-      setError('Client name and address are required.')
+
+    if (!form.job_name.trim() || !form.client_name.trim() || !form.addr_street.trim()) {
+      setError('Job name, client name, and project address are required.')
       return
     }
+
     setLoading(true)
     setError('')
-    const supabase = createClient()
+
     const color = JOB_COLORS[Math.floor(Math.random() * JOB_COLORS.length)]
-    const { data: job, error: err } = await supabase
+
+    const { data: job, error: insertError } = await supabase
       .from('jobs')
       .insert({
+        job_name: form.job_name.trim(),
         client_name: form.client_name.trim(),
-        address: form.address.trim(),
-        sqft: form.sqft ? parseInt(form.sqft) : null,
-        lot_sqft: form.lot_sqft ? parseInt(form.lot_sqft) : null,
-        referral_source: form.referral_source,
+        project_address: composeAddress(form.addr_street, form.addr_city, form.addr_state, form.addr_zip) || null,
+        client_email: form.client_email.trim() || null,
+        client_phone: form.client_phone.trim() || null,
+        sqft: form.sqft ? parseInt(form.sqft, 10) : null,
+        lot_sqft: form.lot_sqft ? parseInt(form.lot_sqft, 10) : null,
+        referral_source: form.referral_source || null,
+        contract_type: form.contract_type,
         scope_notes: form.scope_notes.trim() || null,
         color,
         current_stage: 'intake',
         is_active: true,
         pm_id: userId,
       })
-      .select()
+      .select('id')
       .single()
+
     setLoading(false)
-    if (err) {
-      setError('Error: ' + err.message + ' (code: ' + err.code + ')')
+
+    if (insertError) {
+      setError(`Error: ${insertError.message}${insertError.code ? ` (code: ${insertError.code})` : ''}`)
       return
     }
-    router.push('/')
-  }
 
-  const inputStyle = {
-    width: '100%', padding: '8px 10px', border: '1px solid #ccc',
-    borderRadius: '7px', fontSize: '13px', fontFamily: 'ui-monospace, monospace',
-    boxSizing: 'border-box' as const, outline: 'none',
-    color: '#1a1a18', backgroundColor: '#fff'
-  }
-  const labelStyle = {
-    display: 'block' as const, fontSize: '11px', color: '#777',
-    marginBottom: '4px', fontFamily: 'ui-monospace, monospace',
-    textTransform: 'uppercase' as const, letterSpacing: '0.04em'
+    router.push(job?.id ? `/jobs/${job.id}?tab=scope` : '/')
   }
 
   return (
-    <div style={{ fontFamily: 'system-ui', background: '#f7f6f3', minHeight: '100vh' }}>
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2dfd8', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', position: 'sticky', top: 0, zIndex: 100 }}>
-        <a href="/" style={{ fontSize: '13px', color: '#2563eb', textDecoration: 'none' }}>Back</a>
-        <div style={{ fontSize: '15px', fontWeight: '700' }}>New Job</div>
+    <div
+      style={{
+        fontFamily: 'system-ui,-apple-system,sans-serif',
+        background: 'var(--bg)',
+        minHeight: '100vh',
+        color: 'var(--text)',
+      }}
+    >
+      <div
+        style={{
+          background: 'var(--surface)',
+          borderBottom: '1px solid var(--border)',
+          padding: '12px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => router.push('/')}
+          style={{
+            fontSize: '14px',
+            color: 'var(--blue)',
+            textDecoration: 'none',
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+          }}
+        >
+          ← Back
+        </button>
+
+        <div style={{ fontSize: '16px', fontWeight: 700 }}>Create Job</div>
       </div>
-      <div style={{ padding: '16px', maxWidth: '560px', margin: '0 auto' }}>
-        <div style={{ background: '#fff', border: '1px solid #e2dfd8', borderRadius: '10px', padding: '20px' }}>
-          <form onSubmit={handleSubmit}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={labelStyle}>Client Name</label>
-                <input style={inputStyle} value={form.client_name} onChange={e => set('client_name', e.target.value)} placeholder="Smith Family" required />
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={labelStyle}>Address</label>
-                <input style={inputStyle} value={form.address} onChange={e => set('address', e.target.value)} placeholder="1234 Maple St, Carmel IN 46032" required />
-              </div>
-              <div>
-                <label style={labelStyle}>Sq Ft</label>
-                <input style={inputStyle} type="number" value={form.sqft} onChange={e => set('sqft', e.target.value)} placeholder="3200" />
-              </div>
-              <div>
-                <label style={labelStyle}>Lot Sqft</label>
-                <input style={inputStyle} type="number" value={form.lot_sqft} onChange={e => set('lot_sqft', e.target.value)} placeholder="14000" />
-              </div>
-              <div>
-                <label style={labelStyle}>Referral</label>
-                <select style={inputStyle} value={form.referral_source} onChange={e => set('referral_source', e.target.value)}>
-                  {['Referral','Website','Houzz','Social','Other'].map(s => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={labelStyle}>Scope Notes</label>
-                <textarea style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} value={form.scope_notes} onChange={e => set('scope_notes', e.target.value)} placeholder="Custom 2-story, 4BR/3BA..." />
-              </div>
-            </div>
-            {error && <div style={{ fontSize: '12px', color: '#dc2626', marginBottom: '12px' }}>{error}</div>}
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <a href="/" style={{ padding: '8px 16px', border: '1px solid #ccc', borderRadius: '7px', fontSize: '13px', fontWeight: '600', textDecoration: 'none', color: '#666' }}>Cancel</a>
-              <button type="submit" disabled={loading} style={{ padding: '8px 16px', background: loading ? '#ccc' : '#1a1a18', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '13px', fontWeight: '600', cursor: loading ? 'not-allowed' : 'pointer' }}>
-                {loading ? 'Creating...' : 'Create Job'}
-              </button>
-            </div>
-          </form>
+
+      <div style={{ padding: '16px', maxWidth: '760px', margin: '0 auto' }}>
+        <div style={{ marginBottom: '14px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 700, marginBottom: '4px' }}>
+            New Job
+          </div>
+          <div
+            style={{
+              fontSize: '14px',
+              color: 'var(--text-muted)',
+              lineHeight: 1.5,
+            }}
+          >
+            Create a new job record at the intake stage. Lead and job are the same object in this system.
+          </div>
         </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '12px' }}>
+          <div style={cardStyle()}>
+            <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>
+              Job Identity
+            </div>
+
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <div>
+                <label style={labelStyle()}>Job Name</label>
+                <input
+                  style={inp}
+                  value={form.job_name}
+                  onChange={(e) => setField('job_name', e.target.value)}
+                  placeholder="Lot 12 – Smith Residence"
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle()}>Street</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    style={inp}
+                    value={form.addr_street}
+                    onChange={(e) => handleStreetChange(e.target.value)}
+                    onBlur={() => setTimeout(() => setAddrSuggestions([]), 150)}
+                    placeholder="166 W Lincolnway"
+                    autoComplete="address-line1"
+                    required
+                  />
+                  {addrSuggestions.length > 0 && (
+                    <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:50, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', marginTop:'4px', boxShadow:'0 4px 16px rgba(0,0,0,0.14)', overflow:'hidden' }}>
+                      {addrSuggestions.map((s, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onMouseDown={() => applyAddrSuggestion(s)}
+                          style={{ display:'block', width:'100%', textAlign:'left', padding:'10px 14px', background:'none', border:'none', borderBottom: i < addrSuggestions.length - 1 ? '1px solid var(--border)' : 'none', cursor:'pointer', fontSize:'13px', color:'var(--text)', fontFamily:'system-ui,-apple-system,sans-serif' }}
+                        >
+                          {formatSuggestion(s)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 80px 100px', gap: '12px' }}>
+                <div>
+                  <label style={labelStyle()}>City</label>
+                  <input style={inp} value={form.addr_city} onChange={(e) => setField('addr_city', e.target.value)} placeholder="Valparaiso" autoComplete="address-level2" />
+                </div>
+                <div>
+                  <label style={labelStyle()}>State</label>
+                  <input style={inp} value={form.addr_state} onChange={(e) => setField('addr_state', e.target.value)} placeholder="IN" maxLength={2} autoComplete="address-level1" />
+                </div>
+                <div>
+                  <label style={labelStyle()}>ZIP</label>
+                  <input style={inp} value={form.addr_zip} onChange={(e) => setField('addr_zip', e.target.value)} placeholder="46383" inputMode="numeric" autoComplete="postal-code" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>
+              Client
+            </div>
+
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <div>
+                <label style={labelStyle()}>Client Name</label>
+                <input
+                  style={inp}
+                  value={form.client_name}
+                  onChange={(e) => setField('client_name', e.target.value)}
+                  placeholder="Smith Family"
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={labelStyle()}>Client Email</label>
+                  <input
+                    style={inp}
+                    type="email"
+                    value={form.client_email}
+                    onChange={(e) => setField('client_email', e.target.value)}
+                    placeholder="client@example.com"
+                  />
+                </div>
+
+                <div>
+                  <label style={labelStyle()}>Client Phone</label>
+                  <input
+                    style={inp}
+                    type="tel"
+                    value={form.client_phone}
+                    onChange={(e) => setField('client_phone', e.target.value)}
+                    placeholder="(317) 555-1234"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>
+              Project Context
+            </div>
+
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={labelStyle()}>Sq Ft</label>
+                  <input
+                    style={inp}
+                    type="number"
+                    inputMode="numeric"
+                    value={form.sqft}
+                    onChange={(e) => setField('sqft', e.target.value)}
+                    placeholder="3200"
+                  />
+                </div>
+
+                <div>
+                  <label style={labelStyle()}>Lot Sq Ft</label>
+                  <input
+                    style={inp}
+                    type="number"
+                    inputMode="numeric"
+                    value={form.lot_sqft}
+                    onChange={(e) => setField('lot_sqft', e.target.value)}
+                    placeholder="14000"
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={labelStyle()}>Referral Source</label>
+                  <select
+                    style={inp}
+                    value={form.referral_source}
+                    onChange={(e) => setField('referral_source', e.target.value)}
+                  >
+                    {REFERRAL_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={labelStyle()}>Contract Type</label>
+                  <select
+                    style={inp}
+                    value={form.contract_type}
+                    onChange={(e) => setField('contract_type', e.target.value)}
+                  >
+                    <option value="fixed_price">Fixed Price</option>
+                    <option value="cost_plus">Cost Plus</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={labelStyle()}>Scope Notes</label>
+                <textarea
+                  style={{ ...inp, minHeight: '100px', resize: 'vertical' }}
+                  value={form.scope_notes}
+                  onChange={(e) => setField('scope_notes', e.target.value)}
+                  placeholder="Custom 2-story, 4BR/3BA renovation and addition, early pricing needed..."
+                />
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <div
+              style={{
+                ...cardStyle(),
+                border: '1px solid var(--red)',
+                background: 'var(--red-bg)',
+                color: 'var(--red)',
+                fontSize: '14px',
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <div
+            style={{
+              display: 'flex',
+              gap: '10px',
+              justifyContent: 'flex-end',
+              flexWrap: 'wrap',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => router.push('/')}
+              style={{
+                padding: '12px 16px',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                background: 'var(--surface)',
+                color: 'var(--text)',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                padding: '12px 16px',
+                background: loading ? 'var(--border)' : 'var(--text)',
+                color: 'var(--bg)',
+                border: 'none',
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.7 : 1,
+              }}
+            >
+              {loading ? 'Creating...' : 'Create Job'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )

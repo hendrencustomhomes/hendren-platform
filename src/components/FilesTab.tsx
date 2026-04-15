@@ -1,175 +1,1198 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createClient } from '@/utils/supabase/client'
+import { fetchActiveTrades } from '@/lib/trades'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type EntityType = 'job' | 'schedule_item' | 'procurement_item' | 'task'
+
+// Legacy scope kept only for reading old records
+type LegacyVisibilityScope =
+  | 'internal_only'
+  | 'tagged_external'
+  | 'all_external_except_client'
+  | 'all_external_including_client'
 
 type JobFile = {
-  id: string; category: string; filename: string; display_name: string | null
-  storage_path: string; size_bytes: number | null; mime_type: string | null
-  client_visible: boolean; created_at: string; uploaded_by: string | null
+  id: string
+  category: string
+  filename: string
+  display_name: string | null
+  storage_path: string
+  size_bytes: number | null
+  mime_type: string | null
+  // New-style granular fields (primary)
+  client_visible?: boolean | null
+  companies_visible?: boolean | null
+  company_scope?: 'all' | 'selected' | null
+  // Legacy field (for reading old records)
+  visibility_scope?: LegacyVisibilityScope | null
+  include_in_packet?: boolean | null
+  entity_type?: EntityType | null
+  created_at: string
+  uploaded_by: string | null
 }
-const CATEGORIES = ['plans', 'photos', 'admin', 'other'] as const
-type Category = (typeof CATEGORIES)[number]
 
-function formatBytes(n: number | null) {
-  if (!n) return ''
-  if (n < 1024) return n + ' B'
-  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB'
-  return (n / 1048576).toFixed(1) + ' MB'
-}
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+// In-session permission state driven by the checkboxes.
+// Internal is always on — not stored here, always assumed.
+type VisibilityState = {
+  client: boolean
+  // Trade names that are checked; empty = no trade access
+  selectedTrades: string[]
 }
 
-function UploadModal({ jobId, onClose, onUploaded }: { jobId: string; onClose: () => void; onUploaded: (f: JobFile) => void }) {
-  const [file, setFile] = useState<File | null>(null)
-  const [category, setCategory] = useState<Category>('other')
+// ─── Permission helpers ───────────────────────────────────────────────────────
+
+function defaultVisibilityState(): VisibilityState {
+  return { client: false, selectedTrades: [] }
+}
+
+/**
+ * Reconstruct checkbox state from a loaded file record.
+ * Granular fields (client_visible, companies_visible, company_scope) are
+ * the source of truth — always set by the API. Legacy visibility_scope is
+ * only used as a fallback for records that predate the granular columns.
+ *
+ * Limitation: company_scope='selected' means "some trades" but the DB has
+ * no per-file trade list, so individual trade selections cannot be restored
+ * after save. The summary still shows "Some Trades".
+ */
+function deriveVisibilityState(file: JobFile, availableTrades: string[]): VisibilityState {
+  const hasGranularFields =
+    (file.client_visible !== undefined && file.client_visible !== null) ||
+    (file.companies_visible !== undefined && file.companies_visible !== null)
+
+  if (!hasGranularFields && file.visibility_scope) {
+    switch (file.visibility_scope) {
+      case 'internal_only':
+        return { client: false, selectedTrades: [] }
+      case 'tagged_external':
+        return { client: true, selectedTrades: [] }
+      case 'all_external_except_client':
+        return { client: false, selectedTrades: [...availableTrades] }
+      case 'all_external_including_client':
+        return { client: true, selectedTrades: [...availableTrades] }
+    }
+  }
+
+  const client = file.client_visible ?? false
+  const selectedTrades: string[] =
+    file.companies_visible && file.company_scope === 'all' ? [...availableTrades] : []
+
+  return { client, selectedTrades }
+}
+
+/**
+ * Map checkbox state to DB columns.
+ * Derives a legacy visibility_scope value for backward compat.
+ */
+function visibilityToPayload(state: VisibilityState, totalTradeCount: number) {
+  const companiesVisible = state.selectedTrades.length > 0
+  const allTradesChecked = totalTradeCount > 0 && state.selectedTrades.length >= totalTradeCount
+  const companyScope: 'all' | 'selected' | null = companiesVisible
+    ? allTradesChecked
+      ? 'all'
+      : 'selected'
+    : null
+
+  let visibilityScope: LegacyVisibilityScope
+  if (!companiesVisible && !state.client) {
+    visibilityScope = 'internal_only'
+  } else if (companiesVisible && allTradesChecked && !state.client) {
+    visibilityScope = 'all_external_except_client'
+  } else if (companiesVisible && state.client) {
+    visibilityScope = 'all_external_including_client'
+  } else {
+    visibilityScope = 'tagged_external'
+  }
+
+  return {
+    client_visible: state.client,
+    companies_visible: companiesVisible,
+    company_scope: companyScope,
+    visibility_scope: visibilityScope,
+  }
+}
+
+// ─── Display helpers ──────────────────────────────────────────────────────────
+
+function getVisibilitySummary(file: JobFile): string {
+  const parts: string[] = ['Internal']
+
+  if (file.client_visible) parts.push('Client')
+
+  if (file.companies_visible) {
+    parts.push(file.company_scope === 'all' ? 'All Trades' : 'Some Trades')
+  } else if (
+    file.visibility_scope === 'tagged_external' ||
+    file.visibility_scope === 'all_external_except_client' ||
+    file.visibility_scope === 'all_external_including_client'
+  ) {
+    // Fallback for legacy records without granular fields
+    parts.push('Trades')
+  }
+
+  return parts.join(' · ')
+}
+
+const CATEGORIES = ['plans', 'photos', 'admin', 'financial', 'other'] as const
+type KnownCategory = (typeof CATEGORIES)[number]
+
+function formatBytes(value: number | null) {
+  if (!value) return ''
+  if (value < 1024) return `${value} B`
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+function titleizeCategory(value: string) {
+  return value
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function getCategoryLabel(category: string) {
+  return titleizeCategory(category)
+}
+
+function getSafeDefaultVisibility(category: string, availableTrades: string[]): VisibilityState {
+  if (category === 'plans' || category === 'photos') {
+    return { client: false, selectedTrades: [...availableTrades] }
+  }
+  return defaultVisibilityState()
+}
+
+function sectionCardStyle() {
+  return {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '12px',
+  }
+}
+
+function labelStyle() {
+  return {
+    display: 'block',
+    fontSize: '11px',
+    fontWeight: 700,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '.04em',
+    color: 'var(--text-muted)',
+    marginBottom: '6px',
+    fontFamily: 'ui-monospace,monospace',
+  }
+}
+
+// ─── VisibilityPicker ─────────────────────────────────────────────────────────
+
+function VisibilityPicker({
+  state,
+  onChange,
+  trades,
+}: {
+  state: VisibilityState
+  onChange: (next: VisibilityState) => void
+  trades: string[]
+}) {
+  const [tradesOpen, setTradesOpen] = useState(false)
+
+  const allTradesChecked = trades.length > 0 && state.selectedTrades.length >= trades.length
+  const someTradesChecked = state.selectedTrades.length > 0 && !allTradesChecked
+
+  function toggleAllTrades(checked: boolean) {
+    onChange({ ...state, selectedTrades: checked ? [...trades] : [] })
+  }
+
+  function toggleTrade(trade: string, checked: boolean) {
+    // If a trade is manually unchecked, only that trade is removed.
+    // All Trades visually de-selects (indeterminate → unchecked)
+    // but remaining trades stay selected.
+    const next = checked
+      ? [...state.selectedTrades, trade]
+      : state.selectedTrades.filter((t) => t !== trade)
+    onChange({ ...state, selectedTrades: next })
+  }
+
+  const rowStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '8px 0',
+    fontSize: '14px',
+    color: 'var(--text)',
+  } as const
+
+  const checkStyle = {
+    width: '18px',
+    height: '18px',
+    flexShrink: 0,
+    accentColor: 'var(--text)',
+    cursor: 'pointer',
+  } as const
+
+  return (
+    <div
+      style={{
+        border: '1px solid var(--border)',
+        borderRadius: '12px',
+        padding: '12px',
+        background: 'var(--bg)',
+      }}
+    >
+      <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>Visibility</div>
+
+      {/* Internal — always on, not editable */}
+      <div style={{ ...rowStyle, opacity: 0.55, cursor: 'default' }}>
+        <input
+          type="checkbox"
+          checked
+          readOnly
+          style={{ ...checkStyle, cursor: 'not-allowed' }}
+        />
+        <span>
+          <strong>Internal</strong>
+          <span style={{ marginLeft: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>
+            (always visible to your team)
+          </span>
+        </span>
+      </div>
+
+      {/* Client */}
+      <label style={{ ...rowStyle, cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={state.client}
+          onChange={(e) => onChange({ ...state, client: e.target.checked })}
+          style={checkStyle}
+        />
+        Client
+      </label>
+
+      <div style={{ borderTop: '1px solid var(--border)', margin: '8px 0' }} />
+
+      {/* All Trades — shows indeterminate when some (not all) trades are selected */}
+      <label style={{ ...rowStyle, cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          ref={(el) => {
+            if (el) el.indeterminate = someTradesChecked
+          }}
+          checked={allTradesChecked}
+          onChange={(e) => toggleAllTrades(e.target.checked)}
+          style={checkStyle}
+        />
+        All Trades
+      </label>
+
+      {/* Toggle individual trades */}
+      <button
+        type="button"
+        onClick={() => setTradesOpen((open) => !open)}
+        style={{
+          background: 'none',
+          border: 'none',
+          padding: '4px 0 4px 28px',
+          fontSize: '12px',
+          color: 'var(--blue)',
+          cursor: 'pointer',
+          display: 'block',
+          width: '100%',
+          textAlign: 'left',
+        }}
+      >
+        {tradesOpen ? '▲ Hide individual trades' : '▼ Select individual trades'}
+        {someTradesChecked && (
+          <span style={{ marginLeft: '6px', color: 'var(--text-muted)' }}>
+            ({state.selectedTrades.length}/{trades.length})
+          </span>
+        )}
+      </button>
+
+      {tradesOpen && (
+        <div
+          style={{
+            maxHeight: '180px',
+            overflowY: 'auto',
+            borderTop: '1px solid var(--border)',
+            marginTop: '4px',
+            paddingTop: '4px',
+          }}
+        >
+          {trades.map((trade) => (
+            <label
+              key={trade}
+              style={{ ...rowStyle, cursor: 'pointer', paddingLeft: '28px' }}
+            >
+              <input
+                type="checkbox"
+                checked={state.selectedTrades.includes(trade)}
+                onChange={(e) => toggleTrade(trade, e.target.checked)}
+                style={checkStyle}
+              />
+              {trade}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── UploadModal ──────────────────────────────────────────────────────────────
+
+function UploadModal({
+  jobId,
+  onClose,
+  onUploaded,
+  trades,
+}: {
+  jobId: string
+  onClose: () => void
+  onUploaded: (files: JobFile[]) => void
+  trades: string[]
+}) {
+  const [files, setFiles] = useState<File[]>([])
+  const [category, setCategory] = useState<string>('other')
   const [displayName, setDisplayName] = useState('')
+  const [visibility, setVisibility] = useState<VisibilityState>(defaultVisibilityState())
+  const [includeInPacket, setIncludeInPacket] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
   const inputRef = useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    setVisibility(getSafeDefaultVisibility(category, trades))
+    if (category !== 'plans' && category !== 'photos') {
+      setIncludeInPacket(false)
+    }
+  }, [category])
+
   async function handleSubmit() {
-    if (!file) { setError('Select a file first.'); return }
-    setUploading(true); setError(null)
+    if (!files.length) {
+      setError('Select at least one file first.')
+      return
+    }
+
+    setUploading(true)
+    setError(null)
+
+    const payload = visibilityToPayload(visibility, trades.length)
+
     try {
-      const fd = new FormData()
-      fd.append('file', file); fd.append('job_id', jobId)
-      fd.append('category', category); fd.append('display_name', displayName || file.name)
-      const res = await fetch('/api/files/upload', { method: 'POST', body: fd })
-      if (!res.ok) {
-        const b = await res.json().catch(() => ({}))
-        throw new Error((b as { error?: string }).error ?? 'Upload failed')
+      const uploadedFiles: JobFile[] = []
+
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index]
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('job_id', jobId)
+        formData.append('category', category)
+        formData.append(
+          'display_name',
+          files.length === 1 ? displayName || file.name : file.name
+        )
+        formData.append('client_visible', String(payload.client_visible))
+        formData.append('companies_visible', String(payload.companies_visible))
+        formData.append('company_scope', payload.company_scope ?? '')
+        formData.append('visibility_scope', payload.visibility_scope)
+        formData.append('include_in_packet', String(includeInPacket))
+        formData.append('entity_type', 'job')
+
+        const response = await fetch('/api/files/upload', {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}))
+          throw new Error((body as { error?: string }).error ?? 'Upload failed')
+        }
+
+        const { file: uploaded } = (await response.json()) as { file: JobFile }
+        uploadedFiles.push(uploaded)
       }
-      const { file: uploaded } = await res.json() as { file: JobFile }
-      onUploaded(uploaded); onClose()
-    } catch (e) { setError(e instanceof Error ? e.message : 'Upload failed') }
-    finally { setUploading(false) }
+
+      onUploaded(uploadedFiles)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
   }
 
+  const selectedFileLabel =
+    files.length === 0
+      ? 'Tap to select file(s)'
+      : files.length === 1
+        ? files[0].name
+        : `${files.length} files selected`
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/40">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-6 space-y-4 shadow-xl">
-        <h2 className="text-lg font-semibold text-gray-900">Upload File</h2>
-        <div>
-          <input ref={inputRef} type="file" className="hidden"
-            onChange={e => { const f = e.target.files?.[0] ?? null; setFile(f); if (f && !displayName) setDisplayName(f.name) }} />
-          <button type="button" onClick={() => inputRef.current?.click()}
-            className="w-full border-2 border-dashed border-gray-300 rounded-xl py-6 text-sm text-gray-500 hover:border-blue-400">
-            {file ? file.name : 'Tap to select a file'}
-          </button>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 60,
+        background: 'rgba(0,0,0,0.45)',
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        padding: '16px',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '560px',
+          background: 'var(--surface)',
+          color: 'var(--text)',
+          border: '1px solid var(--border)',
+          borderRadius: '16px',
+          padding: '16px',
+          boxShadow: '0 20px 50px rgba(0,0,0,0.20)',
+          maxHeight: '92dvh',
+          overflowY: 'auto',
+        }}
+      >
+        <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '14px' }}>
+          Upload Files
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-          <select value={category} onChange={e => setCategory(e.target.value as Category)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-            {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Display Name <span className="font-normal text-gray-400">(optional)</span>
-          </label>
-          <input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)}
-            placeholder={file?.name ?? 'File label'}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-        </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex gap-3">
-          <button type="button" onClick={onClose} disabled={uploading}
-            className="flex-1 border border-gray-300 rounded-xl py-2.5 text-sm font-medium text-gray-700">Cancel</button>
-          <button type="button" onClick={handleSubmit} disabled={uploading || !file}
-            className="flex-1 bg-blue-600 disabled:bg-blue-300 rounded-xl py-2.5 text-sm font-medium text-white">
-            {uploading ? 'Uploading...' : 'Upload'}
-          </button>
+
+        <div style={{ display: 'grid', gap: '12px' }}>
+          <div>
+            <input
+              ref={inputRef}
+              type="file"
+              multiple
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const selected = Array.from(e.target.files ?? [])
+                setFiles(selected)
+                if (selected.length === 1 && !displayName) {
+                  setDisplayName(selected[0].name)
+                }
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              style={{
+                width: '100%',
+                border: '2px dashed var(--border)',
+                borderRadius: '12px',
+                padding: '22px 14px',
+                background: 'var(--bg)',
+                color: 'var(--text-muted)',
+                fontSize: '14px',
+                cursor: 'pointer',
+              }}
+            >
+              {selectedFileLabel}
+            </button>
+          </div>
+
+          <div>
+            <label style={labelStyle()}>Category</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              style={{
+                width: '100%',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '12px',
+                fontSize: '16px',
+                background: 'var(--surface)',
+                color: 'var(--text)',
+              }}
+            >
+              {CATEGORIES.map((item) => (
+                <option key={item} value={item}>
+                  {getCategoryLabel(item)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {files.length <= 1 && (
+            <div>
+              <label style={labelStyle()}>Display Name</label>
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder={files[0]?.name ?? 'File label'}
+                style={{
+                  width: '100%',
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  padding: '12px',
+                  fontSize: '16px',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+          )}
+
+          <VisibilityPicker state={visibility} onChange={setVisibility} trades={trades} />
+
+          {(category === 'plans' || category === 'photos') && (
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '14px',
+                color: 'var(--text)',
+                border: '1px solid var(--border)',
+                borderRadius: '12px',
+                padding: '12px',
+                background: 'var(--bg)',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={includeInPacket}
+                onChange={(e) => setIncludeInPacket(e.target.checked)}
+                style={{ width: '18px', height: '18px' }}
+              />
+              Include in job packet
+            </label>
+          )}
+
+          {error && (
+            <div
+              style={{
+                fontSize: '13px',
+                color: 'var(--red)',
+                background: 'var(--red-bg)',
+                border: '1px solid var(--red)',
+                borderRadius: '10px',
+                padding: '10px 12px',
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={uploading}
+              style={{
+                flex: 1,
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '12px',
+                background: 'var(--surface)',
+                color: 'var(--text)',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: uploading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={uploading || files.length === 0}
+              style={{
+                flex: 1,
+                border: 'none',
+                borderRadius: '10px',
+                padding: '12px',
+                background: uploading || files.length === 0 ? 'var(--border)' : 'var(--text)',
+                color: 'var(--bg)',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: uploading || files.length === 0 ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {uploading ? 'Uploading...' : files.length > 1 ? 'Upload Files' : 'Upload'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-function FileRow({ file }: { file: JobFile }) {
+// ─── EditFileModal ────────────────────────────────────────────────────────────
+
+function EditFileModal({
+  file,
+  onClose,
+  onUpdated,
+  trades,
+}: {
+  file: JobFile
+  onClose: () => void
+  onUpdated: (file: JobFile) => void
+  trades: string[]
+}) {
+  const [category, setCategory] = useState<string>(file.category)
+  const [displayName, setDisplayName] = useState(file.display_name ?? '')
+  const [visibility, setVisibility] = useState<VisibilityState>(() =>
+    deriveVisibilityState(file, trades)
+  )
+  const [includeInPacket, setIncludeInPacket] = useState(file.include_in_packet ?? false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (category !== 'plans' && category !== 'photos') {
+      setIncludeInPacket(false)
+    }
+  }, [category])
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+
+    const payload = visibilityToPayload(visibility, trades.length)
+
+    try {
+      const response = await fetch('/api/files/update', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          file_id: file.id,
+          display_name: displayName.trim() || file.filename,
+          category,
+          include_in_packet: includeInPacket,
+          ...payload,
+        }),
+      })
+
+      const body = await response.json().catch(() => ({} as { error?: string; file?: JobFile }))
+
+      if (!response.ok) {
+        throw new Error((body as { error?: string }).error ?? 'Save failed')
+      }
+
+      onUpdated((body as { file: JobFile }).file)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 60,
+        background: 'rgba(0,0,0,0.45)',
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        padding: '16px',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '560px',
+          background: 'var(--surface)',
+          color: 'var(--text)',
+          border: '1px solid var(--border)',
+          borderRadius: '16px',
+          padding: '16px',
+          boxShadow: '0 20px 50px rgba(0,0,0,0.20)',
+          maxHeight: '92dvh',
+          overflowY: 'auto',
+        }}
+      >
+        <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '4px' }}>
+          Edit File Info
+        </div>
+        <div
+          style={{
+            fontSize: '13px',
+            color: 'var(--text-muted)',
+            marginBottom: '14px',
+            wordBreak: 'break-word',
+          }}
+        >
+          {file.filename}
+        </div>
+
+        <div style={{ display: 'grid', gap: '12px' }}>
+          <div>
+            <label style={labelStyle()}>Display Name</label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder={file.filename}
+              style={{
+                width: '100%',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '12px',
+                fontSize: '16px',
+                background: 'var(--surface)',
+                color: 'var(--text)',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={labelStyle()}>Category</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              style={{
+                width: '100%',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '12px',
+                fontSize: '16px',
+                background: 'var(--surface)',
+                color: 'var(--text)',
+              }}
+            >
+              {CATEGORIES.map((item) => (
+                <option key={item} value={item}>
+                  {getCategoryLabel(item)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <VisibilityPicker state={visibility} onChange={setVisibility} trades={trades} />
+
+          {(category === 'plans' || category === 'photos') && (
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '14px',
+                color: 'var(--text)',
+                border: '1px solid var(--border)',
+                borderRadius: '12px',
+                padding: '12px',
+                background: 'var(--bg)',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={includeInPacket}
+                onChange={(e) => setIncludeInPacket(e.target.checked)}
+                style={{ width: '18px', height: '18px' }}
+              />
+              Include in job packet
+            </label>
+          )}
+
+          {error && (
+            <div
+              style={{
+                fontSize: '13px',
+                color: 'var(--red)',
+                background: 'var(--red-bg)',
+                border: '1px solid var(--red)',
+                borderRadius: '10px',
+                padding: '10px 12px',
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              style={{
+                flex: 1,
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '12px',
+                background: 'var(--surface)',
+                color: 'var(--text)',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: saving ? 'not-allowed' : 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              style={{
+                flex: 1,
+                border: 'none',
+                borderRadius: '10px',
+                padding: '12px',
+                background: saving ? 'var(--border)' : 'var(--text)',
+                color: 'var(--bg)',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: saving ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── FileRow ──────────────────────────────────────────────────────────────────
+
+function FileRow({
+  file,
+  onUpdated,
+  trades,
+}: {
+  file: JobFile
+  onUpdated: (file: JobFile) => void
+  trades: string[]
+}) {
   const [opening, setOpening] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
+  const [showEdit, setShowEdit] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function handleOpen() {
-    setOpening(true); setErr(null)
+    const popup = window.open('about:blank', '_blank')
+
+    if (!popup) {
+      setError('Popup blocked. Allow popups for this site and try again.')
+      return
+    }
+
     try {
-      const res = await fetch('/api/files/signed-url?file_id=' + file.id)
-      if (!res.ok) {
-        const b = await res.json().catch(() => ({}))
-        throw new Error((b as { error?: string }).error ?? 'Error')
+      popup.opener = null
+    } catch {}
+
+    setOpening(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/files/signed-url?file_id=${file.id}`)
+      const body = await response.json().catch(() => ({} as { error?: string; url?: string }))
+
+      if (!response.ok) {
+        throw new Error(body.error ?? 'Could not open file')
       }
-      const { url } = await res.json() as { url: string }
-      window.open(url, '_blank', 'noopener,noreferrer')
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not open') }
-    finally { setOpening(false) }
+
+      if (!body.url) {
+        throw new Error('Signed URL missing from response')
+      }
+
+      popup.location.href = body.url
+    } catch (err) {
+      popup.close()
+      setError(err instanceof Error ? err.message : 'Could not open file')
+    } finally {
+      setOpening(false)
+    }
   }
 
   return (
-    <div className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0 gap-3">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-gray-900 truncate">{file.display_name || file.filename}</p>
-        <p className="text-xs text-gray-400 mt-0.5">
-          {formatBytes(file.size_bytes)}{file.size_bytes ? ' · ' : ''}{formatDate(file.created_at)}
-        </p>
-        {err && <p className="text-xs text-red-500 mt-0.5">{err}</p>}
+    <>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={handleOpen}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') handleOpen()
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          padding: '12px 14px',
+          borderBottom: '1px solid var(--border)',
+          cursor: opening ? 'wait' : 'pointer',
+        }}
+      >
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: 'var(--text)',
+              marginBottom: '3px',
+              wordBreak: 'break-word',
+            }}
+          >
+            {file.display_name || file.filename}
+          </div>
+
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            {formatBytes(file.size_bytes)}
+            {file.size_bytes ? ' · ' : ''}
+            {formatDate(file.created_at)}
+            {' · '}
+            {getVisibilitySummary(file)}
+            {file.include_in_packet ? ' · In Packet' : ''}
+          </div>
+
+          {error && (
+            <div style={{ fontSize: '12px', color: 'var(--red)', marginTop: '4px' }}>
+              {error}
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          aria-label="File actions"
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowEdit(true)
+          }}
+          style={{
+            flexShrink: 0,
+            border: '1px solid var(--border)',
+            background: 'var(--surface)',
+            color: 'var(--text-muted)',
+            borderRadius: '8px',
+            width: '32px',
+            height: '32px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '18px',
+            lineHeight: 1,
+            cursor: 'pointer',
+          }}
+        >
+          ⋮
+        </button>
       </div>
-      <button type="button" onClick={handleOpen} disabled={opening}
-        className="shrink-0 text-xs font-medium text-blue-600 disabled:text-blue-300 px-3 py-1 rounded-lg hover:bg-blue-50">
-        {opening ? '...' : 'Open'}
-      </button>
-    </div>
+
+      {showEdit && (
+        <EditFileModal
+          file={file}
+          onClose={() => setShowEdit(false)}
+          onUpdated={(updated) => {
+            onUpdated(updated)
+            setShowEdit(false)
+          }}
+          trades={trades}
+        />
+      )}
+    </>
   )
 }
+
+// ─── FilesTab ─────────────────────────────────────────────────────────────────
 
 export default function FilesTab({ jobId }: { jobId: string }) {
   const [files, setFiles] = useState<JobFile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showUpload, setShowUpload] = useState(false)
+  const [trades, setTrades] = useState<string[]>([])
 
   useEffect(() => {
-    let active = true; setLoading(true)
-    fetch('/api/files/list?job_id=' + jobId)
-      .then(r => r.json())
-      .then((d: { files?: JobFile[]; error?: string }) => {
+    const supabase = createClient()
+    fetchActiveTrades(supabase).then((list) => setTrades(list.map((t) => t.name)))
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError(null)
+
+    fetch(`/api/files/list?job_id=${jobId}`)
+      .then((response) => response.json())
+      .then((data: { files?: JobFile[]; error?: string }) => {
         if (!active) return
-        if (d.error) throw new Error(d.error)
-        setFiles(d.files ?? [])
+        if (data.error) throw new Error(data.error)
+        setFiles(data.files ?? [])
       })
-      .catch((e: Error) => { if (active) setError(e.message) })
-      .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
+      .catch((err: Error) => {
+        if (active) setError(err.message)
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
   }, [jobId])
 
-  const grouped = CATEGORIES.reduce<Record<Category, JobFile[]>>(
-    (acc, cat) => { acc[cat] = files.filter(f => f.category === cat); return acc },
-    { plans: [], photos: [], admin: [], other: [] }
-  )
+  const allCategories = useMemo(() => {
+    const dynamicCategories = Array.from(new Set(files.map((file) => file.category))).filter(
+      (category) => !CATEGORIES.includes(category as KnownCategory)
+    )
+    return [...CATEGORIES, ...dynamicCategories]
+  }, [files])
+
+  const grouped = useMemo(() => {
+    return allCategories.reduce<Record<string, JobFile[]>>((acc, category) => {
+      acc[category] = files.filter((file) => file.category === category)
+      return acc
+    }, {})
+  }, [allCategories, files])
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-semibold text-gray-900">Files</h2>
-        <button type="button" onClick={() => setShowUpload(true)}
-          className="bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-blue-700">
+    <div style={{ padding: '14px' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          marginBottom: '14px',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div>
+          <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text)' }}>Files</div>
+          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
+            Job files and visibility settings.
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowUpload(true)}
+          style={{
+            background: 'var(--text)',
+            color: 'var(--bg)',
+            fontSize: '14px',
+            fontWeight: 600,
+            padding: '10px 14px',
+            borderRadius: '12px',
+            border: 'none',
+            cursor: 'pointer',
+          }}
+        >
           + Upload
         </button>
       </div>
-      {loading && <p className="text-sm text-gray-400 py-8 text-center">Loading...</p>}
-      {!loading && error && <p className="text-sm text-red-500 py-4">{error}</p>}
-      {!loading && !error && files.length === 0 && <p className="text-sm text-gray-400 py-8 text-center">No files yet.</p>}
-      {!loading && !error && files.length > 0 && CATEGORIES.map(cat => grouped[cat].length > 0 && (
-        <div key={cat} className="mb-5">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
-            {cat.charAt(0).toUpperCase() + cat.slice(1)}
-          </h3>
-          <div className="bg-white rounded-xl border border-gray-200 px-4 divide-y divide-gray-100">
-            {grouped[cat].map(f => <FileRow key={f.id} file={f} />)}
-          </div>
+
+      {loading && (
+        <div
+          style={{
+            ...sectionCardStyle(),
+            padding: '24px',
+            textAlign: 'center',
+            color: 'var(--text-muted)',
+            fontSize: '14px',
+          }}
+        >
+          Loading files...
         </div>
-      ))}
-      {showUpload && <UploadModal jobId={jobId} onClose={() => setShowUpload(false)} onUploaded={f => setFiles(p => [f, ...p])} />}
+      )}
+
+      {!loading && error && (
+        <div
+          style={{
+            ...sectionCardStyle(),
+            padding: '16px',
+            color: 'var(--red)',
+            background: 'var(--red-bg)',
+            border: '1px solid var(--red)',
+            fontSize: '14px',
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && files.length === 0 && (
+        <div
+          style={{
+            ...sectionCardStyle(),
+            padding: '24px',
+            textAlign: 'center',
+            color: 'var(--text-muted)',
+            fontSize: '14px',
+          }}
+        >
+          No files yet.
+        </div>
+      )}
+
+      {!loading &&
+        !error &&
+        files.length > 0 &&
+        allCategories.map((category) => {
+          const categoryFiles = grouped[category] || []
+          if (!categoryFiles.length) return null
+
+          return (
+            <div key={category} style={{ marginBottom: '14px' }}>
+              <div
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '.05em',
+                  color: 'var(--text-muted)',
+                  marginBottom: '6px',
+                  fontFamily: 'ui-monospace,monospace',
+                }}
+              >
+                {getCategoryLabel(category)}
+              </div>
+
+              <div style={sectionCardStyle()}>
+                {categoryFiles.map((file) => (
+                  <FileRow
+                    key={file.id}
+                    file={file}
+                    onUpdated={(updated) =>
+                      setFiles((previous) =>
+                        previous.map((f) => (f.id === updated.id ? updated : f))
+                      )
+                    }
+                    trades={trades}
+                  />
+                ))}
+              </div>
+            </div>
+          )
+        })}
+
+      {showUpload && (
+        <UploadModal
+          jobId={jobId}
+          onClose={() => setShowUpload(false)}
+          onUploaded={(uploadedFiles) =>
+            setFiles((previous) => [...uploadedFiles, ...previous])
+          }
+          trades={trades}
+        />
+      )}
     </div>
   )
 }

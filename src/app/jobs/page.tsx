@@ -11,7 +11,20 @@ export default async function JobsPage() {
   if (!user) redirect('/login')
 
   const { data: jobs } = await supabase
-    .from('jobs').select(`id,client_name,address,color,current_stage,created_at,sqft,contract_type,profiles!jobs_pm_id_fkey(full_name),issues(id,severity,resolved),sub_schedule(id,status),procurement_items(id,status,order_by_date)`)
+    .from('jobs').select(`
+  id,
+  job_name,
+  project_address,
+  color,
+  current_stage,
+  created_at,
+  sqft,
+  contract_type,
+  profiles!jobs_pm_id_fkey(full_name),
+  issues(id,severity,resolved),
+  sub_schedule(id,status),
+  procurement_items(id,status,order_by_date)
+`)
     .eq('is_active',true).order('created_at',{ascending:false})
 
   const jobList = jobs || []
@@ -38,11 +51,11 @@ export default async function JobsPage() {
                   <div style={{width:'3px',height:'44px',borderRadius:'2px',background:job.color||'#3B8BD4',flexShrink:0,marginTop:'2px'}} />
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'3px'}}>
-                      <div style={{fontSize:'13px',fontWeight:'700'}}>{job.client_name}</div>
+                      <div style={{fontSize:'13px',fontWeight:'700'}}>{job.job_name}</div>
                       <span style={{fontSize:'10px',fontWeight:'600',padding:'1px 6px',borderRadius:'8px',background:'var(--blue-bg)',color:'var(--blue)',border:'1px solid var(--blue)',fontFamily:'ui-monospace,monospace'}}>{STAGE_LABELS[job.current_stage]}</span>
                       {critIssues.length>0 && <span style={{fontSize:'10px',fontWeight:'600',color:'var(--red)'}}>⚠ {critIssues.length} critical</span>}
                     </div>
-                    <div style={{fontSize:'11px',color:'var(--text-muted)',fontFamily:'ui-monospace,monospace',marginBottom:'6px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{job.address}{job.sqft ? ` · ${job.sqft} sqft` : ''}</div>
+                    <div style={{fontSize:'11px',color:'var(--text-muted)',fontFamily:'ui-monospace,monospace',marginBottom:'6px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{job.project_address}{job.sqft ? ` · ${job.sqft} sqft` : ''}</div>
                     <div style={{height:'3px',background:'var(--border)',borderRadius:'2px',overflow:'hidden',marginBottom:'5px'}}>
                       <div style={{height:'100%',width:`${pct}%`,background:job.color||'var(--blue)',borderRadius:'2px'}} />
                     </div>

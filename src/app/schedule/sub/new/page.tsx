@@ -1,124 +1,706 @@
 'use client'
-import { useState, useEffect, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
+
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/utils/supabase/client'
+import { fetchActiveTrades, type TradeOption } from '@/lib/trades'
+import { fetchActiveCostCodes, type CostCodeOption } from '@/lib/cost-codes'
+import {
+  normalizeFromStartAndEnd,
+  normalizeFromStartAndDuration,
+  applyWeekendInference,
+  formatDateToISO,
+  parseDateLocal,
+} from '@/lib/schedule/labor'
 
-const TRADES = ['Concrete/Foundation','Framing','Rough Electrical','Rough Plumbing','HVAC','Insulation','Drywall','Finish Electrical','Finish Plumbing','Tile','Flooring','Cabinetry','Trim/Millwork','Paint','Exterior/Roofing','Landscaping','Demo','Other']
+const STATUS_OPTIONS = [
+  { value: 'tentative', label: 'Tentative' },
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'complete', label: 'Complete' },
+  { value: 'cancelled', label: 'Cancelled' },
+]
 
-function NewSubForm() {
+function pageCardStyle() {
+  return {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '12px',
+    padding: '16px',
+  }
+}
+
+function labelStyle() {
+  return {
+    display: 'block',
+    fontSize: '11px',
+    fontWeight: 700,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '.04em',
+    color: 'var(--text-muted)',
+    marginBottom: '6px',
+    fontFamily: 'ui-monospace,monospace',
+  }
+}
+
+function inputStyle() {
+  return {
+    width: '100%',
+    padding: '12px',
+    border: '1px solid var(--border)',
+    borderRadius: '10px',
+    fontSize: '16px',
+    background: 'var(--surface)',
+    color: 'var(--text)',
+    boxSizing: 'border-box' as const,
+    outline: 'none',
+  }
+}
+
+export default function NewSubSchedulePage() {
+  const supabase = createClient()
   const router = useRouter()
-  const sp = useSearchParams()
-  const [jobs, setJobs] = useState<any[]>([])
+
+  const [jobId, setJobId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [trades, setTrades] = useState<TradeOption[]>([])
+  const [loadingTrades, setLoadingTrades] = useState(true)
+  const [tradeSearch, setTradeSearch] = useState('')
+  const [tradeOpen, setTradeOpen] = useState(false)
+  const tradeRef = useRef<HTMLDivElement>(null)
+  const [costCodes, setCostCodes] = useState<CostCodeOption[]>([])
+  const [loadingCostCodes, setLoadingCostCodes] = useState(true)
+  const [costCodeSearch, setCostCodeSearch] = useState('')
+  const [costCodeOpen, setCostCodeOpen] = useState(false)
+  const costCodeRef = useRef<HTMLDivElement>(null)
+
   const [form, setForm] = useState({
-    job_id: sp.get('job')||'', trade: 'Framing', sub_name: '', trade_contact: '',
-    status: 'tentative', start_date: '', end_date: '', notes: '',
-    depends_on: 'contract_signed', is_critical_path: false,
+    trade: '',
+    sub_name: '',
+    start_date: '',
+    end_date: '',
+    notes: '',
+    is_released: false,
+    release_date: '',
+    notification_window_days: 14,
+    cost_code: '',
+    status: 'tentative',
+    duration_working_days: 1,
+    include_saturday: false,
+    include_sunday: false,
+    buffer_working_days: 0,
   })
 
   useEffect(() => {
-    createClient().from('jobs').select('id,client_name,color').eq('is_active',true).order('created_at',{ascending:false}).then(({data}) => setJobs(data||[]))
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    setJobId(params.get('jobId'))
   }, [])
 
-  function set(k: string, v: any) { setForm(f => ({...f,[k]:v})) }
+  useEffect(() => {
+    async function loadTrades() {
+      setLoadingTrades(true)
+      const data = await fetchActiveTrades(supabase)
+      setTrades(data)
+      setLoadingTrades(false)
+    }
+    loadTrades()
+  }, [supabase])
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!form.job_id || !form.trade) { setError('Job and trade are required'); return }
-    setLoading(true); setError('')
-    const { error: err } = await createClient().from('sub_schedule').insert({
-      job_id: form.job_id, trade: form.trade, sub_name: form.sub_name||null,
-      trade_contact: form.trade_contact||null, status: form.status,
-      start_date: form.start_date||null, end_date: form.end_date||null,
-      notes: form.notes||null, depends_on: form.depends_on,
-      is_critical_path: form.is_critical_path,
-    })
-    setLoading(false)
-    if (err) { setError(err.message); return }
-    router.push('/schedule')
+  useEffect(() => {
+    async function loadCostCodes() {
+      setLoadingCostCodes(true)
+      const data = await fetchActiveCostCodes(supabase)
+      setCostCodes(data)
+      setLoadingCostCodes(false)
+    }
+    loadCostCodes()
+  }, [supabase])
+
+  const inp = useMemo(() => inputStyle(), [])
+
+  const displayTrades = useMemo(() => {
+    const q = tradeSearch.trim().toLowerCase()
+    if (!q) return trades
+    return trades.filter((t) => t.name.toLowerCase().includes(q))
+  }, [trades, tradeSearch])
+
+  const displayCostCodes = useMemo(() => {
+    const q = costCodeSearch.trim().toLowerCase()
+    if (!q) return costCodes
+    return costCodes.filter(
+      (c) => c.cost_code.toLowerCase().includes(q) || c.title.toLowerCase().includes(q)
+    )
+  }, [costCodes, costCodeSearch])
+
+  function handleChange(key: string, value: string | number | boolean) {
+    setForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  const inp = { width:'100%', padding:'8px 10px', border:'1px solid var(--border)', borderRadius:'7px', fontSize:'13px', fontFamily:'ui-monospace,monospace', boxSizing:'border-box' as const, outline:'none', background:'var(--surface)', color:'var(--text)' }
-  const lbl = { display:'block' as const, fontSize:'11px', color:'var(--text-muted)', marginBottom:'4px', fontFamily:'ui-monospace,monospace', textTransform:'uppercase' as const, letterSpacing:'.04em' }
+  function handleStartDateChange(value: string) {
+    if (!value) {
+      setForm((prev) => ({ ...prev, start_date: '', end_date: '', duration_working_days: 1 }))
+      return
+    }
+    const startDate = parseDateLocal(value)
+    setForm((prev) => {
+      const flags = applyWeekendInference(startDate, {
+        includeSaturday: prev.include_saturday,
+        includeSunday: prev.include_sunday,
+      })
+      const hasValidEnd = !!prev.end_date && parseDateLocal(prev.end_date) >= startDate
+      if (hasValidEnd) {
+        const { durationWorkingDays } = normalizeFromStartAndEnd(
+          startDate,
+          parseDateLocal(prev.end_date),
+          flags
+        )
+        return {
+          ...prev,
+          start_date: value,
+          duration_working_days: durationWorkingDays,
+          include_saturday: flags.includeSaturday,
+          include_sunday: flags.includeSunday,
+        }
+      }
+      return {
+        ...prev,
+        start_date: value,
+        end_date: value,
+        duration_working_days: 1,
+        include_saturday: flags.includeSaturday,
+        include_sunday: flags.includeSunday,
+      }
+    })
+  }
+
+  function handleEndDateChange(value: string) {
+    if (!value || !form.start_date) {
+      setForm((prev) => ({ ...prev, end_date: value }))
+      return
+    }
+    const startDate = parseDateLocal(form.start_date)
+    const endDate = parseDateLocal(value)
+    if (endDate < startDate) {
+      setForm((prev) => ({ ...prev, end_date: value }))
+      return
+    }
+    const flags = { includeSaturday: form.include_saturday, includeSunday: form.include_sunday }
+    const { durationWorkingDays } = normalizeFromStartAndEnd(startDate, endDate, flags)
+    setForm((prev) => ({ ...prev, end_date: value, duration_working_days: durationWorkingDays }))
+  }
+
+  function handleDurationChange(value: string) {
+    const duration = parseInt(value, 10)
+    if (!Number.isFinite(duration) || duration < 1) return
+    setForm((prev) => {
+      if (!prev.start_date) return { ...prev, duration_working_days: duration }
+      const startDate = parseDateLocal(prev.start_date)
+      const flags = { includeSaturday: prev.include_saturday, includeSunday: prev.include_sunday }
+      const { endDate } = normalizeFromStartAndDuration(startDate, duration, flags)
+      return {
+        ...prev,
+        duration_working_days: duration,
+        end_date: formatDateToISO(endDate),
+      }
+    })
+  }
+
+  function handleWeekendFlagChange(flag: 'include_saturday' | 'include_sunday', value: boolean) {
+    setForm((prev) => {
+      if (!prev.start_date) return { ...prev, [flag]: value }
+      const startDate = parseDateLocal(prev.start_date)
+      const newFlags = {
+        includeSaturday: flag === 'include_saturday' ? value : prev.include_saturday,
+        includeSunday: flag === 'include_sunday' ? value : prev.include_sunday,
+      }
+      const { endDate } = normalizeFromStartAndDuration(startDate, prev.duration_working_days, newFlags)
+      return {
+        ...prev,
+        [flag]: value,
+        end_date: formatDateToISO(endDate),
+      }
+    })
+  }
+
+  function handleReleaseToggle(checked: boolean) {
+    setForm((prev) => ({
+      ...prev,
+      is_released: checked,
+      release_date:
+        checked && !prev.release_date
+          ? new Date().toISOString().slice(0, 10)
+          : checked
+            ? prev.release_date
+            : '',
+      status:
+        checked && prev.status === 'tentative'
+          ? 'scheduled'
+          : prev.status,
+    }))
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+
+    if (!jobId) {
+      alert('Missing jobId in URL')
+      return
+    }
+
+    if (!form.trade.trim()) {
+      alert('Trade is required')
+      return
+    }
+
+    setLoading(true)
+
+    const payload = {
+      job_id: jobId,
+      trade: form.trade.trim(),
+      sub_name: form.sub_name.trim() || null,
+      start_date: form.start_date || null,
+      end_date: form.end_date || null,
+      notes: form.notes.trim() || null,
+      is_released: form.is_released,
+      release_date: form.is_released ? form.release_date || null : null,
+      notification_window_days: Number.isFinite(form.notification_window_days)
+        ? form.notification_window_days
+        : 14,
+      cost_code: form.cost_code.trim() || null,
+      status: form.status,
+      confirmed_date:
+        form.status === 'confirmed' ? new Date().toISOString() : null,
+      duration_working_days: form.duration_working_days,
+      buffer_working_days: form.buffer_working_days,
+      include_saturday: form.include_saturday,
+      include_sunday: form.include_sunday,
+    }
+
+    const { error } = await supabase.from('sub_schedule').insert([payload])
+
+    setLoading(false)
+
+    if (error) {
+      console.error('SUB SCHEDULE INSERT ERROR:', error)
+      alert(error.message)
+      return
+    }
+
+    router.push(`/jobs/${jobId}`)
+  }
 
   return (
-    <div style={{fontFamily:'system-ui,-apple-system,sans-serif',background:'var(--bg)',minHeight:'100vh',color:'var(--text)'}}>
-      <div style={{background:'var(--surface)',borderBottom:'1px solid var(--border)',padding:'12px 16px',display:'flex',alignItems:'center',gap:'10px',position:'sticky',top:0,zIndex:100}}>
-        <a href="/schedule" style={{fontSize:'13px',color:'var(--blue)',textDecoration:'none'}}>← Schedule</a>
-        <div style={{fontSize:'15px',fontWeight:'700'}}>Add Sub Schedule Entry</div>
-      </div>
-      <div style={{padding:'16px',maxWidth:'560px',margin:'0 auto'}}>
-        <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'10px',padding:'20px'}}>
-          <form onSubmit={handleSubmit}>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'12px'}}>
-              <div style={{gridColumn:'1 / -1'}}>
-                <label style={lbl}>Job *</label>
-                <select style={inp} value={form.job_id} onChange={e=>set('job_id',e.target.value)} required>
-                  <option value="">Select a job...</option>
-                  {jobs.map(j=><option key={j.id} value={j.id}>{j.client_name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={lbl}>Trade *</label>
-                <select style={inp} value={form.trade} onChange={e=>set('trade',e.target.value)}>
-                  {TRADES.map(t=><option key={t}>{t}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={lbl}>Status</label>
-                <select style={inp} value={form.status} onChange={e=>set('status',e.target.value)}>
-                  {['tentative','confirmed','on_site','complete','cancelled'].map(s=><option key={s}>{s}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={lbl}>Sub / Company</label>
-                <input style={inp} value={form.sub_name} onChange={e=>set('sub_name',e.target.value)} placeholder="ABC Framing Co" />
-              </div>
-              <div>
-                <label style={lbl}>Contact</label>
-                <input style={inp} value={form.trade_contact} onChange={e=>set('trade_contact',e.target.value)} placeholder="John Smith" />
-              </div>
-              <div>
-                <label style={lbl}>Start Date</label>
-                <input style={inp} type="date" value={form.start_date} onChange={e=>set('start_date',e.target.value)} />
-              </div>
-              <div>
-                <label style={lbl}>End Date</label>
-                <input style={inp} type="date" value={form.end_date} onChange={e=>set('end_date',e.target.value)} />
-              </div>
-              <div>
-                <label style={lbl}>Depends On</label>
-                <select style={inp} value={form.depends_on} onChange={e=>set('depends_on',e.target.value)}>
-                  <option value="contract_signed">Contract Signed</option>
-                  <option value="selection_locked">Selection Locked</option>
-                  <option value="none">None</option>
-                </select>
-              </div>
-              <div style={{display:'flex',alignItems:'center',gap:'8px',paddingTop:'20px'}}>
-                <input type="checkbox" id="crit" checked={form.is_critical_path} onChange={e=>set('is_critical_path',e.target.checked)} style={{width:'15px',height:'15px',accentColor:'var(--blue)'}} />
-                <label htmlFor="crit" style={{fontSize:'12px',cursor:'pointer'}}>Critical Path</label>
-              </div>
-              <div style={{gridColumn:'1 / -1'}}>
-                <label style={lbl}>Notes</label>
-                <textarea style={{...inp,minHeight:'70px',resize:'vertical'}} value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Access requirements, special conditions..." />
-              </div>
-            </div>
-            {error && <div style={{fontSize:'12px',color:'var(--red)',marginBottom:'12px'}}>{error}</div>}
-            <div style={{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
-              <a href="/schedule" style={{padding:'8px 16px',border:'1px solid var(--border)',borderRadius:'7px',fontSize:'13px',fontWeight:'600',textDecoration:'none',color:'var(--text-muted)'}}>Cancel</a>
-              <button type="submit" disabled={loading} style={{padding:'8px 16px',background:loading?'var(--border)':'var(--text)',color:'var(--bg)',border:'none',borderRadius:'7px',fontSize:'13px',fontWeight:'600',cursor:loading?'not-allowed':'pointer'}}>
-                {loading?'Saving...':'Add Sub Entry'}
-              </button>
-            </div>
-          </form>
+    <main
+      style={{
+        padding: '16px',
+        maxWidth: '760px',
+        margin: '0 auto',
+        background: 'var(--bg)',
+        minHeight: '100vh',
+        color: 'var(--text)',
+      }}
+    >
+      <div style={{ marginBottom: '14px' }}>
+        <button
+          type="button"
+          onClick={() => {
+            if (jobId) router.push(`/jobs/${jobId}`)
+            else router.push('/schedule')
+          }}
+          style={{
+            border: 'none',
+            background: 'none',
+            padding: 0,
+            color: 'var(--blue)',
+            fontSize: '14px',
+            cursor: 'pointer',
+            marginBottom: '8px',
+          }}
+        >
+          ← Back
+        </button>
+
+        <h1 style={{ margin: 0, fontSize: '28px' }}>Create Schedule Item</h1>
+        <div
+          style={{
+            marginTop: '4px',
+            fontSize: '14px',
+            color: 'var(--text-muted)',
+          }}
+        >
+          Add a planned work item for a trade and assigned company
         </div>
       </div>
-    </div>
-  )
-}
 
-export default function NewSubPage() {
-  return <Suspense fallback={null}><NewSubForm /></Suspense>
+      {!jobId && (
+        <div
+          style={{
+            ...pageCardStyle(),
+            marginBottom: '12px',
+            border: '1px solid rgba(217, 119, 6, 0.35)',
+            background: 'rgba(217, 119, 6, 0.08)',
+            color: 'var(--amber)',
+          }}
+        >
+          Missing <code>jobId</code> in URL. Open this page from a job or from the
+          schedule page with a selected job.
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '12px' }}>
+        <div style={pageCardStyle()}>
+          <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>
+            Work Details
+          </div>
+
+          <div style={{ display: 'grid', gap: '12px' }}>
+            <div>
+              <label style={labelStyle()}>Trade</label>
+              <div ref={tradeRef} style={{ position: 'relative' }}>
+                <input
+                  value={tradeSearch}
+                  onChange={(e) => {
+                    setTradeSearch(e.target.value)
+                    setTradeOpen(true)
+                  }}
+                  onFocus={() => setTradeOpen(true)}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      setTradeOpen(false)
+                      setTradeSearch(form.trade)
+                    }, 150)
+                  }}
+                  placeholder={loadingTrades ? 'Loading trades...' : 'Search trades...'}
+                  disabled={loadingTrades}
+                  autoComplete="off"
+                  style={{ ...inp, opacity: loadingTrades ? 0.7 : 1 }}
+                />
+                {tradeOpen && displayTrades.length > 0 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      zIndex: 50,
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '10px',
+                      marginTop: '4px',
+                      maxHeight: '220px',
+                      overflowY: 'auto',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                    }}
+                  >
+                    {displayTrades.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          handleChange('trade', t.name)
+                          setTradeSearch(t.name)
+                          setTradeOpen(false)
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          textAlign: 'left',
+                          border: 'none',
+                          borderBottom: '1px solid var(--border)',
+                          background: form.trade === t.name ? 'var(--blue-bg)' : 'transparent',
+                          color: form.trade === t.name ? 'var(--blue)' : 'var(--text)',
+                          cursor: 'pointer',
+                          fontSize: '15px',
+                        }}
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label style={labelStyle()}>Assigned Company</label>
+              <input
+                placeholder="Company name"
+                value={form.sub_name}
+                onChange={(e) => handleChange('sub_name', e.target.value)}
+                style={inp}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={labelStyle()}>Start Date</label>
+                <input
+                  type="date"
+                  value={form.start_date}
+                  onChange={(e) => handleStartDateChange(e.target.value)}
+                  style={inp}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle()}>End Date</label>
+                <input
+                  type="date"
+                  value={form.end_date}
+                  onChange={(e) => handleEndDateChange(e.target.value)}
+                  style={inp}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={labelStyle()}>Duration (Working Days)</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={form.duration_working_days}
+                  onChange={(e) => handleDurationChange(e.target.value)}
+                  style={inp}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle()}>Buffer (Working Days)</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  value={form.buffer_working_days}
+                  onChange={(e) => handleChange('buffer_working_days', Number(e.target.value || 0))}
+                  style={inp}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '14px',
+                  color: 'var(--text)',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.include_saturday}
+                  onChange={(e) => handleWeekendFlagChange('include_saturday', e.target.checked)}
+                  style={{ width: '16px', height: '16px' }}
+                />
+                Include Saturdays
+              </label>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '14px',
+                  color: 'var(--text)',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.include_sunday}
+                  onChange={(e) => handleWeekendFlagChange('include_sunday', e.target.checked)}
+                  style={{ width: '16px', height: '16px' }}
+                />
+                Include Sundays
+              </label>
+            </div>
+
+            <div>
+              <label style={labelStyle()}>Status</label>
+              <select
+                value={form.status}
+                onChange={(e) => handleChange('status', e.target.value)}
+                style={inp}
+              >
+                {STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label style={labelStyle()}>Notes</label>
+              <textarea
+                placeholder="Scope notes, coordination notes, access constraints..."
+                value={form.notes}
+                onChange={(e) => handleChange('notes', e.target.value)}
+                rows={4}
+                style={{ ...inp, minHeight: '110px', resize: 'vertical' }}
+              />
+            </div>
+
+            <div>
+              <label style={labelStyle()}>Cost Code</label>
+              <div ref={costCodeRef} style={{ position: 'relative' }}>
+                <input
+                  value={costCodeSearch}
+                  onChange={(e) => { setCostCodeSearch(e.target.value); setCostCodeOpen(true) }}
+                  onFocus={() => setCostCodeOpen(true)}
+                  onBlur={() => { setTimeout(() => { setCostCodeOpen(false); setCostCodeSearch(form.cost_code || '') }, 150) }}
+                  placeholder={loadingCostCodes ? 'Loading cost codes...' : 'Search cost codes...'}
+                  disabled={loadingCostCodes}
+                  autoComplete="off"
+                  style={{ ...inp, opacity: loadingCostCodes ? 0.7 : 1 }}
+                />
+                {costCodeOpen && displayCostCodes.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                    background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px',
+                    marginTop: '4px', maxHeight: '220px', overflowY: 'auto',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}>
+                    {displayCostCodes.map((c) => (
+                      <button key={c.id} type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          handleChange('cost_code', c.cost_code)
+                          setCostCodeSearch(c.title ? `${c.cost_code} — ${c.title}` : c.cost_code)
+                          setCostCodeOpen(false)
+                        }}
+                        style={{ width: '100%', padding: '10px 12px', textAlign: 'left', border: 'none',
+                          borderBottom: '1px solid var(--border)',
+                          background: form.cost_code === c.cost_code ? 'var(--blue-bg)' : 'transparent',
+                          color: form.cost_code === c.cost_code ? 'var(--blue)' : 'var(--text)',
+                          cursor: 'pointer', fontSize: '15px' }}>
+                        {c.title ? `${c.cost_code} — ${c.title}` : c.cost_code}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={pageCardStyle()}>
+          <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>
+            Release Settings
+          </div>
+
+          <div style={{ display: 'grid', gap: '12px' }}>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '15px',
+                color: 'var(--text)',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={form.is_released}
+                onChange={(e) => handleReleaseToggle(e.target.checked)}
+                style={{ width: '18px', height: '18px' }}
+              />
+              Released to company
+            </label>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={labelStyle()}>Release Date</label>
+                <input
+                  type="date"
+                  value={form.release_date}
+                  onChange={(e) => handleChange('release_date', e.target.value)}
+                  disabled={!form.is_released}
+                  style={{
+                    ...inp,
+                    opacity: form.is_released ? 1 : 0.6,
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle()}>Notification Window (Days)</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={form.notification_window_days}
+                  onChange={(e) =>
+                    handleChange(
+                      'notification_window_days',
+                      Number(e.target.value || 0)
+                    )
+                  }
+                  style={inp}
+                />
+              </div>
+            </div>
+
+            <div
+              style={{
+                fontSize: '13px',
+                color: 'var(--text-muted)',
+                lineHeight: 1.5,
+              }}
+            >
+              Release controls whether this item is considered ready for company-facing
+              coordination. Draft items can exist internally before they are released.
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            gap: '10px',
+            justifyContent: 'flex-end',
+            flexWrap: 'wrap',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              if (jobId) router.push(`/jobs/${jobId}`)
+              else router.push('/schedule')
+            }}
+            style={{
+              padding: '12px 16px',
+              borderRadius: '10px',
+              border: '1px solid var(--border)',
+              background: 'var(--surface)',
+              color: 'var(--text)',
+              fontWeight: 600,
+              fontSize: '14px',
+              cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            disabled={loading || !jobId}
+            style={{
+              padding: '12px 16px',
+              borderRadius: '10px',
+              border: 'none',
+              background: 'var(--text)',
+              color: 'var(--bg)',
+              fontWeight: 600,
+              fontSize: '14px',
+              cursor: loading || !jobId ? 'not-allowed' : 'pointer',
+              opacity: loading || !jobId ? 0.6 : 1,
+            }}
+          >
+            {loading ? 'Saving...' : 'Create Schedule Item'}
+          </button>
+        </div>
+      </form>
+    </main>
+  )
 }
