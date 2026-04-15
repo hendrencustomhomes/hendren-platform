@@ -206,7 +206,7 @@ export default async function JobDetailPage({
       .order('created_at', { ascending: false }),
     supabase
       .from('takeoff_items')
-      .select('id, trade, description, cost_code, qty, unit, notes, sort_order, created_at')
+      .select('id, trade, description, cost_code, qty, unit, unit_cost, extended_cost, notes, sort_order, created_at')
       .eq('job_id', id)
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: false }),

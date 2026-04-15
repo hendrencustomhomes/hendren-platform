@@ -1660,6 +1660,7 @@ export default function JobTabs(props: JobTabProps) {
           takeoffItems={props.takeoffItems ?? []}
           trades={props.trades ?? []}
           costCodes={props.costCodes ?? []}
+          scopeItems={props.scopeItems ?? []}
         />
       )}
 
