@@ -13,16 +13,6 @@ export type JobFile = {
   uploaded_by: string
 }
 
-export type CompanyCompliance = {
-  has_coi_gl: boolean
-  coi_gl_expired: boolean
-  has_coi_wc: boolean
-  coi_wc_expired: boolean
-  has_w9: boolean
-  has_general_contract: boolean
-  is_compliant: boolean
-}
-
 export type JobDetailIssue = {
   id: string
   severity: string
@@ -96,22 +86,6 @@ export type ScheduleItemDependency = {
   updated_at: string
 }
 
-export type CompanyType = 'sub' | 'vendor' | 'both'
-
-export type CompanyRow = {
-  id: string
-  name: string
-  type: 'sub' | 'vendor' | 'both'
-  email: string | null
-  phone: string | null
-  is_active: boolean
-  coi_gl_expires: string | null
-  coi_wc_expires: string | null
-  w9_received_at: string | null
-  general_contract_signed_at: string | null
-  created_at: string | null
-}
-
 function daysBetween(a: string, b: string): number {
   return Math.round(
     (new Date(b).getTime() - new Date(a).getTime()) / 86400000
@@ -171,21 +145,6 @@ export async function getJobFiles(
 
   if (error) throw error
   return (data ?? []) as JobFile[]
-}
-
-export async function getCompanyCompliance(
-  supabase: SupabaseClient,
-  companyId: string
-): Promise<CompanyCompliance> {
-  const { data, error } = await supabase.rpc('get_company_compliance', {
-    p_company_id: companyId,
-  })
-
-  if (error || !data) {
-    throw error ?? new Error('Company compliance not found')
-  }
-
-  return data as CompanyCompliance
 }
 
 export async function getJobWithDetails(
@@ -257,35 +216,3 @@ export async function getScheduleDependencies(
   return (data ?? []) as ScheduleItemDependency[]
 }
 
-export async function getCompanies(
-  supabase: SupabaseClient,
-  type?: CompanyType
-): Promise<CompanyRow[]> {
-  const query = supabase
-    .from('companies')
-    .select(
-      `
-      id,
-      name,
-      type,
-      email,
-      phone,
-      is_active,
-      coi_gl_expires,
-      coi_wc_expires,
-      w9_received_at,
-      general_contract_signed_at,
-      created_at
-    `
-    )
-    .order('name')
-
-  if (type && type !== 'both') {
-    query.eq('type', type)
-  }
-
-  const { data, error } = await query
-
-  if (error) throw error
-  return (data ?? []) as CompanyRow[]
-}
