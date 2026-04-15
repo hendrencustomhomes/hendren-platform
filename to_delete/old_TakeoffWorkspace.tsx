@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import TakeoffScopeContext from './TakeoffScopeContext'
-import TakeoffSearchSelect, { type SearchSelectOption } from './TakeoffSearchSelect'
 import type {
   CostCodeOption,
   ScopeContextItem,
@@ -104,33 +103,7 @@ function rowSummary(item: TakeoffItem) {
   return parts.join(' · ') || 'Incomplete row'
 }
 
-function enterBlur(e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault()
-    ;(e.target as HTMLInputElement | HTMLTextAreaElement).blur()
-  }
-}
-
-function buildTradeOptions(trades: TradeOption[]): SearchSelectOption[] {
-  return trades
-    .map((trade) => ({
-      value: trade.name,
-      label: trade.name,
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label))
-}
-
-function buildCostCodeOptions(costCodes: CostCodeOption[]): SearchSelectOption[] {
-  return costCodes
-    .map((item) => ({
-      value: item.cost_code,
-      label: buildCostCodeLabel(item),
-      keywords: [item.cost_code, item.title],
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label))
-}
-
-export default function TakeoffWorkspaceNext({
+export default function TakeoffWorkspace({
   items,
   trades,
   costCodes,
@@ -156,16 +129,10 @@ export default function TakeoffWorkspaceNext({
   }, [])
 
   const sortedItems = useMemo(() => sortTakeoffItems(items), [items])
-  const tradeOptions = useMemo(() => buildTradeOptions(trades), [trades])
 
   const filteredDraftCostCodes = useMemo(
     () => filterCostCodesForTrade(costCodes, trades, draft.trade),
     [costCodes, trades, draft.trade]
-  )
-
-  const filteredDraftCostCodeOptions = useMemo(
-    () => buildCostCodeOptions(filteredDraftCostCodes),
-    [filteredDraftCostCodes]
   )
 
   const totalCost = useMemo(
@@ -256,30 +223,41 @@ export default function TakeoffWorkspaceNext({
         >
           <div>
             <div style={fieldLabelStyle()}>Trade</div>
-            <TakeoffSearchSelect
+            <select
               value={draft.trade}
-              options={tradeOptions}
-              onChange={(nextTrade) => {
+              onChange={(e) => {
+                const nextTrade = e.target.value
                 setDraft((current) => ({
                   ...current,
                   trade: nextTrade,
-                  cost_code: nextTrade === current.trade ? current.cost_code : '',
+                  cost_code: '',
                 }))
               }}
-              placeholder="Search trade"
-            />
+              style={inp}
+            >
+              <option value="">Select trade</option>
+              {trades.map((item) => (
+                <option key={item.id} value={item.name}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
             <div style={fieldLabelStyle()}>Cost Code</div>
-            <TakeoffSearchSelect
+            <select
               value={draft.cost_code}
-              options={filteredDraftCostCodeOptions}
-              onChange={(nextCostCode) => setDraft((current) => ({ ...current, cost_code: nextCostCode }))}
-              placeholder="Search cost code"
-              allowEmpty
-              emptyLabel="None"
-            />
+              onChange={(e) => setDraft((current) => ({ ...current, cost_code: e.target.value }))}
+              style={inp}
+            >
+              <option value="">None</option>
+              {filteredDraftCostCodes.map((item) => (
+                <option key={item.id} value={item.cost_code}>
+                  {buildCostCodeLabel(item)}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -325,12 +303,6 @@ export default function TakeoffWorkspaceNext({
             <input
               value={draft.notes}
               onChange={(e) => setDraft((current) => ({ ...current, notes: e.target.value }))}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  onAddItem()
-                }
-              }}
               style={inp}
             />
           </div>
@@ -366,7 +338,7 @@ export default function TakeoffWorkspaceNext({
         ) : isMobile ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {sortedItems.map((item) => {
-              const rowCostCodeOptions = buildCostCodeOptions(filterCostCodesForTrade(costCodes, trades, item.trade))
+              const rowCostCodes = filterCostCodesForTrade(costCodes, trades, item.trade)
               const isOpen = expandedRowId === item.id
               const extendedCost = getExtendedCost(item)
               return (
@@ -408,35 +380,42 @@ export default function TakeoffWorkspaceNext({
                     <div style={{ display: 'grid', gap: '8px', marginTop: '10px' }}>
                       <div>
                         <div style={fieldLabelStyle()}>Trade</div>
-                        <TakeoffSearchSelect
-                          value={item.trade}
+                        <select
+                          defaultValue={item.trade}
                           disabled={editingId === item.id}
-                          options={tradeOptions}
-                          onChange={(nextTrade) => {
-                            if (nextTrade && nextTrade !== item.trade) {
-                              onUpdateItem(item.id, { trade: nextTrade, cost_code: null })
-                            }
+                          style={inp}
+                          onBlur={(e) => {
+                            const next = e.target.value.trim()
+                            if (next && next !== item.trade) onUpdateItem(item.id, { trade: next, cost_code: null })
                           }}
-                          placeholder="Search trade"
-                        />
+                        >
+                          <option value="">Select trade</option>
+                          {trades.map((tradeItem) => (
+                            <option key={tradeItem.id} value={tradeItem.name}>
+                              {tradeItem.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       <div>
                         <div style={fieldLabelStyle()}>Cost Code</div>
-                        <TakeoffSearchSelect
-                          value={item.cost_code ?? ''}
+                        <select
+                          defaultValue={item.cost_code ?? ''}
                           disabled={editingId === item.id}
-                          options={rowCostCodeOptions}
-                          onChange={(nextCostCode) => {
-                            const normalized = nextCostCode || null
-                            if (normalized !== (item.cost_code ?? null)) {
-                              onUpdateItem(item.id, { cost_code: normalized })
-                            }
+                          style={inp}
+                          onBlur={(e) => {
+                            const next = e.target.value || null
+                            if (next !== (item.cost_code ?? null)) onUpdateItem(item.id, { cost_code: next })
                           }}
-                          placeholder="Search cost code"
-                          allowEmpty
-                          emptyLabel="None"
-                        />
+                        >
+                          <option value="">None</option>
+                          {rowCostCodes.map((codeItem) => (
+                            <option key={codeItem.id} value={codeItem.cost_code}>
+                              {buildCostCodeLabel(codeItem)}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       <div>
@@ -449,7 +428,6 @@ export default function TakeoffWorkspaceNext({
                             const next = e.target.value.trim()
                             if (next && next !== item.description) onUpdateItem(item.id, { description: next })
                           }}
-                          onKeyDown={enterBlur}
                         />
                       </div>
 
@@ -467,7 +445,6 @@ export default function TakeoffWorkspaceNext({
                                 onUpdateItem(item.id, { qty: next })
                               }
                             }}
-                            onKeyDown={enterBlur}
                           />
                         </div>
                         <div>
@@ -480,7 +457,6 @@ export default function TakeoffWorkspaceNext({
                               const next = e.target.value.trim() || null
                               if (next !== (item.unit ?? null)) onUpdateItem(item.id, { unit: next })
                             }}
-                            onKeyDown={enterBlur}
                           />
                         </div>
                       </div>
@@ -506,7 +482,6 @@ export default function TakeoffWorkspaceNext({
                                 onUpdateItem(item.id, { unit_cost: parsed })
                               }
                             }}
-                            onKeyDown={enterBlur}
                           />
                         </div>
                         <div>
@@ -554,7 +529,7 @@ export default function TakeoffWorkspaceNext({
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {sortedItems.map((item) => {
-                  const rowCostCodeOptions = buildCostCodeOptions(filterCostCodesForTrade(costCodes, trades, item.trade))
+                  const rowCostCodes = filterCostCodesForTrade(costCodes, trades, item.trade)
                   const extendedCost = getExtendedCost(item)
                   const isIncomplete = hasIncompleteTakeoffCore(item)
                   return (
@@ -570,32 +545,39 @@ export default function TakeoffWorkspaceNext({
                         background: isIncomplete ? 'var(--amber-bg, #fff7ed)' : 'var(--bg)',
                       }}
                     >
-                      <TakeoffSearchSelect
-                        value={item.trade}
+                      <select
+                        defaultValue={item.trade}
                         disabled={editingId === item.id}
-                        options={tradeOptions}
-                        onChange={(nextTrade) => {
-                          if (nextTrade && nextTrade !== item.trade) {
-                            onUpdateItem(item.id, { trade: nextTrade, cost_code: null })
-                          }
+                        style={inp}
+                        onBlur={(e) => {
+                          const next = e.target.value.trim()
+                          if (next && next !== item.trade) onUpdateItem(item.id, { trade: next, cost_code: null })
                         }}
-                        placeholder="Search trade"
-                      />
+                      >
+                        <option value="">Select trade</option>
+                        {trades.map((tradeItem) => (
+                          <option key={tradeItem.id} value={tradeItem.name}>
+                            {tradeItem.name}
+                          </option>
+                        ))}
+                      </select>
 
-                      <TakeoffSearchSelect
-                        value={item.cost_code ?? ''}
+                      <select
+                        defaultValue={item.cost_code ?? ''}
                         disabled={editingId === item.id}
-                        options={rowCostCodeOptions}
-                        onChange={(nextCostCode) => {
-                          const normalized = nextCostCode || null
-                          if (normalized !== (item.cost_code ?? null)) {
-                            onUpdateItem(item.id, { cost_code: normalized })
-                          }
+                        style={inp}
+                        onBlur={(e) => {
+                          const next = e.target.value || null
+                          if (next !== (item.cost_code ?? null)) onUpdateItem(item.id, { cost_code: next })
                         }}
-                        placeholder="Search cost code"
-                        allowEmpty
-                        emptyLabel="None"
-                      />
+                      >
+                        <option value="">None</option>
+                        {rowCostCodes.map((codeItem) => (
+                          <option key={codeItem.id} value={codeItem.cost_code}>
+                            {buildCostCodeLabel(codeItem)}
+                          </option>
+                        ))}
+                      </select>
 
                       <input
                         defaultValue={item.description}
@@ -605,7 +587,6 @@ export default function TakeoffWorkspaceNext({
                           const next = e.target.value.trim()
                           if (next && next !== item.description) onUpdateItem(item.id, { description: next })
                         }}
-                        onKeyDown={enterBlur}
                       />
 
                       <input
@@ -619,7 +600,6 @@ export default function TakeoffWorkspaceNext({
                             onUpdateItem(item.id, { qty: next })
                           }
                         }}
-                        onKeyDown={enterBlur}
                       />
 
                       <input
@@ -630,7 +610,6 @@ export default function TakeoffWorkspaceNext({
                           const next = e.target.value.trim() || null
                           if (next !== (item.unit ?? null)) onUpdateItem(item.id, { unit: next })
                         }}
-                        onKeyDown={enterBlur}
                       />
 
                       <input
@@ -651,7 +630,6 @@ export default function TakeoffWorkspaceNext({
                             onUpdateItem(item.id, { unit_cost: parsed })
                           }
                         }}
-                        onKeyDown={enterBlur}
                       />
 
                       <div style={{ ...inp, display: 'flex', alignItems: 'center' }}>{formatCurrency(extendedCost)}</div>
@@ -664,7 +642,6 @@ export default function TakeoffWorkspaceNext({
                           const next = e.target.value.trim() || null
                           if (next !== (item.notes ?? null)) onUpdateItem(item.id, { notes: next })
                         }}
-                        onKeyDown={enterBlur}
                       />
                     </div>
                   )
