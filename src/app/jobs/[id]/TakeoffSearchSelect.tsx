@@ -16,6 +16,7 @@ type TakeoffSearchSelectProps = {
   disabled?: boolean
   allowEmpty?: boolean
   emptyLabel?: string
+  selectOnFocus?: boolean
 }
 
 function inputStyle() {
@@ -60,6 +61,7 @@ export default function TakeoffSearchSelect({
   disabled = false,
   allowEmpty = false,
   emptyLabel = 'None',
+  selectOnFocus = true,
 }: TakeoffSearchSelectProps) {
   const inp = inputStyle()
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -109,6 +111,18 @@ export default function TakeoffSearchSelect({
     setHighlightedIndex(0)
   }
 
+  function handleFocus(target: HTMLInputElement) {
+    if (blurTimer.current) clearTimeout(blurTimer.current)
+    setOpen(true)
+    setHighlightedIndex(0)
+
+    if (selectOnFocus) {
+      requestAnimationFrame(() => {
+        target.select()
+      })
+    }
+  }
+
   function handleBlur() {
     blurTimer.current = setTimeout(() => {
       setOpen(false)
@@ -146,10 +160,11 @@ export default function TakeoffSearchSelect({
         disabled={disabled}
         placeholder={placeholder}
         style={inp}
-        onFocus={() => {
-          if (blurTimer.current) clearTimeout(blurTimer.current)
-          setOpen(true)
-          setHighlightedIndex(0)
+        onFocus={(e) => handleFocus(e.currentTarget)}
+        onClick={(e) => {
+          if (selectOnFocus && document.activeElement === e.currentTarget) {
+            e.currentTarget.select()
+          }
         }}
         onChange={(e) => {
           setQuery(e.target.value)
@@ -161,7 +176,9 @@ export default function TakeoffSearchSelect({
           if (e.key === 'ArrowDown') {
             e.preventDefault()
             setOpen(true)
-            setHighlightedIndex((current) => Math.min(current + 1, Math.max(filteredOptions.length - 1, 0)))
+            setHighlightedIndex((current) =>
+              Math.min(current + 1, Math.max(filteredOptions.length - 1, 0))
+            )
           }
 
           if (e.key === 'ArrowUp') {
