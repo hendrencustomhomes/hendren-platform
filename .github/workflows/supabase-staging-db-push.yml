@@ -36,7 +36,7 @@ jobs:
           version: latest
 
       - name: Link staging project
-        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
 
       - name: Show pending migrations
         run: supabase db push --dry-run
