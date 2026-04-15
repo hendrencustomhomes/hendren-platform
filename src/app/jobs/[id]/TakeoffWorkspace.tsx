@@ -1,6 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import TakeoffFilterBar from './TakeoffFilterBar'
+import TakeoffOverviewStrip from './TakeoffOverviewStrip'
+import TakeoffMobileReviewList from './TakeoffMobileReviewList'
+import TakeoffDesktopReviewTable from './TakeoffDesktopReviewTable'
 import TakeoffScopeContext from './TakeoffScopeContext'
 import TakeoffSearchSelect, { type SearchSelectOption } from './TakeoffSearchSelect'
 import type {
@@ -14,10 +18,10 @@ import {
   buildCostCodeLabel,
   filterCostCodesForTrade,
   formatCurrency,
-  getExtendedCost,
   hasIncompleteTakeoffCore,
   sortTakeoffItems,
 } from './takeoffUtils'
+import { buildGroupedItems, matchesTextFilter } from './takeoffReviewUtils'
 
 type TakeoffDraft = {
   trade: string
@@ -87,28 +91,12 @@ function fieldLabelStyle() {
   }
 }
 
-function desktopColumns() {
-  return '1fr 1.35fr 2fr .7fr .8fr .9fr .9fr 1.4fr'
-}
-
 function getDraftExtendedCost(draft: TakeoffDraft) {
   const qty = Number(draft.qty)
   const unitCost = Number(draft.unit_cost)
   if (!Number.isFinite(qty) || !Number.isFinite(unitCost)) return null
   if (qty <= 0 || unitCost < 0) return null
   return qty * unitCost
-}
-
-function rowSummary(item: TakeoffItem) {
-  const parts = [item.trade, item.cost_code, item.unit ? `${item.qty ?? '—'} ${item.unit}` : null].filter(Boolean)
-  return parts.join(' · ') || 'Incomplete row'
-}
-
-function enterBlur(e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault()
-    ;(e.target as HTMLInputElement | HTMLTextAreaElement).blur()
-  }
 }
 
 function buildTradeOptions(trades: TradeOption[]): SearchSelectOption[] {
@@ -130,7 +118,7 @@ function buildCostCodeOptions(costCodes: CostCodeOption[]): SearchSelectOption[]
     .sort((a, b) => a.label.localeCompare(b.label))
 }
 
-export default function TakeoffWorkspaceNext({
+export default function TakeoffWorkspace({
   items,
   trades,
   costCodes,
@@ -146,6 +134,10 @@ export default function TakeoffWorkspaceNext({
   const inp = inputStyle()
   const [isMobile, setIsMobile] = useState(false)
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
+  const [textFilter, setTextFilter] = useState('')
+  const [tradeFilter, setTradeFilter] = useState('')
+  const [costCodeFilter, setCostCodeFilter] = useState('')
+  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false)
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 767px)')
@@ -168,27 +160,48 @@ export default function TakeoffWorkspaceNext({
     [filteredDraftCostCodes]
   )
 
-  const totalCost = useMemo(
-    () => sortedItems.reduce((sum, item) => sum + (getExtendedCost(item) ?? 0), 0),
-    [sortedItems]
+  const availableFilterCostCodes = useMemo(
+    () => buildCostCodeOptions(filterCostCodesForTrade(costCodes, trades, tradeFilter)),
+    [costCodes, trades, tradeFilter]
   )
 
-  const incompleteCount = useMemo(
-    () => sortedItems.filter(hasIncompleteTakeoffCore).length,
-    [sortedItems]
-  )
+  useEffect(() => {
+    if (
+      costCodeFilter &&
+      !availableFilterCostCodes.some((option) => option.value === costCodeFilter)
+    ) {
+      setCostCodeFilter('')
+    }
+  }, [availableFilterCostCodes, costCodeFilter])
 
-  const tradeSubtotals = useMemo(() => {
-    const subtotals = new Map<string, number>()
-    sortedItems.forEach((item) => {
-      const key = item.trade?.trim() || 'Unassigned'
-      const current = subtotals.get(key) ?? 0
-      subtotals.set(key, current + (getExtendedCost(item) ?? 0))
+  const filteredItems = useMemo(() => {
+    return sortedItems.filter((item) => {
+      if (!matchesTextFilter(item, textFilter)) return false
+      if (tradeFilter && item.trade !== tradeFilter) return false
+      if (costCodeFilter && item.cost_code !== costCodeFilter) return false
+      if (showIncompleteOnly && !hasIncompleteTakeoffCore(item)) return false
+      return true
     })
-    return Array.from(subtotals.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-  }, [sortedItems])
+  }, [sortedItems, textFilter, tradeFilter, costCodeFilter, showIncompleteOnly])
+
+  const groupedFilteredItems = useMemo(() => buildGroupedItems(filteredItems), [filteredItems])
+
+  const tradeSubtotals = useMemo(
+    () =>
+      groupedFilteredItems.map(([tradeName, groupItems]) => [
+        tradeName,
+        groupItems.reduce((sum, item) => {
+          const qty = Number(item.qty ?? 0)
+          const unitCost = Number(item.unit_cost ?? 0)
+          if (!Number.isFinite(qty) || !Number.isFinite(unitCost)) return sum
+          return sum + qty * unitCost
+        }, 0),
+      ] as [string, number]),
+    [groupedFilteredItems]
+  )
 
   const draftExtendedCost = getDraftExtendedCost(draft)
+  const hasActiveFilters = Boolean(textFilter.trim() || tradeFilter || costCodeFilter || showIncompleteOnly)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -209,39 +222,33 @@ export default function TakeoffWorkspaceNext({
 
       <TakeoffScopeContext scopeItems={scopeItems} />
 
-      <div style={cardStyle()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
-          <div style={sectionLabelStyle()}>Takeoff Overview</div>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{sortedItems.length} rows</div>
-            <div style={{ fontSize: '12px', color: incompleteCount ? 'var(--amber)' : 'var(--text-muted)' }}>
-              {incompleteCount} incomplete
-            </div>
-            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text)' }}>
-              {formatCurrency(totalCost)} total
-            </div>
-          </div>
-        </div>
+      <TakeoffOverviewStrip
+        allItems={sortedItems}
+        visibleItems={filteredItems}
+        tradeSubtotals={tradeSubtotals}
+        hasActiveFilters={hasActiveFilters}
+      />
 
-        {!!tradeSubtotals.length && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '8px' }}>
-            {tradeSubtotals.map(([tradeName, subtotal]) => (
-              <div
-                key={tradeName}
-                style={{
-                  background: 'var(--bg)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  padding: '8px 10px',
-                }}
-              >
-                <div style={fieldLabelStyle()}>{tradeName}</div>
-                <div style={{ fontSize: '13px', fontWeight: '700' }}>{formatCurrency(subtotal)}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <TakeoffFilterBar
+        isMobile={isMobile}
+        textFilter={textFilter}
+        onTextFilterChange={setTextFilter}
+        tradeFilter={tradeFilter}
+        onTradeFilterChange={setTradeFilter}
+        tradeOptions={tradeOptions}
+        costCodeFilter={costCodeFilter}
+        onCostCodeFilterChange={setCostCodeFilter}
+        costCodeOptions={availableFilterCostCodes}
+        showIncompleteOnly={showIncompleteOnly}
+        onShowIncompleteOnlyChange={setShowIncompleteOnly}
+        hasActiveFilters={hasActiveFilters}
+        onReset={() => {
+          setTextFilter('')
+          setTradeFilter('')
+          setCostCodeFilter('')
+          setShowIncompleteOnly(false)
+        }}
+      />
 
       <div style={cardStyle()}>
         <div style={{ ...sectionLabelStyle(), marginBottom: '10px' }}>Add Takeoff Item</div>
@@ -275,7 +282,9 @@ export default function TakeoffWorkspaceNext({
             <TakeoffSearchSelect
               value={draft.cost_code}
               options={filteredDraftCostCodeOptions}
-              onChange={(nextCostCode) => setDraft((current) => ({ ...current, cost_code: nextCostCode }))}
+              onChange={(nextCostCode) =>
+                setDraft((current) => ({ ...current, cost_code: nextCostCode }))
+              }
               placeholder="Search cost code"
               allowEmpty
               emptyLabel="None"
@@ -354,7 +363,8 @@ export default function TakeoffWorkspaceNext({
         </div>
 
         <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
-          Draft extended cost: <strong style={{ color: 'var(--text)' }}>{formatCurrency(draftExtendedCost)}</strong>
+          Draft extended cost:{' '}
+          <strong style={{ color: 'var(--text)' }}>{formatCurrency(draftExtendedCost)}</strong>
         </div>
       </div>
 
@@ -363,315 +373,30 @@ export default function TakeoffWorkspaceNext({
 
         {!sortedItems.length ? (
           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No takeoff items yet.</div>
+        ) : !filteredItems.length ? (
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            No takeoff items match the current filters.
+          </div>
         ) : isMobile ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {sortedItems.map((item) => {
-              const rowCostCodeOptions = buildCostCodeOptions(filterCostCodesForTrade(costCodes, trades, item.trade))
-              const isOpen = expandedRowId === item.id
-              const extendedCost = getExtendedCost(item)
-              return (
-                <div
-                  key={item.id}
-                  style={{
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    padding: '10px',
-                    background: 'var(--bg)',
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setExpandedRowId(isOpen ? null : item.id)}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                      width: '100%',
-                      background: 'none',
-                      border: 'none',
-                      padding: 0,
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      color: 'inherit',
-                    }}
-                  >
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: '12px', fontWeight: '700', marginBottom: '2px' }}>
-                        {item.description || 'Untitled Item'}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{rowSummary(item)}</div>
-                    </div>
-                    <div style={{ fontSize: '11px', fontWeight: '700' }}>{formatCurrency(extendedCost)}</div>
-                  </button>
-
-                  {isOpen && (
-                    <div style={{ display: 'grid', gap: '8px', marginTop: '10px' }}>
-                      <div>
-                        <div style={fieldLabelStyle()}>Trade</div>
-                        <TakeoffSearchSelect
-                          value={item.trade}
-                          disabled={editingId === item.id}
-                          options={tradeOptions}
-                          onChange={(nextTrade) => {
-                            if (nextTrade && nextTrade !== item.trade) {
-                              onUpdateItem(item.id, { trade: nextTrade, cost_code: null })
-                            }
-                          }}
-                          placeholder="Search trade"
-                        />
-                      </div>
-
-                      <div>
-                        <div style={fieldLabelStyle()}>Cost Code</div>
-                        <TakeoffSearchSelect
-                          value={item.cost_code ?? ''}
-                          disabled={editingId === item.id}
-                          options={rowCostCodeOptions}
-                          onChange={(nextCostCode) => {
-                            const normalized = nextCostCode || null
-                            if (normalized !== (item.cost_code ?? null)) {
-                              onUpdateItem(item.id, { cost_code: normalized })
-                            }
-                          }}
-                          placeholder="Search cost code"
-                          allowEmpty
-                          emptyLabel="None"
-                        />
-                      </div>
-
-                      <div>
-                        <div style={fieldLabelStyle()}>Description</div>
-                        <input
-                          defaultValue={item.description}
-                          disabled={editingId === item.id}
-                          style={inp}
-                          onBlur={(e) => {
-                            const next = e.target.value.trim()
-                            if (next && next !== item.description) onUpdateItem(item.id, { description: next })
-                          }}
-                          onKeyDown={enterBlur}
-                        />
-                      </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <div>
-                          <div style={fieldLabelStyle()}>Qty</div>
-                          <input
-                            defaultValue={item.qty ?? 1}
-                            disabled={editingId === item.id}
-                            inputMode="decimal"
-                            style={inp}
-                            onBlur={(e) => {
-                              const next = Number(e.target.value)
-                              if (Number.isFinite(next) && next > 0 && next !== (item.qty ?? 1)) {
-                                onUpdateItem(item.id, { qty: next })
-                              }
-                            }}
-                            onKeyDown={enterBlur}
-                          />
-                        </div>
-                        <div>
-                          <div style={fieldLabelStyle()}>Unit</div>
-                          <input
-                            defaultValue={item.unit ?? ''}
-                            disabled={editingId === item.id}
-                            style={inp}
-                            onBlur={(e) => {
-                              const next = e.target.value.trim() || null
-                              if (next !== (item.unit ?? null)) onUpdateItem(item.id, { unit: next })
-                            }}
-                            onKeyDown={enterBlur}
-                          />
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <div>
-                          <div style={fieldLabelStyle()}>Unit Cost</div>
-                          <input
-                            defaultValue={item.unit_cost ?? ''}
-                            disabled={editingId === item.id}
-                            inputMode="decimal"
-                            style={inp}
-                            onBlur={(e) => {
-                              const next = e.target.value.trim()
-                              const parsed = next ? Number(next) : null
-                              if (next === '') {
-                                if (item.unit_cost !== null && item.unit_cost !== undefined) {
-                                  onUpdateItem(item.id, { unit_cost: null })
-                                }
-                                return
-                              }
-                              if (parsed !== null && Number.isFinite(parsed) && parsed !== item.unit_cost) {
-                                onUpdateItem(item.id, { unit_cost: parsed })
-                              }
-                            }}
-                            onKeyDown={enterBlur}
-                          />
-                        </div>
-                        <div>
-                          <div style={fieldLabelStyle()}>Extended Cost</div>
-                          <div style={{ ...inp, display: 'flex', alignItems: 'center' }}>{formatCurrency(extendedCost)}</div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <div style={fieldLabelStyle()}>Notes</div>
-                        <textarea
-                          defaultValue={item.notes ?? ''}
-                          disabled={editingId === item.id}
-                          rows={2}
-                          style={{ ...inp, resize: 'vertical' as const }}
-                          onBlur={(e) => {
-                            const next = e.target.value.trim() || null
-                            if (next !== (item.notes ?? null)) onUpdateItem(item.id, { notes: next })
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+          <TakeoffMobileReviewList
+            groupedItems={groupedFilteredItems}
+            costCodes={costCodes}
+            trades={trades}
+            tradeOptions={tradeOptions}
+            editingId={editingId}
+            expandedRowId={expandedRowId}
+            onExpandedRowIdChange={setExpandedRowId}
+            onUpdateItem={onUpdateItem}
+          />
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <div style={{ minWidth: '1120px' }}>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: desktopColumns(),
-                  gap: '8px',
-                  padding: '0 0 8px',
-                  borderBottom: '1px solid var(--border)',
-                  marginBottom: '8px',
-                }}
-              >
-                {['Trade', 'Cost Code', 'Description', 'Qty', 'Unit', 'Unit Cost', 'Ext Cost', 'Notes'].map((label) => (
-                  <div key={label} style={fieldLabelStyle()}>{label}</div>
-                ))}
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {sortedItems.map((item) => {
-                  const rowCostCodeOptions = buildCostCodeOptions(filterCostCodesForTrade(costCodes, trades, item.trade))
-                  const extendedCost = getExtendedCost(item)
-                  const isIncomplete = hasIncompleteTakeoffCore(item)
-                  return (
-                    <div
-                      key={item.id}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: desktopColumns(),
-                        gap: '8px',
-                        padding: '8px',
-                        border: '1px solid var(--border)',
-                        borderRadius: '8px',
-                        background: isIncomplete ? 'var(--amber-bg, #fff7ed)' : 'var(--bg)',
-                      }}
-                    >
-                      <TakeoffSearchSelect
-                        value={item.trade}
-                        disabled={editingId === item.id}
-                        options={tradeOptions}
-                        onChange={(nextTrade) => {
-                          if (nextTrade && nextTrade !== item.trade) {
-                            onUpdateItem(item.id, { trade: nextTrade, cost_code: null })
-                          }
-                        }}
-                        placeholder="Search trade"
-                      />
-
-                      <TakeoffSearchSelect
-                        value={item.cost_code ?? ''}
-                        disabled={editingId === item.id}
-                        options={rowCostCodeOptions}
-                        onChange={(nextCostCode) => {
-                          const normalized = nextCostCode || null
-                          if (normalized !== (item.cost_code ?? null)) {
-                            onUpdateItem(item.id, { cost_code: normalized })
-                          }
-                        }}
-                        placeholder="Search cost code"
-                        allowEmpty
-                        emptyLabel="None"
-                      />
-
-                      <input
-                        defaultValue={item.description}
-                        disabled={editingId === item.id}
-                        style={inp}
-                        onBlur={(e) => {
-                          const next = e.target.value.trim()
-                          if (next && next !== item.description) onUpdateItem(item.id, { description: next })
-                        }}
-                        onKeyDown={enterBlur}
-                      />
-
-                      <input
-                        defaultValue={item.qty ?? 1}
-                        disabled={editingId === item.id}
-                        inputMode="decimal"
-                        style={inp}
-                        onBlur={(e) => {
-                          const next = Number(e.target.value)
-                          if (Number.isFinite(next) && next > 0 && next !== (item.qty ?? 1)) {
-                            onUpdateItem(item.id, { qty: next })
-                          }
-                        }}
-                        onKeyDown={enterBlur}
-                      />
-
-                      <input
-                        defaultValue={item.unit ?? ''}
-                        disabled={editingId === item.id}
-                        style={inp}
-                        onBlur={(e) => {
-                          const next = e.target.value.trim() || null
-                          if (next !== (item.unit ?? null)) onUpdateItem(item.id, { unit: next })
-                        }}
-                        onKeyDown={enterBlur}
-                      />
-
-                      <input
-                        defaultValue={item.unit_cost ?? ''}
-                        disabled={editingId === item.id}
-                        inputMode="decimal"
-                        style={inp}
-                        onBlur={(e) => {
-                          const next = e.target.value.trim()
-                          const parsed = next ? Number(next) : null
-                          if (next === '') {
-                            if (item.unit_cost !== null && item.unit_cost !== undefined) {
-                              onUpdateItem(item.id, { unit_cost: null })
-                            }
-                            return
-                          }
-                          if (parsed !== null && Number.isFinite(parsed) && parsed !== item.unit_cost) {
-                            onUpdateItem(item.id, { unit_cost: parsed })
-                          }
-                        }}
-                        onKeyDown={enterBlur}
-                      />
-
-                      <div style={{ ...inp, display: 'flex', alignItems: 'center' }}>{formatCurrency(extendedCost)}</div>
-
-                      <input
-                        defaultValue={item.notes ?? ''}
-                        disabled={editingId === item.id}
-                        style={inp}
-                        onBlur={(e) => {
-                          const next = e.target.value.trim() || null
-                          if (next !== (item.notes ?? null)) onUpdateItem(item.id, { notes: next })
-                        }}
-                        onKeyDown={enterBlur}
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
+          <TakeoffDesktopReviewTable
+            groupedItems={groupedFilteredItems}
+            costCodes={costCodes}
+            trades={trades}
+            tradeOptions={tradeOptions}
+            editingId={editingId}
+            onUpdateItem={onUpdateItem}
+          />
         )}
       </div>
     </div>
