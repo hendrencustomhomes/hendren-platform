@@ -1,0 +1,7 @@
+project_id = "hendren-platform"
+
+# Remote project selection is handled explicitly in GitHub Actions via:
+# supabase link --project-ref "$SUPABASE_PROJECT_ID"
+#
+# This repo currently uses migrations in supabase/migrations as the database
+# source of truth for staged deployment.
