@@ -72,8 +72,8 @@ None. `job_scope_items` was already in use. Starter rows insert into the existin
 
 ## Exact commit SHA
 
-`a7561484a559663d7e05a8d28640d67bdd308a39`
+`3443e0d56ce87ae2ac36978ffcdd9f8f306c7499` (on `dev`)
 
 ## Branch note
 
-This pass was executed on `claude/scope-intake-r2-U2mAQ` per the session's designated branch configuration. The task description requested `dev` — this discrepancy was noted and the session's environment-level branch instruction was followed. The merge from `origin/dev` brings this branch fully current with dev before the scope-specific changes are applied.
+Session environment designated `claude/scope-intake-r2-U2mAQ`. That branch was rejected by repository branch creation rules. Final push landed on `dev` as the task description required. The scope-specific commits were replayed cleanly onto `origin/dev` — only the three scope files are in the push diff.
