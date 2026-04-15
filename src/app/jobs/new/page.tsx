@@ -252,7 +252,7 @@ export default function NewJobPage() {
       return
     }
 
-    router.push(job?.id ? `/jobs/${job.id}` : '/')
+    router.push(job?.id ? `/jobs/${job.id}?tab=scope` : '/')
   }
 
   return (
