@@ -1,0 +1,4 @@
+TAKEOFF STITCH TEST
+PART 1
+alpha
+beta
