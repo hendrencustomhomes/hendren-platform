@@ -1,9 +1,21 @@
 import type { ScopeContextItem } from './takeoffTypes'
-import { getScopeContextItems } from './takeoffUtils'
 
 type TakeoffScopeContextProps = {
   scopeItems: ScopeContextItem[]
 }
+
+const VISIBLE_SCOPE_TYPES = new Set([
+  'job_type',
+  'construction_type',
+  'bedroom_count',
+  'bathroom_count',
+  'stories',
+  'garage_stalls',
+  'basement_type',
+  'outdoor_living',
+  'special_features',
+  'scope_summary',
+])
 
 function cardStyle() {
   return {
@@ -14,15 +26,33 @@ function cardStyle() {
   }
 }
 
+function normalizeConstructionType(value: string) {
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) return '—'
+  if (normalized.includes('ground')) return 'New Construction'
+  if (normalized.includes('addition')) return 'Addition'
+  return 'Remodel'
+}
+
 function renderScopeValue(item: ScopeContextItem) {
+  if (item.scope_type === 'construction_type' && item.value_text?.trim()) {
+    return normalizeConstructionType(item.value_text)
+  }
+
   if (item.value_text?.trim()) return item.value_text
   if (item.value_number !== null && item.value_number !== undefined) return String(item.value_number)
   if (item.notes?.trim()) return item.notes
   return '—'
 }
 
+function getVisibleScopeItems(scopeItems: ScopeContextItem[]) {
+  return [...scopeItems]
+    .filter((item) => item.scope_type && VISIBLE_SCOPE_TYPES.has(item.scope_type))
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+}
+
 export default function TakeoffScopeContext({ scopeItems }: TakeoffScopeContextProps) {
-  const contextItems = getScopeContextItems(scopeItems)
+  const contextItems = getVisibleScopeItems(scopeItems)
 
   if (!contextItems.length) return null
 
