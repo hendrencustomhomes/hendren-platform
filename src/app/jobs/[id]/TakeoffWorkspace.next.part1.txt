@@ -1,0 +1,289 @@
+'use client'
+
+import { useEffect, useMemo, useRef, useState } from 'react'
+import TakeoffOverviewStrip from './TakeoffOverviewStrip'
+import TakeoffMobileReviewList from './TakeoffMobileReviewList'
+import TakeoffDesktopReviewTable from './TakeoffDesktopReviewTable'
+import TakeoffScopeContext from './TakeoffScopeContext'
+import TakeoffSearchSelect, { type SearchSelectOption } from './TakeoffSearchSelect'
+import type {
+  CostCodeOption,
+  ScopeContextItem,
+  TakeoffEditablePatch,
+  TakeoffItem,
+  TradeOption,
+} from './takeoffTypes'
+import {
+  buildCostCodeLabel,
+  filterCostCodesForTrade,
+  formatCurrency,
+  hasIncompleteTakeoffCore,
+  sortTakeoffItems,
+} from './takeoffUtils'
+import { buildGroupedItems, matchesTextFilter } from './takeoffReviewUtils'
+
+type TakeoffDraft = {
+  trade: string
+  description: string
+  cost_code: string
+  qty: string
+  unit: string
+  unit_cost: string
+  notes: string
+}
+
+type WorkspacePanel = 'add' | 'filters' | 'overview' | 'scope' | null
+
+type TakeoffWorkspaceProps = {
+  items: TakeoffItem[]
+  trades: TradeOption[]
+  costCodes: CostCodeOption[]
+  scopeItems: ScopeContextItem[]
+  draft: TakeoffDraft
+  setDraft: React.Dispatch<React.SetStateAction<TakeoffDraft>>
+  saving: boolean
+  editingId: string | null
+  error: string | null
+  onAddItem: () => void
+  onUpdateItem: (id: string, patch: TakeoffEditablePatch) => void
+}
+
+function cardStyle() {
+  return {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '10px',
+    padding: '12px 14px',
+  }
+}
+
+function inputStyle() {
+  return {
+    width: '100%',
+    padding: '9px 10px',
+    border: '1px solid var(--border)',
+    borderRadius: '7px',
+    fontSize: '16px',
+    fontFamily: 'ui-monospace,monospace',
+    boxSizing: 'border-box' as const,
+    outline: 'none',
+    background: 'var(--surface)',
+    color: 'var(--text)',
+  }
+}
+
+function fieldLabelStyle() {
+  return {
+    fontSize: '10px',
+    color: 'var(--text-muted)',
+    marginBottom: '4px',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '.04em',
+    fontFamily: 'ui-monospace,monospace',
+  }
+}
+
+function actionButtonStyle(active: boolean) {
+  return {
+    padding: '8px 12px',
+    borderRadius: '8px',
+    border: `1px solid ${active ? 'var(--text)' : 'var(--border)'}`,
+    background: active ? 'var(--text)' : 'var(--surface)',
+    color: active ? 'var(--bg)' : 'var(--text)',
+    fontSize: '12px',
+    fontWeight: '700',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap' as const,
+  }
+}
+
+function toolbarBadgeStyle() {
+  return {
+    fontSize: '11px',
+    color: 'var(--text-muted)',
+    fontFamily: 'ui-monospace,monospace',
+  }
+}
+
+function overlayStyle(isMobile: boolean, align: 'left' | 'right') {
+  return {
+    position: 'absolute' as const,
+    top: 'calc(100% + 8px)',
+    left: isMobile || align === 'left' ? 0 : 'auto',
+    right: isMobile || align === 'right' ? 0 : 'auto',
+    width: isMobile ? '100%' : align === 'left' ? 'min(100%, 560px)' : 'min(100%, 860px)',
+    zIndex: 50,
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '10px',
+    boxShadow: '0 16px 40px rgba(0,0,0,0.16)',
+    padding: '12px 14px',
+  }
+}
+
+function sectionLabelStyle() {
+  return {
+    fontSize: '11px',
+    fontWeight: '700',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '.05em',
+  }
+}
+
+function getDraftExtendedCost(draft: TakeoffDraft) {
+  const qty = Number(draft.qty)
+  const unitCost = Number(draft.unit_cost)
+  if (!Number.isFinite(qty) || !Number.isFinite(unitCost)) return null
+  if (qty <= 0 || unitCost < 0) return null
+  return qty * unitCost
+}
+
+function buildTradeOptions(trades: TradeOption[]): SearchSelectOption[] {
+  return trades
+    .map((trade) => ({
+      value: trade.name,
+      label: trade.name,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
+function buildCostCodeOptions(costCodes: CostCodeOption[]): SearchSelectOption[] {
+  return costCodes
+    .map((item) => ({
+      value: item.cost_code,
+      label: buildCostCodeLabel(item),
+      keywords: [item.cost_code, item.title],
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
+export default function TakeoffWorkspace({
+  items,
+  trades,
+  costCodes,
+  scopeItems,
+  draft,
+  setDraft,
+  saving,
+  editingId,
+  error,
+  onAddItem,
+  onUpdateItem,
+}: TakeoffWorkspaceProps) {
+  const inp = inputStyle()
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const addButtonRef = useRef<HTMLButtonElement | null>(null)
+  const filterButtonRef = useRef<HTMLButtonElement | null>(null)
+  const overviewButtonRef = useRef<HTMLButtonElement | null>(null)
+  const scopeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const addPanelRef = useRef<HTMLDivElement | null>(null)
+  const filterPanelRef = useRef<HTMLDivElement | null>(null)
+  const overviewPanelRef = useRef<HTMLDivElement | null>(null)
+  const scopePanelRef = useRef<HTMLDivElement | null>(null)
+
+  const [isMobile, setIsMobile] = useState(false)
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
+  const [openPanel, setOpenPanel] = useState<WorkspacePanel>(null)
+  const [textFilter, setTextFilter] = useState('')
+  const [tradeFilter, setTradeFilter] = useState('')
+  const [costCodeFilter, setCostCodeFilter] = useState('')
+  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false)
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)')
+    const apply = () => setIsMobile(media.matches)
+    apply()
+    media.addEventListener('change', apply)
+    return () => media.removeEventListener('change', apply)
+  }, [])
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent | TouchEvent) {
+      const target = event.target as Node | null
+      if (!target) return
+
+      const refs = [
+        addButtonRef,
+        filterButtonRef,
+        overviewButtonRef,
+        scopeButtonRef,
+        addPanelRef,
+        filterPanelRef,
+        overviewPanelRef,
+        scopePanelRef,
+      ]
+
+      const clickedInsideSecondaryUi = refs.some((ref) => ref.current?.contains(target))
+      if (!clickedInsideSecondaryUi) {
+        setOpenPanel(null)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('touchstart', handlePointerDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('touchstart', handlePointerDown)
+    }
+  }, [])
+
+  const sortedItems = useMemo(() => sortTakeoffItems(items), [items])
+  const tradeOptions = useMemo(() => buildTradeOptions(trades), [trades])
+
+  const filteredDraftCostCodes = useMemo(
+    () => filterCostCodesForTrade(costCodes, trades, draft.trade),
+    [costCodes, trades, draft.trade]
+  )
+
+  const filteredDraftCostCodeOptions = useMemo(
+    () => buildCostCodeOptions(filteredDraftCostCodes),
+    [filteredDraftCostCodes]
+  )
+
+  const availableFilterCostCodes = useMemo(
+    () => buildCostCodeOptions(filterCostCodesForTrade(costCodes, trades, tradeFilter)),
+    [costCodes, trades, tradeFilter]
+  )
+
+  useEffect(() => {
+    if (
+      costCodeFilter &&
+      !availableFilterCostCodes.some((option) => option.value === costCodeFilter)
+    ) {
+      setCostCodeFilter('')
+    }
+  }, [availableFilterCostCodes, costCodeFilter])
+
+  const filteredItems = useMemo(() => {
+    return sortedItems.filter((item) => {
+      if (!matchesTextFilter(item, textFilter)) return false
+      if (tradeFilter && item.trade !== tradeFilter) return false
+      if (costCodeFilter && item.cost_code !== costCodeFilter) return false
+      if (showIncompleteOnly && !hasIncompleteTakeoffCore(item)) return false
+      return true
+    })
+  }, [sortedItems, textFilter, tradeFilter, costCodeFilter, showIncompleteOnly])
+
+  const groupedFilteredItems = useMemo(() => buildGroupedItems(filteredItems), [filteredItems])
+
+  const tradeSubtotals = useMemo(
+    () =>
+      groupedFilteredItems.map(([tradeName, groupItems]) => [
+        tradeName,
+        groupItems.reduce((sum, item) => {
+          const qty = Number(item.qty ?? 0)
+          const unitCost = Number(item.unit_cost ?? 0)
+          if (!Number.isFinite(qty) || !Number.isFinite(unitCost)) return sum
+          return sum + qty * unitCost
+        }, 0),
+      ] as [string, number]),
+    [groupedFilteredItems]
+  )
+
+  const draftExtendedCost = getDraftExtendedCost(draft)
+  const activeFilterCount = [
+    textFilter.trim(),
+    tradeFilter,
+    costCodeFilter,
+    showIncompleteOnly ? 'incomplete' : '',
+  ].filter(Boolean).length
