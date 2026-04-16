@@ -1,0 +1,4 @@
+PART 2
+gamma
+delta
+END TEST
