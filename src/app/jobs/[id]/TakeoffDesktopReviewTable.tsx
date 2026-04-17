@@ -2,16 +2,25 @@
 
 import TakeoffSearchSelect, { type SearchSelectOption } from './TakeoffSearchSelect'
 import type { CostCodeOption, TakeoffEditablePatch, TakeoffItem, TradeOption } from './takeoffTypes'
-import { buildCostCodeLabel, filterCostCodesForTrade, formatCurrency, getExtendedCost, hasIncompleteTakeoffCore } from './takeoffUtils'
-import { getGroupSubtotal } from './takeoffReviewUtils'
+import type { TakeoffTreeNode } from './takeoffReviewUtils'
+import {
+  buildCostCodeLabel,
+  filterCostCodesForTrade,
+  formatCurrency,
+  getExtendedCost,
+  hasIncompleteTakeoffCore,
+  isAssemblyRow,
+} from './takeoffUtils'
+import { getNodeSubtotal } from './takeoffReviewUtils'
 
 type TakeoffDesktopReviewTableProps = {
-  groupedItems: [string, TakeoffItem[]][]
+  treeNodes: TakeoffTreeNode[]
   costCodes: CostCodeOption[]
   trades: TradeOption[]
   tradeOptions: SearchSelectOption[]
   editingId: string | null
   onUpdateItem: (id: string, patch: TakeoffEditablePatch) => void
+  onStartAddChild: (parent: TakeoffItem) => void
 }
 
 function inputStyle() {
@@ -41,7 +50,7 @@ function fieldLabelStyle() {
 }
 
 function desktopColumns() {
-  return '1fr 1.35fr 2fr .7fr .8fr .9fr .9fr 1.4fr'
+  return '.9fr 1fr 1.15fr 2fr .7fr .8fr .9fr .9fr 1.3fr'
 }
 
 function enterBlur(e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
@@ -61,181 +70,306 @@ function buildCostCodeOptions(costCodes: CostCodeOption[]): SearchSelectOption[]
     .sort((a, b) => a.label.localeCompare(b.label))
 }
 
+function normalizeTradeValue(item: TakeoffItem, tradeOptions: SearchSelectOption[]) {
+  return tradeOptions.some((option) => option.value === item.trade) ? item.trade : ''
+}
+
 export default function TakeoffDesktopReviewTable({
-  groupedItems,
+  treeNodes,
   costCodes,
   trades,
   tradeOptions,
   editingId,
   onUpdateItem,
+  onStartAddChild,
 }: TakeoffDesktopReviewTableProps) {
   const inp = inputStyle()
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {groupedItems.map(([tradeName, groupItems]) => {
-        const groupSubtotal = getGroupSubtotal(groupItems)
-        return (
-          <div key={tradeName}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                gap: '8px',
-                flexWrap: 'wrap',
-                marginBottom: '8px',
-                padding: '8px 10px',
-                border: '1px solid var(--border)',
-                borderRadius: '8px',
-                background: 'var(--bg)',
-              }}
-            >
-              <div style={{ fontSize: '12px', fontWeight: '700' }}>{tradeName}</div>
+  function renderItemRow(item: TakeoffItem, depth: number) {
+    const rowCostCodeOptions = buildCostCodeOptions(filterCostCodesForTrade(costCodes, trades, item.trade))
+    const extendedCost = getExtendedCost(item)
+    const isIncomplete = hasIncompleteTakeoffCore(item)
+    const normalizedTradeValue = normalizeTradeValue(item, tradeOptions)
+
+    return (
+      <div
+        key={item.id}
+        style={{
+          marginLeft: `${depth * 18}px`,
+          display: 'grid',
+          gridTemplateColumns: desktopColumns(),
+          gap: '8px',
+          padding: '8px',
+          border: '1px solid var(--border)',
+          borderRadius: '8px',
+          background: isIncomplete ? 'var(--amber-bg, #fff7ed)' : 'var(--bg)',
+        }}
+      >
+        <select
+          value={item.item_kind ?? 'cost'}
+          disabled={editingId === item.id}
+          style={inp}
+          onChange={(e) => {
+            const next = e.target.value === 'scope' ? 'scope' : 'cost'
+            if (next !== item.item_kind) onUpdateItem(item.id, { item_kind: next })
+          }}
+        >
+          <option value="cost">Cost</option>
+          <option value="scope">Scope</option>
+        </select>
+
+        <TakeoffSearchSelect
+          value={normalizedTradeValue}
+          disabled={editingId === item.id}
+          options={tradeOptions}
+          onChange={(nextTrade) => {
+            const normalized = nextTrade || 'Scope'
+            if (normalized !== item.trade) {
+              onUpdateItem(item.id, {
+                trade: normalized,
+                cost_code: nextTrade ? null : item.cost_code,
+              })
+            }
+          }}
+          placeholder="Search trade"
+          allowEmpty
+          emptyLabel="No trade"
+        />
+
+        <TakeoffSearchSelect
+          value={item.cost_code ?? ''}
+          disabled={editingId === item.id}
+          options={rowCostCodeOptions}
+          onChange={(nextCostCode) => {
+            const normalized = nextCostCode || null
+            if (normalized !== (item.cost_code ?? null)) {
+              onUpdateItem(item.id, { cost_code: normalized })
+            }
+          }}
+          placeholder="Search cost code"
+          allowEmpty
+          emptyLabel="None"
+        />
+
+        <input
+          defaultValue={item.description}
+          disabled={editingId === item.id}
+          style={inp}
+          onBlur={(e) => {
+            const next = e.target.value.trim()
+            if (next && next !== item.description) onUpdateItem(item.id, { description: next })
+          }}
+          onKeyDown={enterBlur}
+        />
+
+        <input
+          defaultValue={item.qty ?? 1}
+          disabled={editingId === item.id}
+          inputMode="decimal"
+          style={inp}
+          onBlur={(e) => {
+            const next = Number(e.target.value)
+            if (Number.isFinite(next) && next > 0 && next !== (item.qty ?? 1)) {
+              onUpdateItem(item.id, { qty: next })
+            }
+          }}
+          onKeyDown={enterBlur}
+        />
+
+        <input
+          defaultValue={item.unit ?? ''}
+          disabled={editingId === item.id}
+          style={inp}
+          onBlur={(e) => {
+            const next = e.target.value.trim() || null
+            if (next !== (item.unit ?? null)) onUpdateItem(item.id, { unit: next })
+          }}
+          onKeyDown={enterBlur}
+        />
+
+        <input
+          defaultValue={item.unit_cost ?? ''}
+          disabled={editingId === item.id}
+          inputMode="decimal"
+          style={inp}
+          onBlur={(e) => {
+            const next = e.target.value.trim()
+            const parsed = next ? Number(next) : null
+            if (next === '') {
+              if (item.unit_cost !== null && item.unit_cost !== undefined) {
+                onUpdateItem(item.id, { unit_cost: null })
+              }
+              return
+            }
+            if (parsed !== null && Number.isFinite(parsed) && parsed !== item.unit_cost) {
+              onUpdateItem(item.id, { unit_cost: parsed })
+            }
+          }}
+          onKeyDown={enterBlur}
+        />
+
+        <div style={{ ...inp, display: 'flex', alignItems: 'center' }}>{formatCurrency(extendedCost)}</div>
+
+        <input
+          defaultValue={item.notes ?? ''}
+          disabled={editingId === item.id}
+          style={inp}
+          onBlur={(e) => {
+            const next = e.target.value.trim() || null
+            if (next !== (item.notes ?? null)) onUpdateItem(item.id, { notes: next })
+          }}
+          onKeyDown={enterBlur}
+        />
+      </div>
+    )
+  }
+
+  function renderAssemblyNode(node: TakeoffTreeNode, depth: number): React.ReactNode {
+    const assembly = node.row
+    const assemblySubtotal = getNodeSubtotal(node)
+    const normalizedTradeValue = normalizeTradeValue(assembly, tradeOptions)
+
+    return (
+      <div key={assembly.id} style={{ marginLeft: `${depth * 18}px`, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div
+          style={{
+            padding: '10px',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            background: 'var(--surface)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: '8px',
+              flexWrap: 'wrap',
+              marginBottom: '8px',
+            }}
+          >
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div
+                style={{
+                  fontSize: '10px',
+                  fontWeight: '700',
+                  textTransform: 'uppercase',
+                  letterSpacing: '.04em',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                Assembly
+              </div>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                {groupItems.length} rows · {formatCurrency(groupSubtotal)}
+                {node.children.length} child rows
               </div>
             </div>
-
-            <div style={{ overflowX: 'auto' }}>
-              <div style={{ minWidth: '1120px' }}>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: desktopColumns(),
-                    gap: '8px',
-                    padding: '0 0 8px',
-                    borderBottom: '1px solid var(--border)',
-                    marginBottom: '8px',
-                  }}
-                >
-                  {['Trade', 'Cost Code', 'Description', 'Qty', 'Unit', 'Unit Cost', 'Ext Cost', 'Notes'].map((label) => (
-                    <div key={label} style={fieldLabelStyle()}>{label}</div>
-                  ))}
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {groupItems.map((item) => {
-                    const rowCostCodeOptions = buildCostCodeOptions(filterCostCodesForTrade(costCodes, trades, item.trade))
-                    const extendedCost = getExtendedCost(item)
-                    const isIncomplete = hasIncompleteTakeoffCore(item)
-                    return (
-                      <div
-                        key={item.id}
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: desktopColumns(),
-                          gap: '8px',
-                          padding: '8px',
-                          border: '1px solid var(--border)',
-                          borderRadius: '8px',
-                          background: isIncomplete ? 'var(--amber-bg, #fff7ed)' : 'var(--bg)',
-                        }}
-                      >
-                        <TakeoffSearchSelect
-                          value={item.trade}
-                          disabled={editingId === item.id}
-                          options={tradeOptions}
-                          onChange={(nextTrade) => {
-                            if (nextTrade && nextTrade !== item.trade) {
-                              onUpdateItem(item.id, { trade: nextTrade, cost_code: null })
-                            }
-                          }}
-                          placeholder="Search trade"
-                        />
-
-                        <TakeoffSearchSelect
-                          value={item.cost_code ?? ''}
-                          disabled={editingId === item.id}
-                          options={rowCostCodeOptions}
-                          onChange={(nextCostCode) => {
-                            const normalized = nextCostCode || null
-                            if (normalized !== (item.cost_code ?? null)) {
-                              onUpdateItem(item.id, { cost_code: normalized })
-                            }
-                          }}
-                          placeholder="Search cost code"
-                          allowEmpty
-                          emptyLabel="None"
-                        />
-
-                        <input
-                          defaultValue={item.description}
-                          disabled={editingId === item.id}
-                          style={inp}
-                          onBlur={(e) => {
-                            const next = e.target.value.trim()
-                            if (next && next !== item.description) onUpdateItem(item.id, { description: next })
-                          }}
-                          onKeyDown={enterBlur}
-                        />
-
-                        <input
-                          defaultValue={item.qty ?? 1}
-                          disabled={editingId === item.id}
-                          inputMode="decimal"
-                          style={inp}
-                          onBlur={(e) => {
-                            const next = Number(e.target.value)
-                            if (Number.isFinite(next) && next > 0 && next !== (item.qty ?? 1)) {
-                              onUpdateItem(item.id, { qty: next })
-                            }
-                          }}
-                          onKeyDown={enterBlur}
-                        />
-
-                        <input
-                          defaultValue={item.unit ?? ''}
-                          disabled={editingId === item.id}
-                          style={inp}
-                          onBlur={(e) => {
-                            const next = e.target.value.trim() || null
-                            if (next !== (item.unit ?? null)) onUpdateItem(item.id, { unit: next })
-                          }}
-                          onKeyDown={enterBlur}
-                        />
-
-                        <input
-                          defaultValue={item.unit_cost ?? ''}
-                          disabled={editingId === item.id}
-                          inputMode="decimal"
-                          style={inp}
-                          onBlur={(e) => {
-                            const next = e.target.value.trim()
-                            const parsed = next ? Number(next) : null
-                            if (next === '') {
-                              if (item.unit_cost !== null && item.unit_cost !== undefined) {
-                                onUpdateItem(item.id, { unit_cost: null })
-                              }
-                              return
-                            }
-                            if (parsed !== null && Number.isFinite(parsed) && parsed !== item.unit_cost) {
-                              onUpdateItem(item.id, { unit_cost: parsed })
-                            }
-                          }}
-                          onKeyDown={enterBlur}
-                        />
-
-                        <div style={{ ...inp, display: 'flex', alignItems: 'center' }}>{formatCurrency(extendedCost)}</div>
-
-                        <input
-                          defaultValue={item.notes ?? ''}
-                          disabled={editingId === item.id}
-                          style={inp}
-                          onBlur={(e) => {
-                            const next = e.target.value.trim() || null
-                            if (next !== (item.notes ?? null)) onUpdateItem(item.id, { notes: next })
-                          }}
-                          onKeyDown={enterBlur}
-                        />
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{formatCurrency(assemblySubtotal)}</div>
+              <button
+                type="button"
+                onClick={() => onStartAddChild(assembly)}
+                style={{
+                  padding: '7px 10px',
+                  borderRadius: '7px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg)',
+                  color: 'var(--text)',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                }}
+              >
+                + Child Item
+              </button>
             </div>
           </div>
-        )
-      })}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.4fr', gap: '8px' }}>
+            <div>
+              <div style={fieldLabelStyle()}>Trade</div>
+              <TakeoffSearchSelect
+                value={normalizedTradeValue}
+                disabled={editingId === assembly.id}
+                options={tradeOptions}
+                onChange={(nextTrade) => {
+                  const normalized = nextTrade || 'Assembly'
+                  if (normalized !== assembly.trade) onUpdateItem(assembly.id, { trade: normalized })
+                }}
+                placeholder="Optional trade"
+                allowEmpty
+                emptyLabel="No trade"
+              />
+            </div>
+
+            <div>
+              <div style={fieldLabelStyle()}>Assembly Name</div>
+              <input
+                defaultValue={assembly.description}
+                disabled={editingId === assembly.id}
+                style={inp}
+                onBlur={(e) => {
+                  const next = e.target.value.trim()
+                  if (next && next !== assembly.description) onUpdateItem(assembly.id, { description: next })
+                }}
+                onKeyDown={enterBlur}
+              />
+            </div>
+
+            <div>
+              <div style={fieldLabelStyle()}>Notes</div>
+              <input
+                defaultValue={assembly.notes ?? ''}
+                disabled={editingId === assembly.id}
+                style={inp}
+                onBlur={(e) => {
+                  const next = e.target.value.trim() || null
+                  if (next !== (assembly.notes ?? null)) onUpdateItem(assembly.id, { notes: next })
+                }}
+                onKeyDown={enterBlur}
+              />
+            </div>
+          </div>
+        </div>
+
+        {node.children.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {node.children.map((child) => renderNode(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  function renderNode(node: TakeoffTreeNode, depth: number): React.ReactNode {
+    if (isAssemblyRow(node.row)) return renderAssemblyNode(node, depth)
+    return renderItemRow(node.row, depth)
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ overflowX: 'auto' }}>
+        <div style={{ minWidth: '1180px' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: desktopColumns(),
+              gap: '8px',
+              padding: '0 0 8px',
+              borderBottom: '1px solid var(--border)',
+              marginBottom: '8px',
+            }}
+          >
+            {['Type', 'Trade', 'Cost Code', 'Description', 'Qty', 'Unit', 'Unit Cost', 'Ext Cost', 'Notes'].map((label) => (
+              <div key={label} style={fieldLabelStyle()}>{label}</div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {treeNodes.map((node) => renderNode(node, 0))}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
