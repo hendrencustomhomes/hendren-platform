@@ -1,4 +1,11 @@
-import type { CostCodeOption, ScopeContextItem, TakeoffItem, TradeOption } from './takeoffTypes'
+import type {
+  CostCodeOption,
+  ScopeContextItem,
+  TakeoffItem,
+  TakeoffItemKind,
+  TakeoffRowKind,
+  TradeOption,
+} from './takeoffTypes'
 
 export function sortTakeoffItems(items: TakeoffItem[]) {
   return [...items].sort((a, b) => {
@@ -33,7 +40,33 @@ export function formatCurrency(value: number | null | undefined) {
   }).format(value)
 }
 
-export function getExtendedCost(item: Pick<TakeoffItem, 'qty' | 'unit_cost' | 'extended_cost'>) {
+export function normalizeRowKind(value: TakeoffRowKind | string | null | undefined): TakeoffRowKind {
+  return value === 'assembly' ? 'assembly' : 'item'
+}
+
+export function normalizeItemKind(value: TakeoffItemKind | string | null | undefined): TakeoffItemKind | null {
+  if (!value) return null
+  return value === 'scope' ? 'scope' : 'cost'
+}
+
+export function isAssemblyRow(item: Pick<TakeoffItem, 'row_kind'>) {
+  return normalizeRowKind(item.row_kind) === 'assembly'
+}
+
+export function isItemRow(item: Pick<TakeoffItem, 'row_kind'>) {
+  return normalizeRowKind(item.row_kind) === 'item'
+}
+
+export function isScopeItem(item: Pick<TakeoffItem, 'row_kind' | 'item_kind'>) {
+  return isItemRow(item) && normalizeItemKind(item.item_kind) === 'scope'
+}
+
+export function isCostItem(item: Pick<TakeoffItem, 'row_kind' | 'item_kind'>) {
+  return isItemRow(item) && normalizeItemKind(item.item_kind) !== 'scope'
+}
+
+export function getExtendedCost(item: Pick<TakeoffItem, 'row_kind' | 'qty' | 'unit_cost' | 'extended_cost'>) {
+  if (isAssemblyRow(item)) return null
   if (item.extended_cost !== null && item.extended_cost !== undefined) return item.extended_cost
   if (item.qty === null || item.qty === undefined) return null
   if (item.unit_cost === null || item.unit_cost === undefined) return null
@@ -58,7 +91,6 @@ export function filterCostCodesForTrade(
 export function getScopeContextItems(scopeItems: ScopeContextItem[]) {
   const priorityTypes = new Set([
     'job_type',
-    'project_category',
     'construction_type',
     'bedroom_count',
     'bathroom_count',
@@ -76,5 +108,21 @@ export function getScopeContextItems(scopeItems: ScopeContextItem[]) {
 }
 
 export function hasIncompleteTakeoffCore(item: TakeoffItem) {
-  return !item.trade?.trim() || !item.description?.trim() || !item.unit?.trim() || !item.cost_code?.trim()
+  if (isAssemblyRow(item)) {
+    return !item.description?.trim()
+  }
+
+  if (isScopeItem(item)) {
+    return !item.description?.trim() || item.qty === null || item.qty === undefined || item.qty <= 0 || !item.unit?.trim()
+  }
+
+  return (
+    !item.trade?.trim() ||
+    !item.description?.trim() ||
+    item.qty === null ||
+    item.qty === undefined ||
+    item.qty <= 0 ||
+    !item.unit?.trim() ||
+    !item.cost_code?.trim()
+  )
 }
