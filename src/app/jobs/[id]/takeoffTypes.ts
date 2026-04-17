@@ -1,3 +1,6 @@
+export type TakeoffRowKind = 'assembly' | 'item'
+export type TakeoffItemKind = 'scope' | 'cost'
+
 export type TakeoffItem = {
   id: string
   trade: string
@@ -10,6 +13,9 @@ export type TakeoffItem = {
   notes?: string | null
   sort_order?: number | null
   created_at?: string | null
+  row_kind?: TakeoffRowKind | null
+  item_kind?: TakeoffItemKind | null
+  parent_id?: string | null
 }
 
 export type TradeOption = {
@@ -39,7 +45,16 @@ export type ScopeContextItem = {
 export type TakeoffEditablePatch = Partial<
   Pick<
     TakeoffItem,
-    'trade' | 'description' | 'cost_code' | 'qty' | 'unit' | 'unit_cost' | 'extended_cost' | 'notes'
+    | 'trade'
+    | 'description'
+    | 'cost_code'
+    | 'qty'
+    | 'unit'
+    | 'unit_cost'
+    | 'extended_cost'
+    | 'notes'
+    | 'item_kind'
+    | 'parent_id'
   >
 >
 
