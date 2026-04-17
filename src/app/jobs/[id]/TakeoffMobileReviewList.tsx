@@ -360,7 +360,7 @@ export default function TakeoffMobileReviewList({
 
   function renderNode(node: TakeoffTreeNode, depth: number): React.ReactNode {
     if (isAssemblyRow(node.row)) return renderAssemblyNode(node, depth)
-    return renderItemNode(node.row, depth)
+    return renderItemNode(node, depth)
   }
 
   return <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>{treeNodes.map((node) => renderNode(node, 0))}</div>
