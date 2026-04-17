@@ -11,6 +11,8 @@ import type {
   ScopeContextItem,
   TakeoffEditablePatch,
   TakeoffItem,
+  TakeoffItemKind,
+  TakeoffRowKind,
   TradeOption,
 } from './takeoffTypes'
 import {
@@ -18,11 +20,21 @@ import {
   filterCostCodesForTrade,
   formatCurrency,
   hasIncompleteTakeoffCore,
+  isAssemblyRow,
+  isItemRow,
   sortTakeoffItems,
 } from './takeoffUtils'
-import { buildGroupedItems, matchesTextFilter } from './takeoffReviewUtils'
+import {
+  buildTakeoffTree,
+  filterTakeoffTree,
+  flattenTakeoffTree,
+  matchesTextFilter,
+} from './takeoffReviewUtils'
 
 type TakeoffDraft = {
+  row_kind: TakeoffRowKind
+  item_kind: TakeoffItemKind
+  parent_id: string
   trade: string
   description: string
   cost_code: string
@@ -111,7 +123,7 @@ function overlayStyle(isMobile: boolean, align: 'left' | 'right') {
     top: 'calc(100% + 8px)',
     left: isMobile || align === 'left' ? 0 : 'auto',
     right: isMobile || align === 'right' ? 0 : 'auto',
-    width: isMobile ? '100%' : align === 'left' ? 'min(100%, 560px)' : 'min(100%, 860px)',
+    width: isMobile ? '100%' : align === 'left' ? 'min(100%, 560px)' : 'min(100%, 960px)',
     zIndex: 50,
     background: 'var(--surface)',
     border: '1px solid var(--border)',
@@ -131,6 +143,7 @@ function sectionLabelStyle() {
 }
 
 function getDraftExtendedCost(draft: TakeoffDraft) {
+  if (draft.row_kind === 'assembly') return null
   const qty = Number(draft.qty)
   const unitCost = Number(draft.unit_cost)
   if (!Number.isFinite(qty) || !Number.isFinite(unitCost)) return null
@@ -157,6 +170,17 @@ function buildCostCodeOptions(costCodes: CostCodeOption[]): SearchSelectOption[]
     .sort((a, b) => a.label.localeCompare(b.label))
 }
 
+function buildAssemblyOptions(items: TakeoffItem[]): SearchSelectOption[] {
+  return items
+    .filter(isAssemblyRow)
+    .map((item) => ({
+      value: item.id,
+      label: item.description,
+      keywords: [item.description, item.trade, item.notes ?? ''],
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
 export default function TakeoffWorkspace({
   items,
   trades,
@@ -171,7 +195,6 @@ export default function TakeoffWorkspace({
   onUpdateItem,
 }: TakeoffWorkspaceProps) {
   const inp = inputStyle()
-  const rootRef = useRef<HTMLDivElement | null>(null)
   const addButtonRef = useRef<HTMLButtonElement | null>(null)
   const filterButtonRef = useRef<HTMLButtonElement | null>(null)
   const overviewButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -229,6 +252,13 @@ export default function TakeoffWorkspace({
 
   const sortedItems = useMemo(() => sortTakeoffItems(items), [items])
   const tradeOptions = useMemo(() => buildTradeOptions(trades), [trades])
+  const assemblyOptions = useMemo(() => buildAssemblyOptions(sortedItems), [sortedItems])
+
+  useEffect(() => {
+    if (draft.parent_id && !assemblyOptions.some((option) => option.value === draft.parent_id)) {
+      setDraft((current) => ({ ...current, parent_id: '' }))
+    }
+  }, [assemblyOptions, draft.parent_id, setDraft])
 
   const filteredDraftCostCodes = useMemo(
     () => filterCostCodesForTrade(costCodes, trades, draft.trade),
@@ -254,31 +284,36 @@ export default function TakeoffWorkspace({
     }
   }, [availableFilterCostCodes, costCodeFilter])
 
-  const filteredItems = useMemo(() => {
-    return sortedItems.filter((item) => {
+  const takeoffTree = useMemo(() => buildTakeoffTree(sortedItems), [sortedItems])
+
+  const filteredTree = useMemo(() => {
+    return filterTakeoffTree(takeoffTree, (item) => {
       if (!matchesTextFilter(item, textFilter)) return false
       if (tradeFilter && item.trade !== tradeFilter) return false
       if (costCodeFilter && item.cost_code !== costCodeFilter) return false
       if (showIncompleteOnly && !hasIncompleteTakeoffCore(item)) return false
       return true
     })
-  }, [sortedItems, textFilter, tradeFilter, costCodeFilter, showIncompleteOnly])
+  }, [takeoffTree, textFilter, tradeFilter, costCodeFilter, showIncompleteOnly])
 
-  const groupedFilteredItems = useMemo(() => buildGroupedItems(filteredItems), [filteredItems])
+  const visibleItems = useMemo(() => flattenTakeoffTree(filteredTree), [filteredTree])
 
-  const tradeSubtotals = useMemo(
-    () =>
-      groupedFilteredItems.map(([tradeName, groupItems]) => [
-        tradeName,
-        groupItems.reduce((sum, item) => {
-          const qty = Number(item.qty ?? 0)
-          const unitCost = Number(item.unit_cost ?? 0)
-          if (!Number.isFinite(qty) || !Number.isFinite(unitCost)) return sum
-          return sum + qty * unitCost
-        }, 0),
-      ] as [string, number]),
-    [groupedFilteredItems]
-  )
+  const tradeSubtotals = useMemo(() => {
+    const groups = new Map<string, number>()
+
+    visibleItems.forEach((item) => {
+      if (!isItemRow(item)) return
+      const key = item.trade?.trim() || 'Unassigned'
+      const existing = groups.get(key) ?? 0
+      const unitCost = item.unit_cost ?? null
+      const qty = item.qty ?? null
+      const extendedCost = item.extended_cost ?? null
+      const nextTotal = extendedCost ?? (qty !== null && unitCost !== null ? qty * unitCost : 0)
+      groups.set(key, existing + (Number.isFinite(nextTotal) ? nextTotal : 0))
+    })
+
+    return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+  }, [visibleItems])
 
   const draftExtendedCost = getDraftExtendedCost(draft)
   const activeFilterCount = [
@@ -288,8 +323,29 @@ export default function TakeoffWorkspace({
     showIncompleteOnly ? 'incomplete' : '',
   ].filter(Boolean).length
 
+  function startAddChild(parent: TakeoffItem) {
+    setDraft((current) => ({
+      ...current,
+      row_kind: 'item',
+      item_kind: 'cost',
+      parent_id: parent.id,
+      trade: parent.trade === 'Assembly' ? '' : parent.trade,
+      description: '',
+      cost_code: '',
+      qty: '1',
+      unit: '',
+      unit_cost: '',
+      notes: '',
+    }))
+    setOpenPanel('add')
+  }
+
+  const addDisabled =
+    !draft.description.trim() ||
+    (draft.row_kind === 'item' && draft.item_kind === 'cost' && !draft.trade.trim())
+
   return (
-    <div ref={rootRef} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       {error && (
         <div
           style={{
@@ -318,7 +374,7 @@ export default function TakeoffWorkspace({
         >
           <div style={sectionLabelStyle()}>Takeoff Workspace</div>
           <div style={toolbarBadgeStyle()}>
-            {filteredItems.length}/{sortedItems.length} visible
+            {visibleItems.length}/{sortedItems.length} visible
           </div>
         </div>
 
@@ -336,7 +392,7 @@ export default function TakeoffWorkspace({
             onClick={() => setOpenPanel((current) => (current === 'add' ? null : 'add'))}
             style={actionButtonStyle(openPanel === 'add')}
           >
-            ➕ Add Item
+            ➕ Add Row
           </button>
 
           <button
@@ -462,121 +518,246 @@ export default function TakeoffWorkspace({
 
         {openPanel === 'add' && (
           <div ref={addPanelRef} style={overlayStyle(isMobile, 'right')}>
-            <div style={{ ...sectionLabelStyle(), marginBottom: '10px' }}>Add Takeoff Item</div>
+            <div style={{ ...sectionLabelStyle(), marginBottom: '10px' }}>
+              {draft.row_kind === 'assembly' ? 'Add Assembly' : draft.parent_id ? 'Add Child Item' : 'Add Item'}
+            </div>
 
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr 2fr .8fr .9fr .9fr 1.2fr auto',
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))',
                 gap: '8px',
-                alignItems: 'end',
+                marginBottom: '10px',
               }}
             >
               <div>
-                <div style={fieldLabelStyle()}>Trade</div>
-                <TakeoffSearchSelect
-                  value={draft.trade}
-                  options={tradeOptions}
-                  onChange={(nextTrade) => {
+                <div style={fieldLabelStyle()}>Row Type</div>
+                <select
+                  value={draft.row_kind}
+                  style={inp}
+                  onChange={(e) => {
+                    const next = e.target.value === 'assembly' ? 'assembly' : 'item'
                     setDraft((current) => ({
                       ...current,
-                      trade: nextTrade,
-                      cost_code: nextTrade === current.trade ? current.cost_code : '',
+                      row_kind: next,
+                      parent_id: next === 'assembly' ? '' : current.parent_id,
                     }))
                   }}
-                  placeholder="Search trade"
-                />
+                >
+                  <option value="item">Item</option>
+                  <option value="assembly">Assembly</option>
+                </select>
               </div>
 
-              <div>
-                <div style={fieldLabelStyle()}>Cost Code</div>
-                <TakeoffSearchSelect
-                  value={draft.cost_code}
-                  options={filteredDraftCostCodeOptions}
-                  onChange={(nextCostCode) =>
-                    setDraft((current) => ({ ...current, cost_code: nextCostCode }))
-                  }
-                  placeholder="Search cost code"
-                  allowEmpty
-                  emptyLabel="None"
-                />
-              </div>
+              {draft.row_kind === 'item' && (
+                <div>
+                  <div style={fieldLabelStyle()}>Item Type</div>
+                  <select
+                    value={draft.item_kind}
+                    style={inp}
+                    onChange={(e) => {
+                      const next = e.target.value === 'scope' ? 'scope' : 'cost'
+                      setDraft((current) => ({ ...current, item_kind: next }))
+                    }}
+                  >
+                    <option value="cost">Cost</option>
+                    <option value="scope">Scope</option>
+                  </select>
+                </div>
+              )}
 
-              <div>
-                <div style={fieldLabelStyle()}>Description</div>
-                <input
-                  value={draft.description}
-                  onChange={(e) => setDraft((current) => ({ ...current, description: e.target.value }))}
-                  style={inp}
-                />
-              </div>
-
-              <div>
-                <div style={fieldLabelStyle()}>Qty</div>
-                <input
-                  value={draft.qty}
-                  onChange={(e) => setDraft((current) => ({ ...current, qty: e.target.value }))}
-                  inputMode="decimal"
-                  style={inp}
-                />
-              </div>
-
-              <div>
-                <div style={fieldLabelStyle()}>Unit</div>
-                <input
-                  value={draft.unit}
-                  onChange={(e) => setDraft((current) => ({ ...current, unit: e.target.value }))}
-                  style={inp}
-                />
-              </div>
-
-              <div>
-                <div style={fieldLabelStyle()}>Unit Cost</div>
-                <input
-                  value={draft.unit_cost}
-                  onChange={(e) => setDraft((current) => ({ ...current, unit_cost: e.target.value }))}
-                  inputMode="decimal"
-                  style={inp}
-                />
-              </div>
-
-              <div>
-                <div style={fieldLabelStyle()}>Notes</div>
-                <input
-                  value={draft.notes}
-                  onChange={(e) => setDraft((current) => ({ ...current, notes: e.target.value }))}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      onAddItem()
+              {draft.row_kind === 'item' && (
+                <div>
+                  <div style={fieldLabelStyle()}>Parent Assembly</div>
+                  <TakeoffSearchSelect
+                    value={draft.parent_id}
+                    options={assemblyOptions}
+                    onChange={(nextParentId) =>
+                      setDraft((current) => ({ ...current, parent_id: nextParentId }))
                     }
-                  }}
-                  style={inp}
-                />
-              </div>
+                    placeholder="Top-level item"
+                    allowEmpty
+                    emptyLabel="Top-level item"
+                  />
+                </div>
+              )}
+            </div>
 
-              <button
-                onClick={onAddItem}
-                disabled={saving || !draft.trade.trim() || !draft.description.trim()}
+            {draft.row_kind === 'assembly' ? (
+              <div
                 style={{
-                  padding: '10px 12px',
-                  border: 'none',
-                  borderRadius: '7px',
-                  background: 'var(--text)',
-                  color: 'var(--bg)',
-                  fontSize: '12px',
-                  fontWeight: '700',
-                  cursor: saving || !draft.trade.trim() || !draft.description.trim() ? 'not-allowed' : 'pointer',
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? '1fr' : '1fr 1.5fr 1.5fr auto',
+                  gap: '8px',
+                  alignItems: 'end',
                 }}
               >
-                {saving ? 'Saving...' : 'Add'}
-              </button>
-            </div>
+                <div>
+                  <div style={fieldLabelStyle()}>Trade</div>
+                  <TakeoffSearchSelect
+                    value={tradeOptions.some((option) => option.value === draft.trade) ? draft.trade : ''}
+                    options={tradeOptions}
+                    onChange={(nextTrade) => setDraft((current) => ({ ...current, trade: nextTrade }))}
+                    placeholder="Optional trade"
+                    allowEmpty
+                    emptyLabel="No trade"
+                  />
+                </div>
 
-            <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
-              Draft extended cost:{' '}
-              <strong style={{ color: 'var(--text)' }}>{formatCurrency(draftExtendedCost)}</strong>
-            </div>
+                <div>
+                  <div style={fieldLabelStyle()}>Assembly Name</div>
+                  <input
+                    value={draft.description}
+                    onChange={(e) => setDraft((current) => ({ ...current, description: e.target.value }))}
+                    style={inp}
+                  />
+                </div>
+
+                <div>
+                  <div style={fieldLabelStyle()}>Notes</div>
+                  <input
+                    value={draft.notes}
+                    onChange={(e) => setDraft((current) => ({ ...current, notes: e.target.value }))}
+                    style={inp}
+                  />
+                </div>
+
+                <button
+                  onClick={onAddItem}
+                  disabled={saving || addDisabled}
+                  style={{
+                    padding: '10px 12px',
+                    border: 'none',
+                    borderRadius: '7px',
+                    background: 'var(--text)',
+                    color: 'var(--bg)',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    cursor: saving || addDisabled ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {saving ? 'Saving...' : 'Add'}
+                </button>
+              </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr 2fr .8fr .9fr .9fr 1.2fr auto',
+                    gap: '8px',
+                    alignItems: 'end',
+                  }}
+                >
+                  <div>
+                    <div style={fieldLabelStyle()}>Trade</div>
+                    <TakeoffSearchSelect
+                      value={draft.trade}
+                      options={tradeOptions}
+                      onChange={(nextTrade) => {
+                        setDraft((current) => ({
+                          ...current,
+                          trade: nextTrade,
+                          cost_code: nextTrade === current.trade ? current.cost_code : '',
+                        }))
+                      }}
+                      placeholder={draft.item_kind === 'scope' ? 'Optional trade' : 'Search trade'}
+                      allowEmpty={draft.item_kind === 'scope'}
+                      emptyLabel="No trade"
+                    />
+                  </div>
+
+                  <div>
+                    <div style={fieldLabelStyle()}>Cost Code</div>
+                    <TakeoffSearchSelect
+                      value={draft.cost_code}
+                      options={filteredDraftCostCodeOptions}
+                      onChange={(nextCostCode) =>
+                        setDraft((current) => ({ ...current, cost_code: nextCostCode }))
+                      }
+                      placeholder="Search cost code"
+                      allowEmpty
+                      emptyLabel="None"
+                    />
+                  </div>
+
+                  <div>
+                    <div style={fieldLabelStyle()}>Description</div>
+                    <input
+                      value={draft.description}
+                      onChange={(e) => setDraft((current) => ({ ...current, description: e.target.value }))}
+                      style={inp}
+                    />
+                  </div>
+
+                  <div>
+                    <div style={fieldLabelStyle()}>Qty</div>
+                    <input
+                      value={draft.qty}
+                      onChange={(e) => setDraft((current) => ({ ...current, qty: e.target.value }))}
+                      inputMode="decimal"
+                      style={inp}
+                    />
+                  </div>
+
+                  <div>
+                    <div style={fieldLabelStyle()}>Unit</div>
+                    <input
+                      value={draft.unit}
+                      onChange={(e) => setDraft((current) => ({ ...current, unit: e.target.value }))}
+                      style={inp}
+                    />
+                  </div>
+
+                  <div>
+                    <div style={fieldLabelStyle()}>Unit Cost</div>
+                    <input
+                      value={draft.unit_cost}
+                      onChange={(e) => setDraft((current) => ({ ...current, unit_cost: e.target.value }))}
+                      inputMode="decimal"
+                      style={inp}
+                    />
+                  </div>
+
+                  <div>
+                    <div style={fieldLabelStyle()}>Notes</div>
+                    <input
+                      value={draft.notes}
+                      onChange={(e) => setDraft((current) => ({ ...current, notes: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          onAddItem()
+                        }
+                      }}
+                      style={inp}
+                    />
+                  </div>
+
+                  <button
+                    onClick={onAddItem}
+                    disabled={saving || addDisabled}
+                    style={{
+                      padding: '10px 12px',
+                      border: 'none',
+                      borderRadius: '7px',
+                      background: 'var(--text)',
+                      color: 'var(--bg)',
+                      fontSize: '12px',
+                      fontWeight: '700',
+                      cursor: saving || addDisabled ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {saving ? 'Saving...' : 'Add'}
+                  </button>
+                </div>
+
+                <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  Draft extended cost:{' '}
+                  <strong style={{ color: 'var(--text)' }}>{formatCurrency(draftExtendedCost)}</strong>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -584,7 +765,7 @@ export default function TakeoffWorkspace({
           <div ref={overviewPanelRef} style={{ marginTop: '10px' }}>
             <TakeoffOverviewStrip
               allItems={sortedItems}
-              visibleItems={filteredItems}
+              visibleItems={visibleItems}
               tradeSubtotals={tradeSubtotals}
               hasActiveFilters={activeFilterCount > 0}
             />
@@ -600,14 +781,14 @@ export default function TakeoffWorkspace({
 
       <div style={cardStyle()}>
         {!sortedItems.length ? (
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No takeoff items yet.</div>
-        ) : !filteredItems.length ? (
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No takeoff rows yet.</div>
+        ) : !visibleItems.length ? (
           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            No takeoff items match the current filters.
+            No takeoff rows match the current filters.
           </div>
         ) : isMobile ? (
           <TakeoffMobileReviewList
-            groupedItems={groupedFilteredItems}
+            treeNodes={filteredTree}
             costCodes={costCodes}
             trades={trades}
             tradeOptions={tradeOptions}
@@ -615,15 +796,17 @@ export default function TakeoffWorkspace({
             expandedRowId={expandedRowId}
             onExpandedRowIdChange={setExpandedRowId}
             onUpdateItem={onUpdateItem}
+            onStartAddChild={startAddChild}
           />
         ) : (
           <TakeoffDesktopReviewTable
-            groupedItems={groupedFilteredItems}
+            treeNodes={filteredTree}
             costCodes={costCodes}
             trades={trades}
             tradeOptions={tradeOptions}
             editingId={editingId}
             onUpdateItem={onUpdateItem}
+            onStartAddChild={startAddChild}
           />
         )}
       </div>
