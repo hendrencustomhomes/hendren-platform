@@ -6,12 +6,9 @@ import type { TakeoffTreeNode } from './takeoffReviewUtils'
 import {
   buildCostCodeLabel,
   filterCostCodesForTrade,
-  formatCurrency,
-  getExtendedCost,
   hasIncompleteTakeoffCore,
   isAssemblyRow,
 } from './takeoffUtils'
-import { getNodeSubtotal } from './takeoffReviewUtils'
 
 type TakeoffDesktopReviewTableProps = {
   treeNodes: TakeoffTreeNode[]
@@ -50,7 +47,7 @@ function fieldLabelStyle() {
 }
 
 function desktopColumns() {
-  return '.9fr 1fr 1.15fr 2fr .7fr .8fr .9fr .9fr 1.3fr'
+  return '1fr 1.15fr 2.2fr .8fr .8fr 1.6fr'
 }
 
 function enterBlur(e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
@@ -87,7 +84,6 @@ export default function TakeoffDesktopReviewTable({
 
   function renderItemRow(item: TakeoffItem, depth: number) {
     const rowCostCodeOptions = buildCostCodeOptions(filterCostCodesForTrade(costCodes, trades, item.trade))
-    const extendedCost = getExtendedCost(item)
     const isIncomplete = hasIncompleteTakeoffCore(item)
     const normalizedTradeValue = normalizeTradeValue(item, tradeOptions)
 
@@ -105,35 +101,19 @@ export default function TakeoffDesktopReviewTable({
           background: isIncomplete ? 'var(--amber-bg, #fff7ed)' : 'var(--bg)',
         }}
       >
-        <select
-          value={item.item_kind ?? 'cost'}
-          disabled={editingId === item.id}
-          style={inp}
-          onChange={(e) => {
-            const next = e.target.value === 'scope' ? 'scope' : 'cost'
-            if (next !== item.item_kind) onUpdateItem(item.id, { item_kind: next })
-          }}
-        >
-          <option value="cost">Cost</option>
-          <option value="scope">Scope</option>
-        </select>
-
         <TakeoffSearchSelect
           value={normalizedTradeValue}
           disabled={editingId === item.id}
           options={tradeOptions}
           onChange={(nextTrade) => {
-            const normalized = nextTrade || 'Scope'
-            if (normalized !== item.trade) {
+            if (nextTrade && nextTrade !== item.trade) {
               onUpdateItem(item.id, {
-                trade: normalized,
-                cost_code: nextTrade ? null : item.cost_code,
+                trade: nextTrade,
+                cost_code: nextTrade === item.trade ? item.cost_code : null,
               })
             }
           }}
           placeholder="Search trade"
-          allowEmpty
-          emptyLabel="No trade"
         />
 
         <TakeoffSearchSelect
@@ -188,29 +168,6 @@ export default function TakeoffDesktopReviewTable({
         />
 
         <input
-          defaultValue={item.unit_cost ?? ''}
-          disabled={editingId === item.id}
-          inputMode="decimal"
-          style={inp}
-          onBlur={(e) => {
-            const next = e.target.value.trim()
-            const parsed = next ? Number(next) : null
-            if (next === '') {
-              if (item.unit_cost !== null && item.unit_cost !== undefined) {
-                onUpdateItem(item.id, { unit_cost: null })
-              }
-              return
-            }
-            if (parsed !== null && Number.isFinite(parsed) && parsed !== item.unit_cost) {
-              onUpdateItem(item.id, { unit_cost: parsed })
-            }
-          }}
-          onKeyDown={enterBlur}
-        />
-
-        <div style={{ ...inp, display: 'flex', alignItems: 'center' }}>{formatCurrency(extendedCost)}</div>
-
-        <input
           defaultValue={item.notes ?? ''}
           disabled={editingId === item.id}
           style={inp}
@@ -226,7 +183,6 @@ export default function TakeoffDesktopReviewTable({
 
   function renderAssemblyNode(node: TakeoffTreeNode, depth: number): React.ReactNode {
     const assembly = node.row
-    const assemblySubtotal = getNodeSubtotal(node)
     const normalizedTradeValue = normalizeTradeValue(assembly, tradeOptions)
 
     return (
@@ -264,28 +220,25 @@ export default function TakeoffDesktopReviewTable({
                 {node.children.length} child rows
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{formatCurrency(assemblySubtotal)}</div>
-              <button
-                type="button"
-                onClick={() => onStartAddChild(assembly)}
-                style={{
-                  padding: '7px 10px',
-                  borderRadius: '7px',
-                  border: '1px solid var(--border)',
-                  background: 'var(--bg)',
-                  color: 'var(--text)',
-                  fontSize: '12px',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                }}
-              >
-                + Child Item
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => onStartAddChild(assembly)}
+              style={{
+                padding: '7px 10px',
+                borderRadius: '7px',
+                border: '1px solid var(--border)',
+                background: 'var(--bg)',
+                color: 'var(--text)',
+                fontSize: '12px',
+                fontWeight: '700',
+                cursor: 'pointer',
+              }}
+            >
+              + Child Item
+            </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.4fr', gap: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.6fr', gap: '8px' }}>
             <div>
               <div style={fieldLabelStyle()}>Trade</div>
               <TakeoffSearchSelect
@@ -349,7 +302,7 @@ export default function TakeoffDesktopReviewTable({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       <div style={{ overflowX: 'auto' }}>
-        <div style={{ minWidth: '1180px' }}>
+        <div style={{ minWidth: '980px' }}>
           <div
             style={{
               display: 'grid',
@@ -360,7 +313,7 @@ export default function TakeoffDesktopReviewTable({
               marginBottom: '8px',
             }}
           >
-            {['Type', 'Trade', 'Cost Code', 'Description', 'Qty', 'Unit', 'Unit Cost', 'Ext Cost', 'Notes'].map((label) => (
+            {['Trade', 'Cost Code', 'Description', 'Qty', 'Unit', 'Notes'].map((label) => (
               <div key={label} style={fieldLabelStyle()}>{label}</div>
             ))}
           </div>
