@@ -45,6 +45,7 @@ export async function createInternalUser(email: string, fullName: string) {
     email_confirm: true,
     user_metadata: {
       full_name: fullName,
+      must_reset_password: true,
     },
   })
 
@@ -63,7 +64,6 @@ export async function createInternalUser(email: string, fullName: string) {
     is_admin: false,
     is_active: true,
     role: 'general',
-    must_reset_password: true,
   })
 
   await admin.auth.resetPasswordForEmail(email, {
