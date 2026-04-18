@@ -2,11 +2,8 @@
 
 import { useState, type FormEvent } from 'react'
 import { signInWithPassword, requestPasswordReset } from './actions'
-import { useSearchParams } from 'next/navigation'
 
 export default function LoginPage() {
-  const searchParams = useSearchParams()
-
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -42,14 +39,11 @@ export default function LoginPage() {
     setMessage('Password reset email sent.')
   }
 
-  const queryError = searchParams.get('error')
-
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <form onSubmit={handleSubmit} style={{ width: 320 }}>
         <h2>Sign In</h2>
 
-        {queryError && <div style={{ color: 'red' }}>Invalid or expired link</div>}
         {error && <div style={{ color: 'red' }}>{error}</div>}
         {message && <div style={{ color: 'green' }}>{message}</div>}
 
