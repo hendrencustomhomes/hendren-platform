@@ -1,14 +1,31 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
+import { useRouter } from 'next/navigation'
 import { signInWithPassword, requestPasswordReset } from './actions'
 
 export default function LoginPage() {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    const hash = window.location.hash
+
+    if (!hash) return
+
+    const params = new URLSearchParams(hash.replace('#', ''))
+    const type = params.get('type')
+    const accessToken = params.get('access_token')
+
+    if (type === 'recovery' && accessToken) {
+      // Let Supabase client pick up session via cookies, then redirect
+      router.replace('/reset-password')
+    }
+  }, [router])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
