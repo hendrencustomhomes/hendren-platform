@@ -7,8 +7,8 @@ import {
   createInternalUser,
   resendResetEmail,
   generateResetLink,
+  getInternalUsers,
 } from './actions'
-import { createClient } from '@/utils/supabase/client'
 
 const inputStyle = {
   background: 'var(--background)',
@@ -78,19 +78,20 @@ const solidBtnStyle = {
   cursor: 'pointer',
 } as const
 
-type UserRow = {
+type InternalUser = {
   id: string
-  full_name: string | null
-  internal_access?: { role?: string | null; is_active?: boolean | null }[] | { role?: string | null; is_active?: boolean | null } | null
-}
-
-function getAccess(row: UserRow) {
-  if (Array.isArray(row.internal_access)) return row.internal_access[0] ?? null
-  return row.internal_access ?? null
+  email: string | null
+  fullName: string | null
+  phone: string | null
+  address: string | null
+  birthday: string | null
+  role: string
+  isActive: boolean
+  isAdmin: boolean
 }
 
 export default function InternalUsersPage() {
-  const [users, setUsers] = useState<UserRow[]>([])
+  const [users, setUsers] = useState<InternalUser[]>([])
   const [showForm, setShowForm] = useState(false)
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
@@ -107,14 +108,15 @@ export default function InternalUsersPage() {
 
   async function loadUsers() {
     setListLoading(true)
-    const supabase = createClient()
+    const res = await getInternalUsers()
+    if (res?.error) {
+      setError(res.error)
+      setUsers([])
+      setListLoading(false)
+      return
+    }
 
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, internal_access(role, is_active)')
-      .order('full_name', { ascending: true })
-
-    setUsers((data || []) as UserRow[])
+    setUsers(res?.users || [])
     setListLoading(false)
   }
 
@@ -178,12 +180,7 @@ export default function InternalUsersPage() {
       <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div style={sectionCardStyle}>
           <div style={sectionHeaderStyle}>
-            <div>
-              <div style={sectionTitleStyle}>User Management</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                Manage internal staff access and password setup.
-              </div>
-            </div>
+            <span style={sectionTitleStyle}>Internal Users</span>
             <button type="button" style={ghostBtnStyle} onClick={() => setShowForm((v) => !v)}>
               {showForm ? 'Cancel' : '+ Add User'}
             </button>
@@ -233,51 +230,61 @@ export default function InternalUsersPage() {
           ) : users.length === 0 ? (
             <div style={{ padding: '16px', fontSize: '13px', color: 'var(--text-muted)' }}>No internal users found.</div>
           ) : (
-            users.map((u, index) => {
-              const access = getAccess(u)
-              const role = access?.role || 'general'
-              const active = access?.is_active !== false
-
-              return (
-                <Link key={u.id} href={`/more/internal-users/${u.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                  <div
-                    style={{
-                      padding: '14px 16px',
-                      borderTop: index === 0 ? 'none' : '1px solid var(--border)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '10px',
-                    }}
-                  >
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)' }}>
-                        {u.full_name || 'Unnamed User'}
-                      </div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        {role}
-                      </div>
+            users.map((u, index) => (
+              <Link key={u.id} href={`/more/internal-users/${u.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <div
+                  style={{
+                    padding: '14px 16px',
+                    borderTop: index === 0 ? 'none' : '1px solid var(--border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '10px',
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)' }}>
+                      {u.fullName || u.email || 'Unnamed User'}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          color: active ? '#86efac' : '#fcd34d',
-                          background: 'var(--background)',
-                          border: '1px solid var(--border)',
-                          borderRadius: '6px',
-                          padding: '2px 8px',
-                        }}
-                      >
-                        {active ? 'Active' : 'Inactive'}
-                      </span>
-                      <span style={{ fontSize: '16px', color: 'var(--text-muted)' }}>›</span>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {u.email || 'No email'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      {u.role}
                     </div>
                   </div>
-                </Link>
-              )
-            })
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        color: u.isAdmin ? '#93c5fd' : 'var(--text-muted)',
+                        background: 'var(--background)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '6px',
+                        padding: '2px 8px',
+                      }}
+                    >
+                      {u.isAdmin ? 'Admin' : 'User'}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        color: u.isActive ? '#86efac' : '#fcd34d',
+                        background: 'var(--background)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '6px',
+                        padding: '2px 8px',
+                      }}
+                    >
+                      {u.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                    <span style={{ fontSize: '16px', color: 'var(--text-muted)' }}>›</span>
+                  </div>
+                </div>
+              </Link>
+            ))
           )}
         </div>
       </div>
