@@ -192,106 +192,108 @@ export default function Nav({ title, back, jobId }: NavProps) {
         style={{
           position: 'fixed',
           top: 0,
+          bottom: 0,
           left: 0,
-          height: '100vh',
           width: '280px',
           maxWidth: '84vw',
           background: 'var(--surface)',
           borderRight: '1px solid var(--border)',
           display: 'flex',
           flexDirection: 'column',
+          justifyContent: 'space-between',
           zIndex: 400,
           transform: open ? 'translateX(0)' : 'translateX(-100%)',
           transition: 'transform .22s cubic-bezier(.4,0,.2,1)',
           overflow: 'hidden',
         }}
       >
-        <div
-          style={{
-            padding: '16px',
-            borderBottom: '1px solid var(--border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '10px',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)' }}>
-              Hendren Custom Homes
-            </div>
-            <div
-              style={{
-                fontSize: '11px',
-                color: 'var(--text-muted)',
-                fontFamily: 'ui-monospace,monospace',
-                marginTop: '2px',
-              }}
-            >
-              Field Operations Platform
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
+        <div>
+          <div
             style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '18px',
-              color: 'var(--text-muted)',
-              padding: '4px',
+              padding: '16px',
+              borderBottom: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '10px',
             }}
-            aria-label="Close navigation"
           >
-            ✕
-          </button>
-        </div>
-
-        <div style={{ padding: '10px 8px', flex: 1, overflowY: 'auto' }}>
-          {NAV_ITEMS.map((item) => {
-            const active = isActive(item)
-
-            return (
-              <a
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)' }}>
+                Hendren Custom Homes
+              </div>
+              <div
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '11px 12px',
-                  borderRadius: '10px',
-                  textDecoration: 'none',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  marginBottom: '4px',
-                  background: active ? 'var(--border)' : 'transparent',
-                  color: active ? 'var(--text)' : 'var(--text-muted)',
+                  fontSize: '11px',
+                  color: 'var(--text-muted)',
+                  fontFamily: 'ui-monospace,monospace',
+                  marginTop: '2px',
                 }}
               >
-                <span
+                Field Operations Platform
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '18px',
+                color: 'var(--text-muted)',
+                padding: '4px',
+              }}
+              aria-label="Close navigation"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div style={{ padding: '10px 8px 0 8px' }}>
+            {NAV_ITEMS.map((item) => {
+              const active = isActive(item)
+
+              return (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
                   style={{
-                    fontSize: '15px',
-                    width: '20px',
-                    textAlign: 'center',
-                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '11px 12px',
+                    borderRadius: '10px',
+                    textDecoration: 'none',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    marginBottom: '4px',
+                    background: active ? 'var(--border)' : 'transparent',
+                    color: active ? 'var(--text)' : 'var(--text-muted)',
                   }}
                 >
-                  {item.icon}
-                </span>
-                {item.label}
-              </a>
-            )
-          })}
+                  <span
+                    style={{
+                      fontSize: '15px',
+                      width: '20px',
+                      textAlign: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {item.icon}
+                  </span>
+                  {item.label}
+                </a>
+              )
+            })}
+          </div>
         </div>
 
         <div
           style={{
-            marginTop: 'auto',
-            padding: '12px 16px',
+            padding: '12px 16px 24px 16px',
             borderTop: '1px solid var(--border)',
             fontSize: '11px',
             color: 'var(--text-muted)',
