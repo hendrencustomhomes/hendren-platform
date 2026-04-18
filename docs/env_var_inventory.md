@@ -6,8 +6,8 @@
 | Variable | Side | Used In |
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Client + Server | `src/utils/supabase/client.ts`, `middleware.ts`, `server.ts`, `admin.ts`; `src/lib/supabase/server.ts`, `admin.ts` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Client + Server | `src/utils/supabase/client.ts`, `middleware.ts`, `server.ts`; `src/lib/supabase/server.ts` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server only | `src/utils/supabase/admin.ts`, `src/lib/supabase/admin.ts` — admin client for user management |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Client + Server | `src/utils/supabase/client.ts`, `middleware.ts`, `server.ts`; `src/lib/supabase/server.ts` |
+| `SUPABASE_SECRET_KEY` | Server only | `src/utils/supabase/admin.ts`, `src/lib/supabase/admin.ts` — admin client for user management |
 | `NEXT_PUBLIC_SITE_URL` | Server only | `src/app/login/actions.ts` — builds `redirectTo` URL for auth email links; falls back to `https://hendren-platform.vercel.app` if unset |
 
 ## Stale Staging References
@@ -34,8 +34,8 @@ ${NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/reset-password
 All three required vars must be set for Production environment:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SECRET_KEY`
 
 `NEXT_PUBLIC_SITE_URL` is optional for Production (hardcoded fallback matches) but required for Preview deployments to avoid broken auth redirect URLs.
 
