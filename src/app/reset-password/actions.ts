@@ -31,10 +31,9 @@ export async function updatePassword(password: string) {
     return { error: error.message }
   }
 
-  await supabase
-    .from('internal_access')
-    .update({ must_reset_password: false })
-    .eq('profile_id', user.id)
+  await supabase.auth.updateUser({
+    data: { must_reset_password: false },
+  })
 
   redirect('/')
 }
