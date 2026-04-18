@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Nav from '@/components/Nav'
 import {
   createInternalUser,
   resendResetEmail,
@@ -9,14 +10,94 @@ import {
 } from './actions'
 import { createClient } from '@/utils/supabase/client'
 
+const inputStyle = {
+  background: 'var(--background)',
+  border: '1px solid var(--border)',
+  borderRadius: '10px',
+  padding: '10px 12px',
+  color: 'var(--text)',
+  fontSize: '15px',
+  outline: 'none',
+  width: '100%',
+  boxSizing: 'border-box',
+} as const
+
+const labelStyle = {
+  fontSize: '11px',
+  fontWeight: 600,
+  color: 'var(--text-muted)',
+  marginBottom: '4px',
+  display: 'block',
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+} as const
+
+const sectionCardStyle = {
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
+  borderRadius: '18px',
+  overflow: 'hidden',
+} as const
+
+const sectionHeaderStyle = {
+  padding: '14px 16px',
+  borderBottom: '1px solid var(--border)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '8px',
+} as const
+
+const sectionTitleStyle = {
+  fontSize: '13px',
+  fontWeight: 700,
+  color: 'var(--text)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+} as const
+
+const ghostBtnStyle = {
+  background: 'transparent',
+  color: 'var(--text)',
+  border: '1px solid var(--border)',
+  borderRadius: '8px',
+  padding: '7px 10px',
+  fontSize: '12px',
+  fontWeight: 700,
+  cursor: 'pointer',
+} as const
+
+const solidBtnStyle = {
+  background: 'var(--text)',
+  color: 'var(--surface)',
+  border: 'none',
+  borderRadius: '8px',
+  padding: '8px 12px',
+  fontSize: '12px',
+  fontWeight: 700,
+  cursor: 'pointer',
+} as const
+
+type UserRow = {
+  id: string
+  full_name: string | null
+  internal_access?: { role?: string | null; is_active?: boolean | null }[] | { role?: string | null; is_active?: boolean | null } | null
+}
+
+function getAccess(row: UserRow) {
+  if (Array.isArray(row.internal_access)) return row.internal_access[0] ?? null
+  return row.internal_access ?? null
+}
+
 export default function InternalUsersPage() {
-  const [users, setUsers] = useState<any[]>([])
+  const [users, setUsers] = useState<UserRow[]>([])
   const [showForm, setShowForm] = useState(false)
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
+  const [listLoading, setListLoading] = useState(true)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
+  const [success, setSuccess] = useState('')
   const [warning, setWarning] = useState('')
   const [lastEmail, setLastEmail] = useState('')
 
@@ -25,18 +106,21 @@ export default function InternalUsersPage() {
   }, [])
 
   async function loadUsers() {
+    setListLoading(true)
     const supabase = createClient()
 
     const { data } = await supabase
       .from('profiles')
       .select('id, full_name, internal_access(role, is_active)')
+      .order('full_name', { ascending: true })
 
-    setUsers(data || [])
+    setUsers((data || []) as UserRow[])
+    setListLoading(false)
   }
 
   async function handleCreate() {
     setError('')
-    setSuccess(false)
+    setSuccess('')
     setWarning('')
     setLoading(true)
 
@@ -50,11 +134,12 @@ export default function InternalUsersPage() {
     }
 
     if (res?.warning) {
-      setWarning(res.warning)
+      setWarning('User created. Email was not sent.')
       setLastEmail(res.email)
+    } else {
+      setSuccess('User created. Password setup email sent.')
     }
 
-    setSuccess(true)
     setEmail('')
     setName('')
     setShowForm(false)
@@ -64,67 +149,138 @@ export default function InternalUsersPage() {
 
   async function handleResend() {
     if (!lastEmail) return
-    await resendResetEmail(lastEmail)
+    const res = await resendResetEmail(lastEmail)
+    if (res?.error) {
+      setError(res.error)
+      return
+    }
+    setSuccess('Password reset email sent.')
+    setWarning('')
   }
 
   async function handleCopy() {
     if (!lastEmail) return
     const res = await generateResetLink(lastEmail)
+    if (res?.error) {
+      setError(res.error)
+      return
+    }
     if (res?.link) {
-      navigator.clipboard.writeText(res.link)
+      await navigator.clipboard.writeText(res.link)
+      setSuccess('Reset link copied.')
     }
   }
 
   return (
-    <div style={{ padding: 20, background: '#0a0a0a', minHeight: '100vh' }}>
-      <h1 style={{ fontSize: 28 }}>Internal Users</h1>
+    <>
+      <Nav title="Internal Users" back="/more" />
 
-      {error && <div style={{ color: '#ff4d4f' }}>{error}</div>}
-      {success && <div style={{ color: '#52c41a' }}>User created</div>}
-      {warning && (
-        <div style={{ color: '#faad14' }}>
-          {warning}
-          <div style={{ marginTop: 6, display: 'flex', gap: 10 }}>
-            <button onClick={handleResend}>Resend Email</button>
-            <button onClick={handleCopy}>Copy Reset Link</button>
+      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={sectionCardStyle}>
+          <div style={sectionHeaderStyle}>
+            <div>
+              <div style={sectionTitleStyle}>User Management</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                Manage internal staff access and password setup.
+              </div>
+            </div>
+            <button type="button" style={ghostBtnStyle} onClick={() => setShowForm((v) => !v)}>
+              {showForm ? 'Cancel' : '+ Add User'}
+            </button>
+          </div>
+
+          <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {error && <div style={{ fontSize: '13px', color: '#fca5a5' }}>{error}</div>}
+            {success && <div style={{ fontSize: '13px', color: '#86efac' }}>{success}</div>}
+            {warning && (
+              <div style={{ fontSize: '13px', color: '#fcd34d' }}>
+                {warning}
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+                  <button type="button" style={ghostBtnStyle} onClick={handleResend}>Resend Email</button>
+                  <button type="button" style={ghostBtnStyle} onClick={handleCopy}>Copy Reset Link</button>
+                </div>
+              </div>
+            )}
+
+            {showForm && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px' }}>
+                <div>
+                  <label style={labelStyle} htmlFor="user-name">Full Name</label>
+                  <input id="user-name" placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle} htmlFor="user-email">Email</label>
+                  <input id="user-email" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} inputMode="email" />
+                </div>
+                <div>
+                  <button type="button" style={{ ...solidBtnStyle, opacity: loading ? 0.7 : 1 }} onClick={handleCreate} disabled={loading || !email || !name}>
+                    {loading ? 'Creating…' : 'Create User'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      )}
 
-      <div style={{ marginTop: 20 }}>
-        <button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? 'Cancel' : '+ Add User'}
-        </button>
-      </div>
+        <div style={sectionCardStyle}>
+          <div style={sectionHeaderStyle}>
+            <span style={sectionTitleStyle}>Users</span>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{users.length}</span>
+          </div>
 
-      {showForm && (
-        <div style={{ marginTop: 12 }}>
-          <input
-            placeholder="Full name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <input
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <button onClick={handleCreate} disabled={loading}>
-            {loading ? 'Creating...' : 'Create'}
-          </button>
+          {listLoading ? (
+            <div style={{ padding: '16px', fontSize: '13px', color: 'var(--text-muted)' }}>Loading…</div>
+          ) : users.length === 0 ? (
+            <div style={{ padding: '16px', fontSize: '13px', color: 'var(--text-muted)' }}>No internal users found.</div>
+          ) : (
+            users.map((u, index) => {
+              const access = getAccess(u)
+              const role = access?.role || 'general'
+              const active = access?.is_active !== false
+
+              return (
+                <Link key={u.id} href={`/more/internal-users/${u.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <div
+                    style={{
+                      padding: '14px 16px',
+                      borderTop: index === 0 ? 'none' : '1px solid var(--border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '10px',
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)' }}>
+                        {u.full_name || 'Unnamed User'}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        {role}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          color: active ? '#86efac' : '#fcd34d',
+                          background: 'var(--background)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '6px',
+                          padding: '2px 8px',
+                        }}
+                      >
+                        {active ? 'Active' : 'Inactive'}
+                      </span>
+                      <span style={{ fontSize: '16px', color: 'var(--text-muted)' }}>›</span>
+                    </div>
+                  </div>
+                </Link>
+              )
+            })
+          )}
         </div>
-      )}
-
-      <div style={{ marginTop: 20 }}>
-        {users.map((u) => (
-          <Link key={u.id} href={`/more/internal-users/${u.id}`}>
-            <div style={{ padding: 12, borderBottom: '1px solid #333' }}>
-              <div>{u.full_name}</div>
-              <div>{u.internal_access?.role}</div>
-            </div>
-          </Link>
-        ))}
       </div>
-    </div>
+    </>
   )
 }
