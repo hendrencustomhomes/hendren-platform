@@ -98,6 +98,11 @@ const inputStyle = {
   boxSizing: 'border-box',
 } as const
 
+const readOnlyInputStyle = {
+  ...inputStyle,
+  color: 'var(--text-muted)',
+} as const
+
 const labelStyle = {
   fontSize: '11px',
   fontWeight: 600,
@@ -169,6 +174,7 @@ export default function InternalUserDetailPage() {
   const addrTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [user, setUser] = useState<InternalUser | null>(null)
+  const [canManage, setCanManage] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -219,6 +225,7 @@ export default function InternalUserDetailPage() {
     }
 
     const nextUser = res.user as InternalUser
+    setCanManage(res?.canManage === true)
     setUser(nextUser)
     setName(nextUser.fullName || '')
     setRoles(nextUser.roles?.length ? nextUser.roles : ['viewer'])
@@ -391,46 +398,52 @@ export default function InternalUserDetailPage() {
 
             <div>
               <label style={labelStyle}>Email</label>
-              <input value={user?.email || ''} readOnly style={{ ...inputStyle, color: 'var(--text-muted)' }} />
+              <input value={user?.email || ''} readOnly style={readOnlyInputStyle} />
             </div>
 
             <div>
               <label style={labelStyle}>Name</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
+              <input value={name} onChange={(e) => setName(e.target.value)} style={canManage ? inputStyle : readOnlyInputStyle} readOnly={!canManage} />
             </div>
 
             <div ref={roleMenuRef} style={{ position: 'relative' }}>
               <label style={labelStyle}>Roles</label>
-              <button
-                type="button"
-                onClick={() => setRoleMenuOpen((v) => !v)}
-                style={{ ...inputStyle, textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
-              >
-                <span>{nonAdminRoleSummary}</span>
-                <span style={{ color: 'var(--text-muted)' }}>{roleMenuOpen ? '▴' : '▾'}</span>
-              </button>
-              {roleMenuOpen && (
-                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 6, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, zIndex: 20, overflow: 'hidden' }}>
-                  {APP_ROLES.map((role) => (
-                    <label key={role} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderTop: role === APP_ROLES[0] ? 'none' : '1px solid var(--border)', fontSize: '14px', color: 'var(--text)' }}>
-                      <input type="checkbox" checked={roles.includes(role)} onChange={() => toggleRole(role)} />
-                      {APP_ROLE_LABELS[role]}
-                    </label>
-                  ))}
-                </div>
+              {canManage ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setRoleMenuOpen((v) => !v)}
+                    style={{ ...inputStyle, textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+                  >
+                    <span>{nonAdminRoleSummary}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{roleMenuOpen ? '▴' : '▾'}</span>
+                  </button>
+                  {roleMenuOpen && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 6, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, zIndex: 20, overflow: 'hidden' }}>
+                      {APP_ROLES.map((role) => (
+                        <label key={role} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderTop: role === APP_ROLES[0] ? 'none' : '1px solid var(--border)', fontSize: '14px', color: 'var(--text)' }}>
+                          <input type="checkbox" checked={roles.includes(role)} onChange={() => toggleRole(role)} />
+                          {APP_ROLE_LABELS[role]}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <input value={nonAdminRoleSummary} readOnly style={readOnlyInputStyle} />
               )}
             </div>
 
             <div>
               <label style={labelStyle}>Phone</label>
-              <input value={phone} onChange={(e) => handlePhoneChange(e.target.value)} style={inputStyle} inputMode="numeric" type="tel" placeholder="(555) 555-1234" />
+              <input value={phone} onChange={(e) => handlePhoneChange(e.target.value)} style={canManage ? inputStyle : readOnlyInputStyle} readOnly={!canManage} inputMode="numeric" type="tel" placeholder="(555) 555-1234" />
             </div>
 
             <div>
               <label style={labelStyle}>Street</label>
               <div style={{ position: 'relative' }}>
-                <input value={street} onChange={(e) => handleStreetChange(e.target.value)} onBlur={() => setTimeout(() => setAddrSuggestions([]), 150)} style={inputStyle} autoComplete="address-line1" />
-                {addrSuggestions.length > 0 && (
+                <input value={street} onChange={(e) => handleStreetChange(e.target.value)} onBlur={() => setTimeout(() => setAddrSuggestions([]), 150)} style={canManage ? inputStyle : readOnlyInputStyle} readOnly={!canManage} autoComplete="address-line1" />
+                {canManage && addrSuggestions.length > 0 && (
                   <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', marginTop: '4px', boxShadow: '0 4px 16px rgba(0,0,0,0.14)', overflow: 'hidden' }}>
                     {addrSuggestions.map((s, i) => (
                       <button
@@ -450,55 +463,61 @@ export default function InternalUserDetailPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 84px 110px', gap: 10 }}>
               <div>
                 <label style={labelStyle}>City</label>
-                <input value={city} onChange={(e) => setCity(e.target.value)} style={inputStyle} autoComplete="address-level2" />
+                <input value={city} onChange={(e) => setCity(e.target.value)} style={canManage ? inputStyle : readOnlyInputStyle} readOnly={!canManage} autoComplete="address-level2" />
               </div>
               <div>
                 <label style={labelStyle}>State</label>
-                <input value={state} onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))} style={inputStyle} autoComplete="address-level1" maxLength={2} />
+                <input value={state} onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))} style={canManage ? inputStyle : readOnlyInputStyle} readOnly={!canManage} autoComplete="address-level1" maxLength={2} />
               </div>
               <div>
                 <label style={labelStyle}>ZIP</label>
-                <input value={zip} onChange={(e) => setZip(e.target.value.replace(/\D/g, '').slice(0, 5))} style={inputStyle} inputMode="numeric" autoComplete="postal-code" />
+                <input value={zip} onChange={(e) => setZip(e.target.value.replace(/\D/g, '').slice(0, 5))} style={canManage ? inputStyle : readOnlyInputStyle} readOnly={!canManage} inputMode="numeric" autoComplete="postal-code" />
               </div>
             </div>
 
             <div>
               <label style={labelStyle}>Birthday</label>
-              <input type="date" value={birthday || ''} onChange={(e) => setBirthday(e.target.value)} style={inputStyle} />
+              <input type="date" value={birthday || ''} onChange={(e) => setBirthday(e.target.value)} style={canManage ? inputStyle : readOnlyInputStyle} readOnly={!canManage} />
             </div>
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <span style={{ fontSize: '11px', fontWeight: 600, color: roles.includes('admin') ? '#93c5fd' : 'var(--text-muted)', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '999px', padding: '2px 8px' }}>
                 {roles.includes('admin') ? 'Admin' : 'User'}
               </span>
-              <span style={{ fontSize: '11px', fontWeight: 600, color: user?.isActive ? '#86efac' : '#fcd34d', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '999px', padding: '2px 8px' }}>
-                {user?.isActive ? 'Active' : 'Inactive'}
-              </span>
+              {canManage && (
+                <span style={{ fontSize: '11px', fontWeight: 600, color: user?.isActive ? '#86efac' : '#fcd34d', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '999px', padding: '2px 8px' }}>
+                  {user?.isActive ? 'Active' : 'Inactive'}
+                </span>
+              )}
             </div>
 
-            <button onClick={handleSave} style={solidBtnStyle} disabled={saving}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
+            {canManage && (
+              <button onClick={handleSave} style={solidBtnStyle} disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            )}
           </div>
         </div>
 
-        <div style={sectionCardStyle}>
-          <div style={sectionHeaderStyle}>
-            <span style={sectionTitleStyle}>Account</span>
-          </div>
+        {canManage && (
+          <div style={sectionCardStyle}>
+            <div style={sectionHeaderStyle}>
+              <span style={sectionTitleStyle}>Account</span>
+            </div>
 
-          <div style={{ padding: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={handleResend} style={ghostBtnStyle}>
-              Resend Email
-            </button>
-            <button onClick={handleCopy} style={ghostBtnStyle}>
-              Copy Reset Link
-            </button>
-            <button onClick={handleDeactivate} style={{ ...ghostBtnStyle, color: '#f87171' }}>
-              Deactivate
-            </button>
+            <div style={{ padding: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={handleResend} style={ghostBtnStyle}>
+                Resend Email
+              </button>
+              <button onClick={handleCopy} style={ghostBtnStyle}>
+                Copy Reset Link
+              </button>
+              <button onClick={handleDeactivate} style={{ ...ghostBtnStyle, color: '#f87171' }}>
+                Deactivate
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </>
   )
