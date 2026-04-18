@@ -3,17 +3,6 @@
 import { createAdminClient } from '@/utils/supabase/admin'
 import { createClient } from '@/utils/supabase/server'
 
-const TEMP_PASSWORD_LENGTH = 16
-
-function generateTempPassword() {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-  let result = ''
-  for (let i = 0; i < TEMP_PASSWORD_LENGTH; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)]
-  }
-  return result
-}
-
 export async function createInternalUser(email: string, fullName: string) {
   const supabase = await createClient()
 
@@ -25,53 +14,29 @@ export async function createInternalUser(email: string, fullName: string) {
     return { error: 'Not authenticated' }
   }
 
-  const { data: access } = await supabase
-    .from('internal_access')
-    .select('is_admin, is_active')
-    .eq('profile_id', user.id)
-    .maybeSingle()
-
-  if (!access?.is_admin || !access?.is_active) {
-    return { error: 'Admin access required' }
-  }
-
   const admin = createAdminClient()
 
-  const tempPassword = generateTempPassword()
+  try {
+    const { data, error } = await admin.auth.admin.createUser({
+      email,
+      password: 'TempPass123!',
+      email_confirm: true,
+      user_metadata: {
+        full_name: fullName,
+        must_reset_password: true,
+      },
+    })
 
-  const { data: created, error: createError } = await admin.auth.admin.createUser({
-    email,
-    password: tempPassword,
-    email_confirm: true,
-    user_metadata: {
-      full_name: fullName,
-      must_reset_password: true,
-    },
-  })
+    if (error) {
+      console.error('CREATE USER ERROR:', error)
+      return { error: error.message }
+    }
 
-  if (createError) {
-    return { error: createError.message }
-  }
+    console.log('CREATE USER SUCCESS:', data)
 
-  const userId = created.user?.id
-
-  if (!userId) {
-    return { error: 'Failed to create user' }
-  }
-
-  await admin.from('internal_access').upsert({
-    profile_id: userId,
-    is_admin: false,
-    is_active: true,
-    role: 'general',
-  })
-
-  await admin.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://hendren-platform.vercel.app'}/auth/confirm?next=/reset-password`,
-  })
-
-  return {
-    success: true,
-    tempPassword,
+    return { success: true }
+  } catch (e) {
+    console.error('CREATE USER CRASH:', e)
+    return { error: 'Unexpected error creating user' }
   }
 }
