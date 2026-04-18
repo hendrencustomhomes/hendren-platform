@@ -6,6 +6,21 @@ import { createClient } from '@/utils/supabase/server'
 
 const TEMP_PASSWORD_LENGTH = 16
 
+type AccessRow = {
+  profile_id: string
+  role: string | null
+  is_active: boolean | null
+  is_admin: boolean | null
+}
+
+type ProfileRow = {
+  id: string
+  full_name: string | null
+  phone: string | null
+  address: string | null
+  birthday: string | null
+}
+
 function generateTempPassword() {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
   let result = ''
@@ -39,6 +54,114 @@ async function requireAdmin() {
   }
 
   return { userId: user.id }
+}
+
+async function listAllAuthUsers() {
+  const admin = createAdminClient()
+  const users: Array<{ id: string; email: string | null }> = []
+  let page = 1
+
+  while (true) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 100 })
+    if (error) return { error: error.message as string }
+
+    const batch = data?.users ?? []
+    users.push(...batch.map((user) => ({ id: user.id, email: user.email ?? null })))
+
+    if (batch.length < 100) break
+    page += 1
+  }
+
+  return { users }
+}
+
+export async function getInternalUsers() {
+  const adminCheck = await requireAdmin()
+  if ('error' in adminCheck) return { error: adminCheck.error }
+
+  const admin = createAdminClient()
+  const [authUsersResult, accessResult, profilesResult] = await Promise.all([
+    listAllAuthUsers(),
+    admin
+      .from('internal_access')
+      .select('profile_id, role, is_active, is_admin')
+      .order('profile_id', { ascending: true }),
+    admin
+      .from('profiles')
+      .select('id, full_name, phone, address, birthday')
+      .order('full_name', { ascending: true }),
+  ])
+
+  if ('error' in authUsersResult) return { error: authUsersResult.error }
+  if (accessResult.error) return { error: accessResult.error.message }
+  if (profilesResult.error) return { error: profilesResult.error.message }
+
+  const authUsers = new Map(authUsersResult.users.map((user) => [user.id, user]))
+  const profiles = new Map(((profilesResult.data ?? []) as ProfileRow[]).map((profile) => [profile.id, profile]))
+
+  const users = ((accessResult.data ?? []) as AccessRow[]).map((access) => {
+    const profile = profiles.get(access.profile_id)
+    const authUser = authUsers.get(access.profile_id)
+
+    return {
+      id: access.profile_id,
+      email: authUser?.email ?? null,
+      fullName: profile?.full_name ?? null,
+      phone: profile?.phone ?? null,
+      address: profile?.address ?? null,
+      birthday: profile?.birthday ?? null,
+      role: access.role ?? 'general',
+      isActive: access.is_active !== false,
+      isAdmin: access.is_admin === true,
+    }
+  })
+
+  users.sort((a, b) => (a.fullName || a.email || '').localeCompare(b.fullName || b.email || ''))
+
+  return { users }
+}
+
+export async function getInternalUser(profileId: string) {
+  const adminCheck = await requireAdmin()
+  if ('error' in adminCheck) return { error: adminCheck.error }
+
+  const admin = createAdminClient()
+  const [authUsersResult, accessResult, profileResult] = await Promise.all([
+    listAllAuthUsers(),
+    admin
+      .from('internal_access')
+      .select('profile_id, role, is_active, is_admin')
+      .eq('profile_id', profileId)
+      .maybeSingle(),
+    admin
+      .from('profiles')
+      .select('id, full_name, phone, address, birthday')
+      .eq('id', profileId)
+      .maybeSingle(),
+  ])
+
+  if ('error' in authUsersResult) return { error: authUsersResult.error }
+  if (accessResult.error) return { error: accessResult.error.message }
+  if (profileResult.error) return { error: profileResult.error.message }
+  if (!accessResult.data) return { error: 'User not found' }
+
+  const authUser = authUsersResult.users.find((user) => user.id === profileId)
+  const profile = profileResult.data as ProfileRow | null
+  const access = accessResult.data as AccessRow
+
+  return {
+    user: {
+      id: profileId,
+      email: authUser?.email ?? null,
+      fullName: profile?.full_name ?? null,
+      phone: profile?.phone ?? null,
+      address: profile?.address ?? null,
+      birthday: profile?.birthday ?? null,
+      role: access.role ?? 'general',
+      isActive: access.is_active !== false,
+      isAdmin: access.is_admin === true,
+    },
+  }
 }
 
 export async function createInternalUser(email: string, fullName: string) {
@@ -118,6 +241,7 @@ export async function updateInternalUser(input: {
   profileId: string
   fullName: string
   role: string
+  isAdmin: boolean
   phone: string
   address: string
   birthday: string
@@ -141,7 +265,10 @@ export async function updateInternalUser(input: {
 
   const { error: accessError } = await admin
     .from('internal_access')
-    .update({ role: input.role.trim() || 'general' })
+    .update({
+      role: input.role.trim() || 'general',
+      is_admin: input.isAdmin,
+    })
     .eq('profile_id', input.profileId)
 
   if (accessError) return { error: accessError.message }
