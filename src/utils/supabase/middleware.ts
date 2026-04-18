@@ -17,13 +17,32 @@ export async function updateSession(request: NextRequest) {
       },
     }
   )
-  const { data: { user } } = await supabase.auth.getUser()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
   const { pathname } = request.nextUrl
-  const isPublic = pathname.startsWith("/login") || pathname.startsWith("/auth") || pathname.startsWith("/_next") || pathname.startsWith("/favicon")
+  const isPublic =
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/favicon")
+
   if (!user && !isPublic) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     return NextResponse.redirect(url)
   }
+
+  const mustResetPassword = user?.user_metadata?.must_reset_password === true
+
+  if (user && mustResetPassword && !pathname.startsWith("/reset-password") && !pathname.startsWith("/auth") && !pathname.startsWith("/login")) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/reset-password"
+    return NextResponse.redirect(url)
+  }
+
   return supabaseResponse
 }
