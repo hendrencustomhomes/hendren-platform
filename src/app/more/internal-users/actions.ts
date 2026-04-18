@@ -4,7 +4,6 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { createClient } from '@/utils/supabase/server'
 
 const TEMP_PASSWORD_LENGTH = 16
-const DEFAULT_SITE_URL = 'https://hendren-platform.vercel.app'
 
 function generateTempPassword() {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -19,31 +18,14 @@ function normalizeEmail(email: string) {
   return email.toLowerCase().trim()
 }
 
-function getSiteUrl() {
-  return process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL
-}
-
 export async function createInternalUser(email: string, fullName: string) {
-  const normalizedEmail = normalizeEmail(email)
-  const normalizedName = fullName.trim()
-
-  if (!normalizedEmail) {
-    return { error: 'Email is required.' }
-  }
-
-  if (!normalizedName) {
-    return { error: 'Full name is required.' }
-  }
-
   const supabase = await createClient()
 
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { error: 'Not authenticated' }
-  }
+  if (!user) return { error: 'Not authenticated' }
 
   const { data: access } = await supabase
     .from('internal_access')
@@ -58,52 +40,56 @@ export async function createInternalUser(email: string, fullName: string) {
   const admin = createAdminClient()
   const tempPassword = generateTempPassword()
 
-  try {
-    const { data, error } = await admin.auth.admin.createUser({
-      email: normalizedEmail,
-      password: tempPassword,
-      email_confirm: true,
-      user_metadata: {
-        full_name: normalizedName,
-        must_reset_password: true,
-      },
-    })
+  const { data, error } = await admin.auth.admin.createUser({
+    email: normalizeEmail(email),
+    password: tempPassword,
+    email_confirm: true,
+    user_metadata: {
+      full_name: fullName,
+      must_reset_password: true,
+    },
+  })
 
-    if (error) {
-      console.error('CREATE USER ERROR:', error)
-      return { error: error.message }
+  if (error) return { error: error.message }
+
+  const userId = data.user?.id
+  if (!userId) return { error: 'Failed to create user' }
+
+  await admin.from('internal_access').upsert({
+    profile_id: userId,
+    is_admin: false,
+    is_active: true,
+    role: 'general',
+  })
+
+  const { error: resetError } = await admin.auth.resetPasswordForEmail(email)
+
+  if (resetError) {
+    return {
+      success: true,
+      warning: 'User created but email failed',
+      email,
     }
-
-    const userId = data.user?.id
-
-    if (!userId) {
-      return { error: 'Failed to create user.' }
-    }
-
-    const { error: upsertError } = await admin.from('internal_access').upsert({
-      profile_id: userId,
-      is_admin: false,
-      is_active: true,
-      role: 'general',
-    })
-
-    if (upsertError) {
-      console.error('INTERNAL ACCESS UPSERT ERROR:', upsertError)
-      return { error: upsertError.message }
-    }
-
-    const { error: resetError } = await admin.auth.resetPasswordForEmail(normalizedEmail, {
-      redirectTo: `${getSiteUrl()}/auth/confirm`,
-    })
-
-    if (resetError) {
-      console.error('RESET PASSWORD EMAIL ERROR:', resetError)
-      return { error: resetError.message }
-    }
-
-    return { success: true }
-  } catch (e) {
-    console.error('CREATE USER CRASH:', e)
-    return { error: 'Unexpected error creating user' }
   }
+
+  return { success: true, email }
+}
+
+export async function resendResetEmail(email: string) {
+  const admin = createAdminClient()
+  const { error } = await admin.auth.resetPasswordForEmail(email)
+  if (error) return { error: error.message }
+  return { success: true }
+}
+
+export async function generateResetLink(email: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.auth.generateLink({
+    type: 'recovery',
+    email,
+  })
+
+  if (error) return { error: error.message }
+
+  return { link: data?.action_link }
 }
