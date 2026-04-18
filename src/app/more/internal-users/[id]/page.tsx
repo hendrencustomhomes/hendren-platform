@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
-import { createClient } from '@/utils/supabase/client'
 import {
+  getInternalUser,
   updateInternalUser,
   deactivateInternalUser,
   resendResetEmail,
@@ -74,14 +74,24 @@ const solidBtnStyle = {
   cursor: 'pointer',
 } as const
 
+type InternalUser = {
+  id: string
+  email: string | null
+  fullName: string | null
+  phone: string | null
+  address: string | null
+  birthday: string | null
+  role: string
+  isActive: boolean
+  isAdmin: boolean
+}
+
 export default function InternalUserDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const supabase = createClient()
-
   const id = params.id as string
 
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<InternalUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -89,6 +99,7 @@ export default function InternalUserDetailPage() {
 
   const [name, setName] = useState('')
   const [role, setRole] = useState('general')
+  const [isAdmin, setIsAdmin] = useState(false)
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
   const [birthday, setBirthday] = useState('')
@@ -99,41 +110,37 @@ export default function InternalUserDetailPage() {
 
   async function load() {
     setLoading(true)
+    setError('')
 
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, phone, address, birthday, internal_access(role, is_active)')
-      .eq('id', id)
-      .maybeSingle()
+    const res = await getInternalUser(id)
 
-    if (!data) {
-      setError('User not found')
+    if (res?.error || !res?.user) {
+      setError(res?.error || 'User not found')
       setLoading(false)
       return
     }
 
-    const access = Array.isArray(data.internal_access)
-      ? data.internal_access[0]
-      : data.internal_access
-
-    setUser(data)
-    setName(data.full_name || '')
-    setRole(access?.role || 'general')
-    setPhone(data.phone || '')
-    setAddress(data.address || '')
-    setBirthday(data.birthday || '')
-
+    const nextUser = res.user as InternalUser
+    setUser(nextUser)
+    setName(nextUser.fullName || '')
+    setRole(nextUser.role || 'general')
+    setIsAdmin(nextUser.isAdmin)
+    setPhone(nextUser.phone || '')
+    setAddress(nextUser.address || '')
+    setBirthday(nextUser.birthday || '')
     setLoading(false)
   }
 
   async function handleSave() {
     setSaving(true)
     setError('')
+    setSuccess('')
 
     const res = await updateInternalUser({
       profileId: id,
       fullName: name,
       role,
+      isAdmin,
       phone,
       address,
       birthday,
@@ -147,12 +154,44 @@ export default function InternalUserDetailPage() {
     }
 
     setSuccess('Saved')
+    await load()
   }
 
   async function handleDeactivate() {
     const res = await deactivateInternalUser(id)
-    if (!res?.error) {
-      router.push('/more/internal-users')
+    if (res?.error) {
+      setError(res.error)
+      return
+    }
+    router.push('/more/internal-users')
+  }
+
+  async function handleResend() {
+    if (!user?.email) {
+      setError('No email found for this user')
+      return
+    }
+    const res = await resendResetEmail(user.email)
+    if (res?.error) {
+      setError(res.error)
+      return
+    }
+    setSuccess('Password reset email sent.')
+  }
+
+  async function handleCopy() {
+    if (!user?.email) {
+      setError('No email found for this user')
+      return
+    }
+    const res = await generateResetLink(user.email)
+    if (res?.error) {
+      setError(res.error)
+      return
+    }
+    if (res?.link) {
+      await navigator.clipboard.writeText(res.link)
+      setSuccess('Reset link copied.')
     }
   }
 
@@ -160,24 +199,29 @@ export default function InternalUserDetailPage() {
     return (
       <>
         <Nav title="User" back="/more/internal-users" />
-        <div style={{ padding: 16 }}>Loading…</div>
+        <div style={{ padding: 16, fontSize: '13px', color: 'var(--text-muted)' }}>Loading…</div>
       </>
     )
   }
 
   return (
     <>
-      <Nav title={name || 'User'} back="/more/internal-users" />
+      <Nav title={name || user?.email || 'User'} back="/more/internal-users" />
 
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={sectionCardStyle}>
           <div style={sectionHeaderStyle}>
-            <span style={sectionTitleStyle}>Info</span>
+            <span style={sectionTitleStyle}>Profile</span>
           </div>
 
           <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {error && <div style={{ color: '#fca5a5' }}>{error}</div>}
-            {success && <div style={{ color: '#86efac' }}>{success}</div>}
+            {error && <div style={{ color: '#fca5a5', fontSize: '13px' }}>{error}</div>}
+            {success && <div style={{ color: '#86efac', fontSize: '13px' }}>{success}</div>}
+
+            <div>
+              <label style={labelStyle}>Email</label>
+              <input value={user?.email || ''} readOnly style={{ ...inputStyle, color: 'var(--text-muted)' }} />
+            </div>
 
             <div>
               <label style={labelStyle}>Name</label>
@@ -188,6 +232,11 @@ export default function InternalUserDetailPage() {
               <label style={labelStyle}>Role</label>
               <input value={role} onChange={(e) => setRole(e.target.value)} style={inputStyle} />
             </div>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '14px', color: 'var(--text)', fontWeight: 600 }}>
+              <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />
+              Admin
+            </label>
 
             <div>
               <label style={labelStyle}>Phone</label>
@@ -201,7 +250,36 @@ export default function InternalUserDetailPage() {
 
             <div>
               <label style={labelStyle}>Birthday</label>
-              <input value={birthday} onChange={(e) => setBirthday(e.target.value)} style={inputStyle} />
+              <input type="date" value={birthday || ''} onChange={(e) => setBirthday(e.target.value)} style={inputStyle} />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: isAdmin ? '#93c5fd' : 'var(--text-muted)',
+                  background: 'var(--background)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  padding: '2px 8px',
+                }}
+              >
+                {isAdmin ? 'Admin' : 'User'}
+              </span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: user?.isActive ? '#86efac' : '#fcd34d',
+                  background: 'var(--background)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  padding: '2px 8px',
+                }}
+              >
+                {user?.isActive ? 'Active' : 'Inactive'}
+              </span>
             </div>
 
             <button onClick={handleSave} style={solidBtnStyle} disabled={saving}>
@@ -216,16 +294,10 @@ export default function InternalUserDetailPage() {
           </div>
 
           <div style={{ padding: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={() => resendResetEmail(user?.email)} style={ghostBtnStyle}>
+            <button onClick={handleResend} style={ghostBtnStyle}>
               Resend Email
             </button>
-            <button
-              onClick={async () => {
-                const res = await generateResetLink(user?.email)
-                if (res?.link) navigator.clipboard.writeText(res.link)
-              }}
-              style={ghostBtnStyle}
-            >
+            <button onClick={handleCopy} style={ghostBtnStyle}>
               Copy Reset Link
             </button>
             <button onClick={handleDeactivate} style={{ ...ghostBtnStyle, color: '#f87171' }}>
