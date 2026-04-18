@@ -58,15 +58,14 @@ export async function createInternalUser(email: string, fullName: string) {
     return { error: 'Failed to create user' }
   }
 
-  // Ensure internal_access row exists
   await admin.from('internal_access').upsert({
     profile_id: userId,
     is_admin: false,
     is_active: true,
     role: 'general',
+    must_reset_password: true,
   })
 
-  // Trigger password reset email so user sets their own password
   await admin.auth.resetPasswordForEmail(email, {
     redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://hendren-platform.vercel.app'}/auth/confirm?next=/reset-password`,
   })
