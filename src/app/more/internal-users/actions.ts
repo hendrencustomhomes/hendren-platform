@@ -93,7 +93,7 @@ export async function createInternalUser(email: string, fullName: string) {
     }
 
     const { error: resetError } = await admin.auth.resetPasswordForEmail(normalizedEmail, {
-      redirectTo: `${getSiteUrl()}/auth/confirm?next=/reset-password`,
+      redirectTo: `${getSiteUrl()}/auth/confirm`,
     })
 
     if (resetError) {
