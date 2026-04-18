@@ -40,12 +40,28 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <form onSubmit={handleSubmit} style={{ width: 320 }}>
-        <h2>Sign In</h2>
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20,
+      background: '#0a0a0a'
+    }}>
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          width: '100%',
+          maxWidth: 420,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12
+        }}
+      >
+        <h1 style={{ fontSize: 28 }}>Sign In</h1>
 
-        {error && <div style={{ color: 'red' }}>{error}</div>}
-        {message && <div style={{ color: 'green' }}>{message}</div>}
+        {error && <div style={{ color: '#ff4d4f' }}>{error}</div>}
+        {message && <div style={{ color: '#52c41a' }}>{message}</div>}
 
         <input
           type="email"
@@ -53,6 +69,14 @@ export default function LoginPage() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
+          style={{
+            padding: '14px',
+            fontSize: 16,
+            borderRadius: 8,
+            border: '1px solid #333',
+            background: '#111',
+            color: '#fff'
+          }}
         />
 
         <input
@@ -61,13 +85,43 @@ export default function LoginPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
+          style={{
+            padding: '14px',
+            fontSize: 16,
+            borderRadius: 8,
+            border: '1px solid #333',
+            background: '#111',
+            color: '#fff'
+          }}
         />
 
-        <button type="submit" disabled={loading}>
+        <button
+          type="submit"
+          disabled={loading}
+          style={{
+            padding: '14px',
+            fontSize: 16,
+            borderRadius: 8,
+            border: 'none',
+            background: '#1677ff',
+            color: '#fff'
+          }}
+        >
           {loading ? 'Signing in...' : 'Sign In'}
         </button>
 
-        <button type="button" onClick={handleReset} disabled={!email}>
+        <button
+          type="button"
+          onClick={handleReset}
+          disabled={!email}
+          style={{
+            padding: '10px',
+            fontSize: 14,
+            background: 'transparent',
+            color: '#999',
+            border: 'none'
+          }}
+        >
           Forgot password?
         </button>
       </form>
