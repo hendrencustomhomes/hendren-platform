@@ -3,33 +3,41 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 
-export async function checkEmailType(email: string): Promise<'internal' | 'external'> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .rpc('is_internal_email', { p_email: email.toLowerCase().trim() })
-  if (error || !data) return 'external'
-  return data === true ? 'internal' : 'external'
+const DEFAULT_SITE_URL = 'https://hendren-platform.vercel.app'
+
+function normalizeEmail(email: string) {
+  return email.toLowerCase().trim()
+}
+
+function getSiteUrl() {
+  return process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL
 }
 
 export async function signInWithPassword(email: string, password: string) {
   const supabase = await createClient()
   const { error } = await supabase.auth.signInWithPassword({
-    email: email.toLowerCase().trim(),
+    email: normalizeEmail(email),
     password,
   })
+
   if (error) return { error: error.message }
+
   redirect('/')
 }
 
-export async function signInWithMagicLink(email: string) {
+export async function requestPasswordReset(email: string) {
+  const normalizedEmail = normalizeEmail(email)
+
+  if (!normalizedEmail) {
+    return { error: 'Enter your email first.' }
+  }
+
   const supabase = await createClient()
-  const { error } = await supabase.auth.signInWithOtp({
-    email: email.toLowerCase().trim(),
-    options: {
-      shouldCreateUser: false,
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://hendren-platform.vercel.app'}/auth/confirm`,
-    },
+  const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+    redirectTo: `${getSiteUrl()}/auth/confirm?next=/reset-password`,
   })
+
   if (error) return { error: error.message }
+
   return { success: true }
 }
