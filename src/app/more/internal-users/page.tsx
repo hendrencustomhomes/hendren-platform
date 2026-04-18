@@ -117,6 +117,7 @@ function copyText(text: string) {
 
 export default function InternalUsersPage() {
   const [users, setUsers] = useState<InternalUser[]>([])
+  const [canManage, setCanManage] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
@@ -142,6 +143,7 @@ export default function InternalUsersPage() {
     }
 
     setUsers((res?.users || []) as InternalUser[])
+    setCanManage(res?.canManage === true)
     setListLoading(false)
   }
 
@@ -208,18 +210,20 @@ export default function InternalUsersPage() {
       <Nav title="Internal Users" />
 
       <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button type="button" style={ghostBtnStyle} onClick={() => setShowForm((v) => !v)}>
-            {showForm ? 'Cancel' : '+ Add User'}
-          </button>
-        </div>
+        {canManage && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button type="button" style={ghostBtnStyle} onClick={() => setShowForm((v) => !v)}>
+              {showForm ? 'Cancel' : '+ Add User'}
+            </button>
+          </div>
+        )}
 
-        {(showForm || error || success || warning) && (
+        {((canManage && showForm) || error || success || warning) && (
           <div style={sectionCardStyle}>
             <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {error && <div style={{ fontSize: '13px', color: '#fca5a5' }}>{error}</div>}
               {success && <div style={{ fontSize: '13px', color: '#86efac' }}>{success}</div>}
-              {warning && (
+              {warning && canManage && (
                 <div style={{ fontSize: '13px', color: '#fcd34d' }}>
                   {warning}
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
@@ -229,7 +233,7 @@ export default function InternalUsersPage() {
                 </div>
               )}
 
-              {showForm && (
+              {canManage && showForm && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px' }}>
                   <div>
                     <label style={labelStyle} htmlFor="user-name">Full Name</label>
@@ -291,9 +295,11 @@ export default function InternalUsersPage() {
                         <span style={badgeStyle(isAdmin ? '#93c5fd' : 'var(--text-muted)')}>
                           {isAdmin ? 'Admin' : 'User'}
                         </span>
-                        <span style={badgeStyle(u.isActive ? '#86efac' : '#fcd34d')}>
-                          {u.isActive ? 'Active' : 'Inactive'}
-                        </span>
+                        {canManage && (
+                          <span style={badgeStyle(u.isActive ? '#86efac' : '#fcd34d')}>
+                            {u.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        )}
                       </div>
                       <span style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: 1 }}>›</span>
                     </div>
