@@ -3,22 +3,34 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { createClient } from '@/utils/supabase/server'
+import { parseStoredRoles, serializeRoles } from '@/lib/permissions'
 
 const TEMP_PASSWORD_LENGTH = 16
 
-type AccessRow = {
-  profile_id: string
-  role: string | null
-  is_active: boolean | null
-  is_admin: boolean | null
+function composeAddress(street: string, city: string, state: string, zip: string): string {
+  const s = street.trim(), c = city.trim(), st = state.trim(), z = zip.trim()
+  const cityStateZip = [c, [st, z].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+  return [s, cityStateZip].filter(Boolean).join(', ')
 }
 
-type ProfileRow = {
-  id: string
-  full_name: string | null
-  phone: string | null
-  address: string | null
-  birthday: string | null
+function splitAddress(address: string | null) {
+  if (!address) return { street: '', city: '', state: '', zip: '' }
+
+  const parts = address.split(',').map((p) => p.trim())
+  const street = parts[0] || ''
+
+  let city = ''
+  let state = ''
+  let zip = ''
+
+  if (parts[1]) {
+    const cityStateZip = parts[1].split(' ')
+    city = cityStateZip.slice(0, -2).join(' ') || parts[1]
+    state = cityStateZip[cityStateZip.length - 2] || ''
+    zip = cityStateZip[cityStateZip.length - 1] || ''
+  }
+
+  return { street, city, state, zip }
 }
 
 function generateTempPassword() {
@@ -84,12 +96,10 @@ export async function getInternalUsers() {
     listAllAuthUsers(),
     admin
       .from('internal_access')
-      .select('profile_id, role, is_active, is_admin')
-      .order('profile_id', { ascending: true }),
+      .select('profile_id, role, is_active, is_admin'),
     admin
       .from('profiles')
-      .select('id, full_name, phone, address, birthday')
-      .order('full_name', { ascending: true }),
+      .select('id, full_name, phone, address, birthday'),
   ])
 
   if ('error' in authUsersResult) return { error: authUsersResult.error }
@@ -97,9 +107,9 @@ export async function getInternalUsers() {
   if (profilesResult.error) return { error: profilesResult.error.message }
 
   const authUsers = new Map(authUsersResult.users.map((user) => [user.id, user]))
-  const profiles = new Map(((profilesResult.data ?? []) as ProfileRow[]).map((profile) => [profile.id, profile]))
+  const profiles = new Map((profilesResult.data || []).map((p: any) => [p.id, p]))
 
-  const users = ((accessResult.data ?? []) as AccessRow[]).map((access) => {
+  const users = (accessResult.data || []).map((access: any) => {
     const profile = profiles.get(access.profile_id)
     const authUser = authUsers.get(access.profile_id)
 
@@ -109,14 +119,12 @@ export async function getInternalUsers() {
       fullName: profile?.full_name ?? null,
       phone: profile?.phone ?? null,
       address: profile?.address ?? null,
+      addressParts: splitAddress(profile?.address),
       birthday: profile?.birthday ?? null,
-      role: access.role ?? 'general',
+      roles: parseStoredRoles(access.role, access.is_admin === true),
       isActive: access.is_active !== false,
-      isAdmin: access.is_admin === true,
     }
   })
-
-  users.sort((a, b) => (a.fullName || a.email || '').localeCompare(b.fullName || b.email || ''))
 
   return { users }
 }
@@ -146,8 +154,8 @@ export async function getInternalUser(profileId: string) {
   if (!accessResult.data) return { error: 'User not found' }
 
   const authUser = authUsersResult.users.find((user) => user.id === profileId)
-  const profile = profileResult.data as ProfileRow | null
-  const access = accessResult.data as AccessRow
+  const profile = profileResult.data
+  const access = accessResult.data
 
   return {
     user: {
@@ -156,94 +164,23 @@ export async function getInternalUser(profileId: string) {
       fullName: profile?.full_name ?? null,
       phone: profile?.phone ?? null,
       address: profile?.address ?? null,
+      addressParts: splitAddress(profile?.address),
       birthday: profile?.birthday ?? null,
-      role: access.role ?? 'general',
+      roles: parseStoredRoles(access.role, access.is_admin === true),
       isActive: access.is_active !== false,
-      isAdmin: access.is_admin === true,
     },
   }
-}
-
-export async function createInternalUser(email: string, fullName: string) {
-  const adminCheck = await requireAdmin()
-  if ('error' in adminCheck) return { error: adminCheck.error }
-
-  const admin = createAdminClient()
-  const tempPassword = generateTempPassword()
-  const normalizedEmail = normalizeEmail(email)
-  const trimmedName = fullName.trim()
-
-  const { data, error } = await admin.auth.admin.createUser({
-    email: normalizedEmail,
-    password: tempPassword,
-    email_confirm: true,
-    user_metadata: {
-      full_name: trimmedName,
-      must_reset_password: true,
-    },
-  })
-
-  if (error) return { error: error.message }
-
-  const userId = data.user?.id
-  if (!userId) return { error: 'Failed to create user' }
-
-  const { error: upsertError } = await admin.from('internal_access').upsert({
-    profile_id: userId,
-    is_admin: false,
-    is_active: true,
-    role: 'general',
-  })
-
-  if (upsertError) return { error: upsertError.message }
-
-  revalidatePath('/more/internal-users')
-
-  const { error: resetError } = await admin.auth.resetPasswordForEmail(normalizedEmail)
-
-  if (resetError) {
-    return {
-      success: true,
-      warning: 'User created but email failed',
-      email: normalizedEmail,
-    }
-  }
-
-  return { success: true, email: normalizedEmail }
-}
-
-export async function resendResetEmail(email: string) {
-  const adminCheck = await requireAdmin()
-  if ('error' in adminCheck) return { error: adminCheck.error }
-
-  const admin = createAdminClient()
-  const { error } = await admin.auth.resetPasswordForEmail(normalizeEmail(email))
-  if (error) return { error: error.message }
-  return { success: true }
-}
-
-export async function generateResetLink(email: string) {
-  const adminCheck = await requireAdmin()
-  if ('error' in adminCheck) return { error: adminCheck.error }
-
-  const admin = createAdminClient()
-  const { data, error } = await admin.auth.admin.generateLink({
-    type: 'recovery',
-    email: normalizeEmail(email),
-  })
-
-  if (error) return { error: error.message }
-
-  return { link: data?.properties?.action_link ?? null }
 }
 
 export async function updateInternalUser(input: {
   profileId: string
   fullName: string
-  role: string
-  isAdmin: boolean
+  roles: string[]
   phone: string
-  address: string
+  street: string
+  city: string
+  state: string
+  zip: string
   birthday: string
 }) {
   const adminCheck = await requireAdmin()
@@ -251,12 +188,14 @@ export async function updateInternalUser(input: {
 
   const admin = createAdminClient()
 
+  const { roleValue, isAdmin } = serializeRoles(input.roles as any)
+
   const { error: profileError } = await admin
     .from('profiles')
     .update({
       full_name: input.fullName.trim(),
       phone: input.phone.trim() || null,
-      address: input.address.trim() || null,
+      address: composeAddress(input.street, input.city, input.state, input.zip) || null,
       birthday: input.birthday || null,
     })
     .eq('id', input.profileId)
@@ -266,8 +205,8 @@ export async function updateInternalUser(input: {
   const { error: accessError } = await admin
     .from('internal_access')
     .update({
-      role: input.role.trim() || 'general',
-      is_admin: input.isAdmin,
+      role: roleValue,
+      is_admin: isAdmin,
     })
     .eq('profile_id', input.profileId)
 
@@ -275,24 +214,6 @@ export async function updateInternalUser(input: {
 
   revalidatePath('/more/internal-users')
   revalidatePath(`/more/internal-users/${input.profileId}`)
-
-  return { success: true }
-}
-
-export async function deactivateInternalUser(profileId: string) {
-  const adminCheck = await requireAdmin()
-  if ('error' in adminCheck) return { error: adminCheck.error }
-
-  const admin = createAdminClient()
-  const { error } = await admin
-    .from('internal_access')
-    .update({ is_active: false })
-    .eq('profile_id', profileId)
-
-  if (error) return { error: error.message }
-
-  revalidatePath('/more/internal-users')
-  revalidatePath(`/more/internal-users/${profileId}`)
 
   return { success: true }
 }
