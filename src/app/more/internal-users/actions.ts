@@ -84,12 +84,12 @@ export async function resendResetEmail(email: string) {
 
 export async function generateResetLink(email: string) {
   const admin = createAdminClient()
-  const { data, error } = await admin.auth.generateLink({
+  const { data, error } = await admin.auth.admin.generateLink({
     type: 'recovery',
     email,
   })
 
   if (error) return { error: error.message }
 
-  return { link: data?.action_link }
+  return { link: data?.properties?.action_link ?? null }
 }
