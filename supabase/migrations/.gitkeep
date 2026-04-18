@@ -1,3 +1,0 @@
-# Keep this directory in git.
-# Real migration files should be committed here as:
-# supabase/migrations/<timestamp>_<name>.sql
