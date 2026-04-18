@@ -8,11 +8,11 @@ export default function InternalUsersPage() {
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [result, setResult] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
 
   async function handleCreate() {
     setError('')
-    setResult(null)
+    setSuccess(false)
     setLoading(true)
 
     const res = await createInternalUser(email, name)
@@ -24,45 +24,79 @@ export default function InternalUsersPage() {
       return
     }
 
-    setResult('User created successfully.')
+    setSuccess(true)
     setEmail('')
     setName('')
   }
 
   return (
-    <div style={{ padding: 20, maxWidth: 480 }}>
-      <h1>Internal Users</h1>
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20,
+      background: '#0a0a0a'
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: 420,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12
+      }}>
+        <h1 style={{ fontSize: 28 }}>Add Internal User</h1>
 
-      <div style={{ marginBottom: 12 }}>
+        {error && <div style={{ color: '#ff4d4f' }}>{error}</div>}
+        {success && (
+          <div style={{ color: '#52c41a' }}>
+            User created. Password setup email sent.
+          </div>
+        )}
+
         <input
           placeholder="Full name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          style={{ width: '100%', fontSize: 16, marginBottom: 8 }}
+          style={{
+            padding: '14px',
+            fontSize: 16,
+            borderRadius: 8,
+            border: '1px solid #333',
+            background: '#111',
+            color: '#fff'
+          }}
         />
 
         <input
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          style={{ width: '100%', fontSize: 16 }}
+          style={{
+            padding: '14px',
+            fontSize: 16,
+            borderRadius: 8,
+            border: '1px solid #333',
+            background: '#111',
+            color: '#fff'
+          }}
         />
+
+        <button
+          onClick={handleCreate}
+          disabled={loading || !email || !name}
+          style={{
+            padding: '14px',
+            fontSize: 16,
+            borderRadius: 8,
+            border: 'none',
+            background: '#1677ff',
+            color: '#fff'
+          }}
+        >
+          {loading ? 'Creating...' : 'Create User'}
+        </button>
       </div>
-
-      <button onClick={handleCreate} disabled={loading || !email || !name}>
-        {loading ? 'Creating...' : 'Create User'}
-      </button>
-
-      {error && <div style={{ color: 'red', marginTop: 12 }}>{error}</div>}
-
-      {result && (
-        <div style={{ marginTop: 12, color: 'green' }}>
-          {result}
-          <div style={{ fontSize: 12, marginTop: 4 }}>
-            A reset email has been sent to the user.
-          </div>
-        </div>
-      )}
     </div>
   )
 }
