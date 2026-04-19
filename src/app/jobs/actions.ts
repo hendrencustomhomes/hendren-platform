@@ -19,8 +19,8 @@ export async function archiveJob(jobId: string) {
   const { error } = await supabase
     .from('jobs')
     .update({
-      deleted_at: new Date().toISOString(),
-      deleted_by: user.id,
+      archived_at: new Date().toISOString(),
+      archived_by: user.id,
     })
     .eq('id', jobId)
 
@@ -43,8 +43,8 @@ export async function restoreJob(jobId: string) {
   const { error } = await supabase
     .from('jobs')
     .update({
-      deleted_at: null,
-      deleted_by: null,
+      archived_at: null,
+      archived_by: null,
     })
     .eq('id', jobId)
 
