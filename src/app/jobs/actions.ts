@@ -11,7 +11,7 @@ async function requireUser() {
   return { supabase, user }
 }
 
-export async function trashJob(jobId: string) {
+export async function archiveJob(jobId: string) {
   const auth = await requireUser()
   if ('error' in auth) redirect('/login')
 
@@ -31,6 +31,10 @@ export async function trashJob(jobId: string) {
   redirect('/jobs')
 }
 
+export async function trashJob(jobId: string) {
+  return archiveJob(jobId)
+}
+
 export async function restoreJob(jobId: string) {
   const auth = await requireUser()
   if ('error' in auth) redirect('/login')
@@ -48,5 +52,5 @@ export async function restoreJob(jobId: string) {
 
   revalidatePath('/jobs')
   revalidatePath(`/jobs/${jobId}`)
-  redirect('/jobs?view=trashed')
+  redirect('/jobs?view=archived')
 }
