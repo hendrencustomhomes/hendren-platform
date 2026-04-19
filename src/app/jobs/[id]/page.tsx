@@ -2,7 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Nav from '@/components/Nav'
 import JobTabs from './JobTabs'
-import JobTrashControls from './JobTrashControls'
+import JobArchiveControls from './JobArchiveControls'
 
 const STAGES = [
   'intake','takeoff','estimate','contract','selections','procurement','schedule','draws','construction'
@@ -38,7 +38,7 @@ export default async function JobDetailPage({params}:{params:Promise<{id:string}
   if(jobError){console.error('Job query failed:',jobError);throw new Error(jobError.message)}
   if(!job)notFound()
 
-  if(job.deleted_at){redirect('/jobs?view=trashed')}
+  if(job.deleted_at){redirect('/jobs?view=archived')}
 
   const roleAssignmentSelect=`
     profile_id,
@@ -93,7 +93,7 @@ export default async function JobDetailPage({params}:{params:Promise<{id:string}
             </div>
 
             <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
-              <JobTrashControls jobId={id} counts={counts}/>
+              <JobArchiveControls jobId={id} counts={counts}/>
               <a href={`/schedule?job=${id}`} style={{fontSize:'12px',padding:'7px 10px',border:'1px solid var(--border)',borderRadius:'7px'}}>📅 Master Schedule</a>
             </div>
           </div>
