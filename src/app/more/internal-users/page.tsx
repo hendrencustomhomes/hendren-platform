@@ -79,6 +79,8 @@ const solidBtnStyle = {
   cursor: 'pointer',
 } as const
 
+type InternalUsersView = 'active' | 'inactive' | 'archived'
+
 type InternalUser = {
   id: string
   email: string | null
@@ -88,6 +90,7 @@ type InternalUser = {
   birthday: string | null
   roles: AppRole[]
   isActive: boolean
+  archivedAt: string | null
 }
 
 function badgeStyle(color: string) {
@@ -100,6 +103,15 @@ function badgeStyle(color: string) {
     borderRadius: '999px',
     padding: '2px 8px',
     whiteSpace: 'nowrap' as const,
+  }
+}
+
+function filterButtonStyle(active: boolean) {
+  return {
+    ...ghostBtnStyle,
+    background: active ? 'var(--text)' : 'transparent',
+    color: active ? 'var(--surface)' : 'var(--text)',
+    border: active ? '1px solid var(--text)' : '1px solid var(--border)',
   }
 }
 
@@ -119,6 +131,7 @@ export default function InternalUsersPage() {
   const [users, setUsers] = useState<InternalUser[]>([])
   const [canManage, setCanManage] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [view, setView] = useState<InternalUsersView>('active')
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -129,12 +142,12 @@ export default function InternalUsersPage() {
   const [lastEmail, setLastEmail] = useState('')
 
   useEffect(() => {
-    loadUsers()
-  }, [])
+    loadUsers(view)
+  }, [view])
 
-  async function loadUsers() {
+  async function loadUsers(nextView: InternalUsersView) {
     setListLoading(true)
-    const res = await getInternalUsers()
+    const res = await getInternalUsers(nextView)
     if (res?.error) {
       setError(res.error)
       setUsers([])
@@ -174,7 +187,7 @@ export default function InternalUsersPage() {
     setName('')
     setShowForm(false)
 
-    loadUsers()
+    loadUsers(view)
   }
 
   async function handleResend() {
@@ -205,13 +218,20 @@ export default function InternalUsersPage() {
     }
   }
 
+  const viewLabel = view === 'archived' ? 'Archived Users' : view === 'inactive' ? 'Inactive Users' : 'Active Users'
+
   return (
     <>
       <Nav title="Internal Users" />
 
       <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {canManage && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button type="button" style={filterButtonStyle(view === 'active')} onClick={() => setView('active')}>Active</button>
+              <button type="button" style={filterButtonStyle(view === 'inactive')} onClick={() => setView('inactive')}>Inactive</button>
+              <button type="button" style={filterButtonStyle(view === 'archived')} onClick={() => setView('archived')}>Archived</button>
+            </div>
             <button type="button" style={ghostBtnStyle} onClick={() => setShowForm((v) => !v)}>
               {showForm ? 'Cancel' : '+ Add User'}
             </button>
@@ -256,7 +276,7 @@ export default function InternalUsersPage() {
 
         <div style={sectionCardStyle}>
           <div style={sectionHeaderStyle}>
-            <span style={sectionTitleStyle}>Users</span>
+            <span style={sectionTitleStyle}>{canManage ? viewLabel : 'Users'}</span>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{users.length}</span>
           </div>
 
@@ -267,6 +287,9 @@ export default function InternalUsersPage() {
           ) : (
             users.map((u, index) => {
               const isAdmin = u.roles.includes('admin')
+              const roleSummary = rolesSummary(u.roles.filter((role) => role !== 'admin')) || 'Viewer'
+              const isArchived = !!u.archivedAt
+
               return (
                 <Link key={u.id} href={`/more/internal-users/${u.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                   <div
@@ -287,7 +310,7 @@ export default function InternalUsersPage() {
                         {u.email || 'No email'}
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                        {rolesSummary(u.roles.filter((role) => role !== 'admin')) || 'Viewer'}
+                        {roleSummary}
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', flexShrink: 0 }}>
@@ -296,9 +319,16 @@ export default function InternalUsersPage() {
                           {isAdmin ? 'Admin' : 'User'}
                         </span>
                         {canManage && (
-                          <span style={badgeStyle(u.isActive ? '#86efac' : '#fcd34d')}>
-                            {u.isActive ? 'Active' : 'Inactive'}
-                          </span>
+                          <>
+                            <span style={badgeStyle(u.isActive ? '#86efac' : '#fcd34d')}>
+                              {u.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                            {isArchived && (
+                              <span style={badgeStyle('#fca5a5')}>
+                                Archived
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                       <span style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: 1 }}>›</span>
