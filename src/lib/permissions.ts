@@ -1,5 +1,7 @@
 export const APP_ROLES = [
   'admin',
+  'operations',
+  'sales',
   'estimator',
   'project_manager',
   'bookkeeper',
@@ -10,6 +12,8 @@ export type AppRole = (typeof APP_ROLES)[number]
 
 export const APP_ROLE_LABELS: Record<AppRole, string> = {
   admin: 'Admin',
+  operations: 'Operations',
+  sales: 'Sales',
   estimator: 'Estimator',
   project_manager: 'Project Manager',
   bookkeeper: 'Bookkeeper',
@@ -35,6 +39,20 @@ export const ROLE_CAPABILITIES: Record<AppRole, Partial<Record<PermissionModule,
     takeoffs: ['view', 'add', 'edit', 'delete'],
     schedule: ['view', 'add', 'edit', 'delete'],
     companies: ['view', 'add', 'edit', 'delete'],
+  },
+  operations: {
+    internal_users: ['view'],
+    jobs: ['view', 'add', 'edit'],
+    takeoffs: ['view'],
+    schedule: ['view', 'add', 'edit'],
+    companies: ['view', 'add', 'edit'],
+  },
+  sales: {
+    internal_users: ['view'],
+    jobs: ['view'],
+    takeoffs: ['view'],
+    schedule: ['view'],
+    companies: ['view'],
   },
   estimator: {
     internal_users: ['view'],
