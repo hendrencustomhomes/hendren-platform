@@ -31,10 +31,6 @@ export async function archiveJob(jobId: string) {
   redirect('/jobs')
 }
 
-export async function trashJob(jobId: string) {
-  return archiveJob(jobId)
-}
-
 export async function restoreJob(jobId: string) {
   const auth = await requireUser()
   if ('error' in auth) redirect('/login')
