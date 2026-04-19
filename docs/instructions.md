@@ -1,6 +1,6 @@
-  # Hendren Platform — Instructions
+# Hendren Platform — Instructions
 
-Last updated: 2026-04-09
+Last updated: 2026-04-19
 
 ## Read First
 
@@ -134,4 +134,3 @@ Keep this file short.
 
 If a rule is about how Claude should behave on every task, it belongs here.
 If a rule is about how the system is built or constrained, it belongs in `docs/dev_scope.md`.
-
