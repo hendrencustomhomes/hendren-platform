@@ -23,10 +23,10 @@ export default async function JobsPage({ searchParams }: { searchParams?: Promis
         id,
         job_name,
         project_address,
-        deleted_at
+        archived_at
       `)
-      .not('deleted_at','is',null)
-      .order('deleted_at',{ascending:false})
+      .not('archived_at','is',null)
+      .order('archived_at',{ascending:false})
   } else {
     jobsRes = await supabase
       .from('jobs')
@@ -39,14 +39,14 @@ export default async function JobsPage({ searchParams }: { searchParams?: Promis
         created_at,
         sqft,
         contract_type,
-        deleted_at,
+        archived_at,
         profiles!jobs_pm_id_fkey(full_name),
         issues(id,severity,resolved),
         sub_schedule(id,status),
         procurement_items(id,status,order_by_date)
       `)
       .eq('is_active',true)
-      .is('deleted_at',null)
+      .is('archived_at',null)
       .order('created_at',{ascending:false})
   }
 
