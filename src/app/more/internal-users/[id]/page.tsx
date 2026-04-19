@@ -7,6 +7,9 @@ import {
   getInternalUser,
   updateInternalUser,
   deactivateInternalUser,
+  activateInternalUser,
+  archiveInternalUser,
+  restoreInternalUser,
   resendResetEmail,
   generateResetLink,
 } from '../actions'
@@ -164,6 +167,7 @@ type InternalUser = {
   birthday: string | null
   roles: AppRole[]
   isActive: boolean
+  archivedAt: string | null
 }
 
 export default function InternalUserDetailPage() {
@@ -267,6 +271,33 @@ export default function InternalUserDetailPage() {
 
   async function handleDeactivate() {
     const res = await deactivateInternalUser(id)
+    if (res?.error) {
+      setError(res.error)
+      return
+    }
+    router.push('/more/internal-users')
+  }
+
+  async function handleActivate() {
+    const res = await activateInternalUser(id)
+    if (res?.error) {
+      setError(res.error)
+      return
+    }
+    router.push('/more/internal-users')
+  }
+
+  async function handleArchive() {
+    const res = await archiveInternalUser(id)
+    if (res?.error) {
+      setError(res.error)
+      return
+    }
+    router.push('/more/internal-users')
+  }
+
+  async function handleRestore() {
+    const res = await restoreInternalUser(id)
     if (res?.error) {
       setError(res.error)
       return
@@ -382,6 +413,8 @@ export default function InternalUserDetailPage() {
     )
   }
 
+  const isArchived = !!user?.archivedAt
+
   return (
     <>
       <Nav title={name || user?.email || 'User'} />
@@ -485,9 +518,16 @@ export default function InternalUserDetailPage() {
                 {roles.includes('admin') ? 'Admin' : 'User'}
               </span>
               {canManage && (
-                <span style={{ fontSize: '11px', fontWeight: 600, color: user?.isActive ? '#86efac' : '#fcd34d', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '999px', padding: '2px 8px' }}>
-                  {user?.isActive ? 'Active' : 'Inactive'}
-                </span>
+                <>
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: user?.isActive ? '#86efac' : '#fcd34d', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '999px', padding: '2px 8px' }}>
+                    {user?.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                  {isArchived && (
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#fca5a5', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '999px', padding: '2px 8px' }}>
+                      Archived
+                    </span>
+                  )}
+                </>
               )}
             </div>
 
@@ -512,8 +552,11 @@ export default function InternalUserDetailPage() {
               <button onClick={handleCopy} style={ghostBtnStyle}>
                 Copy Reset Link
               </button>
-              <button onClick={handleDeactivate} style={{ ...ghostBtnStyle, color: '#f87171' }}>
-                Deactivate
+              <button onClick={user?.isActive ? handleDeactivate : handleActivate} style={{ ...ghostBtnStyle, color: user?.isActive ? '#f87171' : '#86efac' }}>
+                {user?.isActive ? 'Deactivate' : 'Activate'}
+              </button>
+              <button onClick={isArchived ? handleRestore : handleArchive} style={{ ...ghostBtnStyle, color: isArchived ? '#86efac' : '#f87171' }}>
+                {isArchived ? 'Restore' : 'Archive'}
               </button>
             </div>
           </div>
