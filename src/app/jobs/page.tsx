@@ -8,7 +8,7 @@ const STAGES = ['intake','takeoff','estimate','contract','selections','procureme
 
 export default async function JobsPage({ searchParams }: { searchParams?: Promise<{ view?: string }> }) {
   const params = searchParams ? await searchParams : {}
-  const isTrashView = params?.view === 'trashed'
+  const isArchiveView = params?.view === 'archived' || params?.view === 'trashed'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -16,7 +16,7 @@ export default async function JobsPage({ searchParams }: { searchParams?: Promis
 
   let jobsRes
 
-  if (isTrashView) {
+  if (isArchiveView) {
     jobsRes = await supabase
       .from('jobs')
       .select(`
@@ -59,23 +59,23 @@ export default async function JobsPage({ searchParams }: { searchParams?: Promis
         <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'10px'}}>
           <div style={{padding:'12px 16px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
             <div style={{fontSize:'13px',fontWeight:'700'}}>
-              {jobList.length} {isTrashView ? 'Trashed Jobs' : 'Active Jobs'}
+              {jobList.length} {isArchiveView ? 'Archived Jobs' : 'Active Jobs'}
             </div>
             <div style={{display:'flex',gap:'8px'}}>
-              {!isTrashView && (
-                <a href="/jobs?view=trashed" style={{fontSize:'12px',fontWeight:'600',padding:'6px 12px',borderRadius:'6px',textDecoration:'none',border:'1px solid var(--border)'}}>Trash</a>
+              {!isArchiveView && (
+                <a href="/jobs?view=archived" style={{fontSize:'12px',fontWeight:'600',padding:'6px 12px',borderRadius:'6px',textDecoration:'none',border:'1px solid var(--border)'}}>Archive</a>
               )}
-              {isTrashView && (
+              {isArchiveView && (
                 <a href="/jobs" style={{fontSize:'12px',fontWeight:'600',padding:'6px 12px',borderRadius:'6px',textDecoration:'none',border:'1px solid var(--border)'}}>Back to Active</a>
               )}
-              {!isTrashView && (
+              {!isArchiveView && (
                 <a href="/jobs/new" style={{fontSize:'12px',fontWeight:'600',background:'var(--text)',color:'var(--bg)',padding:'6px 12px',borderRadius:'6px',textDecoration:'none'}}>+ New Job</a>
               )}
             </div>
           </div>
 
           {jobList.map((job:any) => {
-            if (isTrashView) {
+            if (isArchiveView) {
               const restoreAction = restoreJob.bind(null, job.id)
               return (
                 <div key={job.id} style={{padding:'12px 16px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
@@ -124,7 +124,7 @@ export default async function JobsPage({ searchParams }: { searchParams?: Promis
 
           {jobList.length===0 && (
             <div style={{padding:'40px',textAlign:'center',color:'var(--text-muted)'}}>
-              {isTrashView ? 'No trashed jobs' : 'No active jobs'}
+              {isArchiveView ? 'No archived jobs' : 'No active jobs'}
             </div>
           )}
         </div>
