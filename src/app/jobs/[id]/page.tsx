@@ -32,13 +32,13 @@ export default async function JobDetailPage({params}:{params:Promise<{id:string}
   if(!user)redirect('/login')
 
   const {data:job,error:jobError}=await supabase.from('jobs').select(`
-      id,job_name,project_address,client_name,client_email,client_phone,pm_id,estimator_profile_id,bookkeeper_profile_id,color,sqft,lot_sqft,referral_source,scope_notes,current_stage,contract_type,is_active,deleted_at,garage_code,lockbox_code,gate_code,parking_notes,neighborhood_requirements,profiles!jobs_pm_id_fkey(full_name, phone),estimator:profiles!jobs_estimator_profile_id_fkey(full_name),bookkeeper:profiles!jobs_bookkeeper_profile_id_fkey(full_name)
+      id,job_name,project_address,client_name,client_email,client_phone,pm_id,estimator_profile_id,bookkeeper_profile_id,color,sqft,lot_sqft,referral_source,scope_notes,current_stage,contract_type,is_active,archived_at,garage_code,lockbox_code,gate_code,parking_notes,neighborhood_requirements,profiles!jobs_pm_id_fkey(full_name, phone),estimator:profiles!jobs_estimator_profile_id_fkey(full_name),bookkeeper:profiles!jobs_bookkeeper_profile_id_fkey(full_name)
     `).eq('id',id).single()
 
   if(jobError){console.error('Job query failed:',jobError);throw new Error(jobError.message)}
   if(!job)notFound()
 
-  if(job.deleted_at){redirect('/jobs?view=archived')}
+  if(job.archived_at){redirect('/jobs?view=archived')}
 
   const roleAssignmentSelect=`
     profile_id,
