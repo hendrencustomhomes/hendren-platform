@@ -8,7 +8,7 @@ const STAGES = ['intake','takeoff','estimate','contract','selections','procureme
 
 export default async function JobsPage({ searchParams }: { searchParams?: Promise<{ view?: string }> }) {
   const params = searchParams ? await searchParams : {}
-  const isArchiveView = params?.view === 'archived' || params?.view === 'trashed'
+  const isArchiveView = params?.view === 'archived'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
