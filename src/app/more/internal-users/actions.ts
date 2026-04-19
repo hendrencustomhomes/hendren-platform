@@ -7,6 +7,8 @@ import { parseStoredRoles, serializeRoles } from '@/lib/permissions'
 
 const TEMP_PASSWORD_LENGTH = 16
 
+type InternalUsersView = 'active' | 'inactive' | 'archived'
+
 function composeAddress(street: string, city: string, state: string, zip: string): string {
   const s = street.trim(), c = city.trim(), st = state.trim(), z = zip.trim()
   const cityStateZip = [c, [st, z].filter(Boolean).join(' ')].filter(Boolean).join(', ')
@@ -94,14 +96,14 @@ async function listAllAuthUsers() {
   return { users }
 }
 
-export async function getInternalUsers() {
+export async function getInternalUsers(view: InternalUsersView = 'active') {
   const viewer = await getViewerContext()
   if ('error' in viewer) return { error: viewer.error }
 
   const admin = createAdminClient()
   const [authUsersResult, accessResult, profilesResult] = await Promise.all([
     listAllAuthUsers(),
-    admin.from('internal_access').select('profile_id, role, is_active, is_admin'),
+    admin.from('internal_access').select('profile_id, role, is_active, is_admin, archived_at, archived_by'),
     admin.from('profiles').select('id, full_name, phone, address, birthday'),
   ])
 
@@ -113,7 +115,15 @@ export async function getInternalUsers() {
   const profiles = new Map((profilesResult.data || []).map((p: any) => [p.id, p]))
 
   const users = (accessResult.data || [])
-    .filter((access: any) => viewer.isAdmin || access.is_active === true)
+    .filter((access: any) => {
+      const isArchived = access.archived_at != null
+      if (!viewer.isAdmin) {
+        return access.is_active === true && !isArchived
+      }
+      if (view === 'archived') return isArchived
+      if (view === 'inactive') return !isArchived && access.is_active !== true
+      return !isArchived && access.is_active === true
+    })
     .map((access: any) => {
       const profile = profiles.get(access.profile_id)
       const authUser = authUsers.get(access.profile_id)
@@ -128,6 +138,7 @@ export async function getInternalUsers() {
         birthday: profile?.birthday ?? null,
         roles: parseStoredRoles(access.role, access.is_admin === true),
         isActive: access.is_active === true,
+        archivedAt: access.archived_at ?? null,
       }
     })
 
@@ -148,7 +159,7 @@ export async function getInternalUser(profileId: string) {
     listAllAuthUsers(),
     admin
       .from('internal_access')
-      .select('profile_id, role, is_active, is_admin')
+      .select('profile_id, role, is_active, is_admin, archived_at, archived_by')
       .eq('profile_id', profileId)
       .maybeSingle(),
     admin
@@ -163,7 +174,7 @@ export async function getInternalUser(profileId: string) {
   if (profileResult.error) return { error: profileResult.error.message }
   if (!accessResult.data) return { error: 'User not found' }
 
-  if (!viewer.isAdmin && accessResult.data.is_active !== true) {
+  if (!viewer.isAdmin && (accessResult.data.is_active !== true || accessResult.data.archived_at != null)) {
     return { error: 'User not found' }
   }
 
@@ -182,6 +193,7 @@ export async function getInternalUser(profileId: string) {
       birthday: profile?.birthday ?? null,
       roles: parseStoredRoles(access.role, access.is_admin === true),
       isActive: access.is_active === true,
+      archivedAt: access.archived_at ?? null,
     },
     canManage: viewer.isAdmin,
   }
@@ -302,6 +314,46 @@ export async function updateInternalUser(input: {
   return { success: true }
 }
 
+export async function archiveInternalUser(profileId: string) {
+  const adminCheck = await requireAdmin()
+  if ('error' in adminCheck) return { error: adminCheck.error }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('internal_access')
+    .update({
+      archived_at: new Date().toISOString(),
+      archived_by: adminCheck.userId,
+    })
+    .eq('profile_id', profileId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/more/internal-users')
+  revalidatePath(`/more/internal-users/${profileId}`)
+  return { success: true }
+}
+
+export async function restoreInternalUser(profileId: string) {
+  const adminCheck = await requireAdmin()
+  if ('error' in adminCheck) return { error: adminCheck.error }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('internal_access')
+    .update({
+      archived_at: null,
+      archived_by: null,
+    })
+    .eq('profile_id', profileId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/more/internal-users')
+  revalidatePath(`/more/internal-users/${profileId}`)
+  return { success: true }
+}
+
 export async function deactivateInternalUser(profileId: string) {
   const adminCheck = await requireAdmin()
   if ('error' in adminCheck) return { error: adminCheck.error }
@@ -310,6 +362,23 @@ export async function deactivateInternalUser(profileId: string) {
   const { error } = await admin
     .from('internal_access')
     .update({ is_active: false })
+    .eq('profile_id', profileId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/more/internal-users')
+  revalidatePath(`/more/internal-users/${profileId}`)
+  return { success: true }
+}
+
+export async function activateInternalUser(profileId: string) {
+  const adminCheck = await requireAdmin()
+  if ('error' in adminCheck) return { error: adminCheck.error }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('internal_access')
+    .update({ is_active: true })
     .eq('profile_id', profileId)
 
   if (error) return { error: error.message }
