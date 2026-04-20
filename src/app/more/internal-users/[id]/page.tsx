@@ -117,10 +117,11 @@ function copyText(text: string) {
 const inputStyle = {
   background: 'var(--background)',
   border: '1px solid var(--border)',
-  borderRadius: '10px',
-  padding: '10px 12px',
+  borderRadius: '8px',
+  padding: '8px 10px',
   color: 'var(--text)',
-  fontSize: '15px',
+  fontSize: '14px',
+  lineHeight: 1.2,
   outline: 'none',
   width: '100%',
   boxSizing: 'border-box',
@@ -132,43 +133,46 @@ const readOnlyInputStyle = {
 } as const
 
 const labelStyle = {
-  fontSize: '11px',
+  fontSize: '10px',
   fontWeight: 600,
   color: 'var(--text-muted)',
-  marginBottom: '4px',
+  marginBottom: '3px',
   display: 'block',
   textTransform: 'uppercase',
-  letterSpacing: '0.04em',
+  letterSpacing: '0.05em',
 } as const
 
 const sectionCardStyle = {
   background: 'var(--surface)',
   border: '1px solid var(--border)',
-  borderRadius: '18px',
+  borderRadius: '14px',
   overflow: 'hidden',
 } as const
 
 const sectionHeaderStyle = {
-  padding: '12px 14px',
+  padding: '10px 12px',
   borderBottom: '1px solid var(--border)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
+  gap: '8px',
 } as const
 
 const sectionTitleStyle = {
-  fontSize: '13px',
+  fontSize: '12px',
   fontWeight: 700,
   color: 'var(--text)',
   textTransform: 'uppercase',
+  letterSpacing: '0.05em',
 } as const
 
 const ghostBtnStyle = {
   background: 'transparent',
   border: '1px solid var(--border)',
   borderRadius: '8px',
-  padding: '7px 10px',
-  fontSize: '12px',
+  padding: '6px 9px',
+  fontSize: '11px',
+  lineHeight: 1.2,
   cursor: 'pointer',
 } as const
 
@@ -177,9 +181,29 @@ const solidBtnStyle = {
   color: 'var(--surface)',
   border: 'none',
   borderRadius: '8px',
-  padding: '8px 12px',
-  fontSize: '12px',
+  padding: '7px 11px',
+  fontSize: '11px',
+  lineHeight: 1.2,
   cursor: 'pointer',
+} as const
+
+const compactBadgeStyle = {
+  fontSize: '10px',
+  fontWeight: 600,
+  background: 'var(--background)',
+  border: '1px solid var(--border)',
+  borderRadius: '999px',
+  padding: '2px 7px',
+} as const
+
+const stickyActionBarStyle = {
+  position: 'sticky' as const,
+  bottom: 0,
+  background: 'var(--surface)',
+  borderTop: '1px solid var(--border)',
+  padding: '10px 12px',
+  display: 'flex',
+  justifyContent: 'flex-end',
 } as const
 
 type TabKey = 'profile' | 'permissions'
@@ -509,7 +533,7 @@ export default function InternalUserDetailPage() {
     return (
       <>
         <Nav title="Profile" />
-        <div style={{ padding: 16, fontSize: '13px', color: 'var(--text-muted)' }}>Loading…</div>
+        <div style={{ padding: 12, fontSize: '12px', color: 'var(--text-muted)' }}>Loading…</div>
       </>
     )
   }
@@ -522,8 +546,8 @@ export default function InternalUserDetailPage() {
     <>
       <Nav title="Profile" />
 
-      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <button type="button" onClick={() => setActiveTab('profile')} style={{ ...ghostBtnStyle, background: activeTab === 'profile' ? 'var(--text)' : 'transparent', color: activeTab === 'profile' ? 'var(--surface)' : 'var(--text)' }}>
             Profile
           </button>
@@ -541,9 +565,9 @@ export default function InternalUserDetailPage() {
                 <span style={sectionTitleStyle}>Profile</span>
               </div>
 
-              <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {error && <div style={{ color: '#fca5a5', fontSize: '13px' }}>{error}</div>}
-                {success && <div style={{ color: '#86efac', fontSize: '13px' }}>{success}</div>}
+              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {error && <div style={{ color: '#fca5a5', fontSize: '12px' }}>{error}</div>}
+                {success && <div style={{ color: '#86efac', fontSize: '12px' }}>{success}</div>}
 
                 <div>
                   <label style={labelStyle}>Email</label>
@@ -586,7 +610,7 @@ export default function InternalUserDetailPage() {
                             key={i}
                             type="button"
                             onMouseDown={() => applyAddrSuggestion(s)}
-                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', background: 'none', border: 'none', borderBottom: i < addrSuggestions.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text)' }}
+                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', background: 'none', border: 'none', borderBottom: i < addrSuggestions.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer', fontSize: '12px', color: 'var(--text)' }}
                           >
                             {formatSuggestion(s)}
                           </button>
@@ -596,7 +620,7 @@ export default function InternalUserDetailPage() {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 84px 110px', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 68px 86px', gap: 8 }}>
                   <div>
                     <label style={labelStyle}>City</label>
                     <input value={city} onChange={(e) => setCity(e.target.value)} style={canManage ? inputStyle : readOnlyInputStyle} readOnly={!canManage} autoComplete="address-level2" />
@@ -616,17 +640,17 @@ export default function InternalUserDetailPage() {
                   <input type="date" value={birthday || ''} onChange={(e) => setBirthday(e.target.value)} style={canManage ? inputStyle : readOnlyInputStyle} readOnly={!canManage} />
                 </div>
 
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 600, color: legacyRoles.includes('admin') ? '#93c5fd' : 'var(--text-muted)', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '999px', padding: '2px 8px' }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ ...compactBadgeStyle, color: legacyRoles.includes('admin') ? '#93c5fd' : 'var(--text-muted)' }}>
                     {legacyRoles.includes('admin') ? 'Admin' : 'User'}
                   </span>
                   {canManage && (
                     <>
-                      <span style={{ fontSize: '11px', fontWeight: 600, color: user?.isActive ? '#86efac' : '#fcd34d', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '999px', padding: '2px 8px' }}>
+                      <span style={{ ...compactBadgeStyle, color: user?.isActive ? '#86efac' : '#fcd34d' }}>
                         {user?.isActive ? 'Active' : 'Inactive'}
                       </span>
                       {isArchived && (
-                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#fca5a5', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '999px', padding: '2px 8px' }}>
+                        <span style={{ ...compactBadgeStyle, color: '#fca5a5' }}>
                           Archived
                         </span>
                       )}
@@ -635,9 +659,11 @@ export default function InternalUserDetailPage() {
                 </div>
 
                 {canManage && (
-                  <button onClick={handleSaveProfile} style={solidBtnStyle} disabled={saving}>
-                    {saving ? 'Saving…' : 'Save Profile'}
-                  </button>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button onClick={handleSaveProfile} style={solidBtnStyle} disabled={saving}>
+                      {saving ? 'Saving…' : 'Save Profile'}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -648,7 +674,7 @@ export default function InternalUserDetailPage() {
                   <span style={sectionTitleStyle}>Account</span>
                 </div>
 
-                <div style={{ padding: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ padding: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button onClick={handleResend} style={ghostBtnStyle}>
                     Resend Email
                   </button>
@@ -674,14 +700,14 @@ export default function InternalUserDetailPage() {
             <div style={sectionCardStyle}>
               <div style={sectionHeaderStyle}>
                 <span style={sectionTitleStyle}>Access Model</span>
-                <Link href="/more/internal-users/templates" style={{ fontSize: '12px', color: 'var(--text)' }}>
-                  Manage Templates
+                <Link href="/more/internal-users/templates" style={{ fontSize: '11px', color: 'var(--text)', whiteSpace: 'nowrap' }}>
+                  Templates
                 </Link>
               </div>
 
-              <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {error && <div style={{ color: '#fca5a5', fontSize: '13px' }}>{error}</div>}
-                {accessSuccess && <div style={{ color: '#86efac', fontSize: '13px' }}>{accessSuccess}</div>}
+              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {error && <div style={{ color: '#fca5a5', fontSize: '12px' }}>{error}</div>}
+                {accessSuccess && <div style={{ color: '#86efac', fontSize: '12px' }}>{accessSuccess}</div>}
 
                 <div>
                   <label style={labelStyle}>Permission Template</label>
@@ -699,15 +725,28 @@ export default function InternalUserDetailPage() {
 
                 <div>
                   <label style={labelStyle}>Workflow Eligibility</label>
-                  <div style={{ display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {workflowRoles.map((workflow) => {
                       const isLocked = defaultWorkflowKeys.includes(workflow.key as WorkflowRoleKey)
                       const isChecked = isLocked || selectedWorkflowKeys.includes(workflow.key)
                       return (
-                        <label key={workflow.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '14px', color: 'var(--text)' }}>
+                        <label
+                          key={workflow.id}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontSize: '12px',
+                            color: 'var(--text)',
+                            background: 'var(--background)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '999px',
+                            padding: '5px 8px',
+                          }}
+                        >
                           <input type="checkbox" checked={isChecked} disabled={isLocked || !selectedTemplateKey} onChange={() => toggleWorkflow(workflow.key)} />
                           <span>{workflow.label || WORKFLOW_ROLE_LABELS[workflow.key as WorkflowRoleKey]}</span>
-                          {isLocked && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>default from template</span>}
+                          {isLocked && <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>default</span>}
                         </label>
                       )
                     })}
@@ -721,9 +760,9 @@ export default function InternalUserDetailPage() {
                 <span style={sectionTitleStyle}>Permissions</span>
               </div>
 
-              <div style={{ padding: 14, overflowX: 'auto' }}>
-                <div style={{ minWidth: 560 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 0.5fr 0.7fr 0.7fr', gap: 8, paddingBottom: 8, fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <div style={{ padding: 10, overflowX: 'auto' }}>
+                <div style={{ minWidth: 420 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(136px,1.6fr) 46px 58px 54px', gap: 4, paddingBottom: 5, fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     <div>Module</div>
                     <div style={{ textAlign: 'center' }}>View</div>
                     <div style={{ textAlign: 'center' }}>Manage</div>
@@ -733,8 +772,8 @@ export default function InternalUserDetailPage() {
                   {permissionMatrix.map((row, index) => {
                     const isLockedView = LOCKED_BASELINE_VIEW_ROWS.includes(row.rowKey)
                     return (
-                      <div key={row.rowKey} style={{ display: 'grid', gridTemplateColumns: '1.6fr 0.5fr 0.7fr 0.7fr', gap: 8, alignItems: 'center', padding: '10px 0', borderTop: index === 0 ? '1px solid var(--border)' : '1px solid var(--border)' }}>
-                        <div style={{ fontSize: '13px', color: 'var(--text)' }}>{PERMISSION_ROW_LABELS[row.rowKey] || row.rowKey}</div>
+                      <div key={row.rowKey} style={{ display: 'grid', gridTemplateColumns: 'minmax(136px,1.6fr) 46px 58px 54px', gap: 4, alignItems: 'center', padding: '7px 0', borderTop: index === 0 ? '1px solid var(--border)' : '1px solid var(--border)' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--text)', lineHeight: 1.2 }}>{PERMISSION_ROW_LABELS[row.rowKey] || row.rowKey}</div>
                         <div style={{ display: 'flex', justifyContent: 'center' }}>
                           <input type="checkbox" checked={row.canView} disabled={isLockedView} onChange={(e) => updatePermission(row.rowKey, 'canView', e.target.checked)} />
                         </div>
@@ -750,7 +789,7 @@ export default function InternalUserDetailPage() {
                 </div>
               </div>
 
-              <div style={{ padding: '0 14px 14px 14px' }}>
+              <div style={stickyActionBarStyle}>
                 <button onClick={handleSaveAccess} style={solidBtnStyle} disabled={accessSaving || !selectedTemplateKey}>
                   {accessSaving ? 'Saving…' : 'Save Permissions'}
                 </button>
