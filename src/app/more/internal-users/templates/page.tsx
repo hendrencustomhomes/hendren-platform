@@ -98,7 +98,7 @@ export default function PermissionTemplatesPage() {
     setError('')
 
     const res = await getPermissionTemplateManagerAction()
-    if (res?.error) {
+    if ('error' in res) {
       setError(res.error)
       setLoading(false)
       return
@@ -155,7 +155,7 @@ export default function PermissionTemplatesPage() {
 
     setSaving(false)
 
-    if (res?.error) {
+    if ('error' in res) {
       setError(res.error)
       return
     }

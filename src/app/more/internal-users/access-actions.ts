@@ -77,7 +77,7 @@ export async function getPermissionTemplateManagerAction() {
   if ('error' in adminCheck) return { error: adminCheck.error }
 
   const result = await getTemplatePermissions()
-  if ('error' in result) return result
+  if ('error' in result) return { error: result.error }
 
   return {
     templates: result.templates,
