@@ -111,8 +111,8 @@ export async function getInternalUsers(view: InternalUsersView = 'active') {
   if (accessResult.error) return { error: accessResult.error.message }
   if (profilesResult.error) return { error: profilesResult.error.message }
 
-  const authUsers = new Map(authUsersResult.users.map((user) => [user.id, user]))
-  const profiles = new Map((profilesResult.data || []).map((p: any) => [p.id, p]))
+  const authUsers = new Map<string, { id: string; email: string | null }>(authUsersResult.users.map((user) => [user.id, user]))
+  const profiles = new Map<string, any>((profilesResult.data || []).map((p: any) => [p.id, p]))
 
   const users = (accessResult.data || [])
     .filter((access: any) => {

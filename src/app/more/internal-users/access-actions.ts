@@ -43,7 +43,7 @@ export async function getInternalUserAccessEditor(profileId: string) {
   if ('error' in adminCheck) return { error: adminCheck.error }
 
   const result = await getUserAccessModel(profileId)
-  if ('error' in result) return result
+  if ('error' in result) return { error: result.error }
 
   if (!result.selectedTemplate) {
     return {
@@ -65,7 +65,7 @@ export async function saveInternalUserAccessEditor(input: {
   if ('error' in adminCheck) return { error: adminCheck.error }
 
   const result = await saveUserAccessModel(input)
-  if ('error' in result) return result
+  if ('error' in result) return { error: result.error }
 
   revalidatePath('/more/internal-users')
   revalidatePath(`/more/internal-users/${input.profileId}`)
@@ -95,7 +95,7 @@ export async function savePermissionTemplateAction(input: {
   if ('error' in adminCheck) return { error: adminCheck.error }
 
   const result = await saveTemplatePermissionMatrix(input)
-  if ('error' in result) return result
+  if ('error' in result) return { error: result.error }
 
   revalidatePath('/more/internal-users/templates')
   return { success: true }

@@ -271,7 +271,7 @@ export default function InternalUserDetailPage() {
 
   const defaultWorkflowKeys = useMemo(() => {
     if (!selectedTemplateKey) return []
-    return DEFAULT_WORKFLOWS_BY_TEMPLATE[selectedTemplateKey] || []
+    return DEFAULT_WORKFLOWS_BY_TEMPLATE[selectedTemplateKey as PermissionTemplateKey] || []
   }, [selectedTemplateKey])
 
   useEffect(() => {
@@ -305,15 +305,15 @@ export default function InternalUserDetailPage() {
     setZip(nextUser.addressParts?.zip || '')
     setBirthday(nextUser.birthday || '')
 
-    if (!accessRes?.error) {
-      const templatesData = (accessRes?.templates || []) as CatalogOption[]
-      const workflowsData = (accessRes?.workflowRoles || []) as CatalogOption[]
-      const permissionsData = (accessRes?.permissionSnapshot || []) as PermissionMatrixCell[]
+    if (!('error' in accessRes)) {
+      const templatesData = (accessRes.templates || []) as CatalogOption[]
+      const workflowsData = (accessRes.workflowRoles || []) as CatalogOption[]
+      const permissionsData = (accessRes.permissionSnapshot || []) as PermissionMatrixCell[]
 
       setTemplates(templatesData)
       setWorkflowRoles(workflowsData)
-      setSelectedTemplateKey((accessRes?.selectedTemplate?.key as PermissionTemplateKey | undefined) || deriveTemplateFallbackFromRoles(nextUser.roles || []))
-      setSelectedWorkflowKeys((accessRes?.workflowKeys || []) as string[])
+      setSelectedTemplateKey((accessRes.selectedTemplate?.key as PermissionTemplateKey | undefined) || deriveTemplateFallbackFromRoles(nextUser.roles || []))
+      setSelectedWorkflowKeys((accessRes.workflowKeys || []) as string[])
       setPermissionMatrix(permissionsData.length > 0 ? permissionsData : permissionMatrix)
     }
 
@@ -367,8 +367,8 @@ export default function InternalUserDetailPage() {
 
     setAccessSaving(false)
 
-    if (res?.error) {
-      setError(res.error)
+    if ('error' in res) {
+      setError(res.error ?? '')
       return
     }
 
@@ -539,7 +539,7 @@ export default function InternalUserDetailPage() {
   }
 
   const isArchived = !!user?.archivedAt
-  const profileTemplateLabel = selectedTemplateKey ? (PERMISSION_TEMPLATE_LABELS[selectedTemplateKey] || selectedTemplateKey) : 'Not set'
+  const profileTemplateLabel = selectedTemplateKey ? (PERMISSION_TEMPLATE_LABELS[selectedTemplateKey as PermissionTemplateKey] || selectedTemplateKey) : 'Not set'
   const profileWorkflowSummary = formatWorkflowSummary(Array.from(new Set([...defaultWorkflowKeys, ...selectedWorkflowKeys])))
 
   return (
@@ -591,7 +591,7 @@ export default function InternalUserDetailPage() {
 
                 <div>
                   <label style={labelStyle}>Legacy Access Summary</label>
-                  <input value={legacyRoles.map((role) => APP_ROLE_LABELS[role] || role).join(', ')} readOnly style={readOnlyInputStyle} />
+                  <input value={legacyRoles.map((role) => APP_ROLE_LABELS[role as AppRole] || role).join(', ')} readOnly style={readOnlyInputStyle} />
                 </div>
 
                 <div>
@@ -773,7 +773,7 @@ export default function InternalUserDetailPage() {
                     const isLockedView = LOCKED_BASELINE_VIEW_ROWS.includes(row.rowKey)
                     return (
                       <div key={row.rowKey} style={{ display: 'grid', gridTemplateColumns: 'minmax(136px,1.6fr) 46px 58px 54px', gap: 4, alignItems: 'center', padding: '7px 0', borderTop: index === 0 ? '1px solid var(--border)' : '1px solid var(--border)' }}>
-                        <div style={{ fontSize: '12px', color: 'var(--text)', lineHeight: 1.2 }}>{PERMISSION_ROW_LABELS[row.rowKey] || row.rowKey}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text)', lineHeight: 1.2 }}>{PERMISSION_ROW_LABELS[row.rowKey as PermissionRowKey] || row.rowKey}</div>
                         <div style={{ display: 'flex', justifyContent: 'center' }}>
                           <input type="checkbox" checked={row.canView} disabled={isLockedView} onChange={(e) => updatePermission(row.rowKey, 'canView', e.target.checked)} />
                         </div>

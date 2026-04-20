@@ -73,7 +73,7 @@ export async function getAccessControlCatalog() {
     .filter((value): value is WorkflowRoleRecord => value != null)
     .sort((a, b) => a.label.localeCompare(b.label))
 
-  const permissionRows = sortPermissionRows(
+  const permissionRows: PermissionRowRecord[] = sortPermissionRows(
     (rowsResult.data || [])
       .map(mapPermissionRowRecord)
       .filter((value): value is PermissionRowRecord => value != null)
@@ -94,8 +94,8 @@ export async function getTemplatePermissions() {
   const result = await admin.from('template_permissions').select('*')
   if (result.error) return { error: result.error.message as string }
 
-  const templateById = new Map(catalog.templates.map((template) => [template.id, template]))
-  const rowById = new Map(catalog.permissionRows.map((row) => [row.id, row]))
+  const templateById = new Map<string, PermissionTemplateRecord>(catalog.templates.map((template) => [template.id, template]))
+  const rowById = new Map<string, PermissionRowRecord>(catalog.permissionRows.map((row) => [row.id, row]))
 
   const rows = new Map<string, PermissionMatrixCell[]>()
 
@@ -154,9 +154,9 @@ export async function getUserAccessModel(profileId: string) {
   if (snapshotsResult.error) return { error: snapshotsResult.error.message as string }
   if (templatePermissionsResult.error) return { error: templatePermissionsResult.error.message as string }
 
-  const templateById = new Map(catalog.templates.map((template) => [template.id, template]))
-  const workflowById = new Map(catalog.workflowRoles.map((workflow) => [workflow.id, workflow]))
-  const rowById = new Map(catalog.permissionRows.map((row) => [row.id, row]))
+  const templateById = new Map<string, PermissionTemplateRecord>(catalog.templates.map((template) => [template.id, template]))
+  const workflowById = new Map<string, WorkflowRoleRecord>(catalog.workflowRoles.map((workflow) => [workflow.id, workflow]))
+  const rowById = new Map<string, PermissionRowRecord>(catalog.permissionRows.map((row) => [row.id, row]))
 
   const access = accessResult.data
   const selectedTemplate = access?.permission_template_id ? templateById.get(String(access.permission_template_id)) ?? null : null
@@ -225,7 +225,7 @@ export async function saveUserAccessModel(input: {
     .filter((record) => workflowKeys.includes(record.key))
     .map((record) => record.id)
 
-  const rowByKey = new Map(catalog.permissionRows.map((row) => [row.key, row]))
+  const rowByKey = new Map<PermissionRowKey, PermissionRowRecord>(catalog.permissionRows.map((row) => [row.key, row]))
   const normalizedPermissions = PERMISSION_ROW_KEYS.map((rowKey) => {
     const found = input.permissions.find((row) => row.rowKey === rowKey)
     return {
@@ -306,7 +306,7 @@ export async function saveTemplatePermissionMatrix(input: {
   const template = catalog.templates.find((record) => record.key === input.templateKey)
   if (!template) return { error: 'Permission template not found' }
 
-  const rowByKey = new Map(catalog.permissionRows.map((row) => [row.key, row]))
+  const rowByKey = new Map<PermissionRowKey, PermissionRowRecord>(catalog.permissionRows.map((row) => [row.key, row]))
 
   const rows = PERMISSION_ROW_KEYS.map((rowKey) => {
     const found = input.permissions.find((row) => row.rowKey === rowKey)

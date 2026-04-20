@@ -204,7 +204,7 @@ export default function PermissionTemplatesPage() {
         <div style={sectionCardStyle}>
           <div style={sectionHeaderStyle}>
             <span style={sectionTitleStyle}>Template Matrix</span>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{selectedTemplateKey ? (PERMISSION_TEMPLATE_LABELS[selectedTemplateKey] || selectedTemplateKey) : 'None selected'}</span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{selectedTemplateKey ? (PERMISSION_TEMPLATE_LABELS[selectedTemplateKey as PermissionTemplateKey] || selectedTemplateKey) : 'None selected'}</span>
           </div>
 
           <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -224,7 +224,7 @@ export default function PermissionTemplatesPage() {
                   const isLockedView = LOCKED_BASELINE_VIEW_ROWS.includes(row.rowKey)
                   return (
                     <div key={row.rowKey} style={{ display: 'grid', gridTemplateColumns: 'minmax(136px,1.6fr) 46px 58px 54px', gap: 4, alignItems: 'center', padding: '7px 0', borderTop: index === 0 ? '1px solid var(--border)' : '1px solid var(--border)' }}>
-                      <div style={{ fontSize: '12px', color: 'var(--text)', lineHeight: 1.2 }}>{PERMISSION_ROW_LABELS[row.rowKey] || row.rowKey}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text)', lineHeight: 1.2 }}>{PERMISSION_ROW_LABELS[row.rowKey as PermissionRowKey] || row.rowKey}</div>
                       <div style={{ display: 'flex', justifyContent: 'center' }}>
                         <input type="checkbox" checked={row.canView} disabled={isLockedView} onChange={(e) => updatePermission(row.rowKey, 'canView', e.target.checked)} />
                       </div>
