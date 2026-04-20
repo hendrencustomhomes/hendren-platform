@@ -21,12 +21,12 @@ import {
 const sectionCardStyle = {
   background: 'var(--surface)',
   border: '1px solid var(--border)',
-  borderRadius: '18px',
+  borderRadius: '14px',
   overflow: 'hidden',
 } as const
 
 const sectionHeaderStyle = {
-  padding: '12px 14px',
+  padding: '10px 12px',
   borderBottom: '1px solid var(--border)',
   display: 'flex',
   alignItems: 'center',
@@ -35,7 +35,7 @@ const sectionHeaderStyle = {
 } as const
 
 const sectionTitleStyle = {
-  fontSize: '13px',
+  fontSize: '12px',
   fontWeight: 700,
   color: 'var(--text)',
   textTransform: 'uppercase',
@@ -47,9 +47,10 @@ const ghostBtnStyle = {
   color: 'var(--text)',
   border: '1px solid var(--border)',
   borderRadius: '8px',
-  padding: '7px 10px',
-  fontSize: '12px',
+  padding: '6px 9px',
+  fontSize: '11px',
   fontWeight: 700,
+  lineHeight: 1.2,
   cursor: 'pointer',
 } as const
 
@@ -58,10 +59,21 @@ const solidBtnStyle = {
   color: 'var(--surface)',
   border: 'none',
   borderRadius: '8px',
-  padding: '8px 12px',
-  fontSize: '12px',
+  padding: '7px 11px',
+  fontSize: '11px',
   fontWeight: 700,
+  lineHeight: 1.2,
   cursor: 'pointer',
+} as const
+
+const stickyActionBarStyle = {
+  position: 'sticky' as const,
+  bottom: 0,
+  background: 'var(--surface)',
+  borderTop: '1px solid var(--border)',
+  padding: '10px 12px',
+  display: 'flex',
+  justifyContent: 'flex-end',
 } as const
 
 type CatalogOption = {
@@ -168,7 +180,7 @@ export default function PermissionTemplatesPage() {
     return (
       <>
         <Nav title="Templates" />
-        <div style={{ padding: 16, fontSize: '13px', color: 'var(--text-muted)' }}>Loading…</div>
+        <div style={{ padding: 12, fontSize: '12px', color: 'var(--text-muted)' }}>Loading…</div>
       </>
     )
   }
@@ -177,8 +189,8 @@ export default function PermissionTemplatesPage() {
     <>
       <Nav title="Templates" />
 
-      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <Link href="/more/internal-users" style={{ ...ghostBtnStyle, textDecoration: 'none' }}>
             Back to Users
           </Link>
@@ -192,16 +204,16 @@ export default function PermissionTemplatesPage() {
         <div style={sectionCardStyle}>
           <div style={sectionHeaderStyle}>
             <span style={sectionTitleStyle}>Template Matrix</span>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{selectedTemplateKey ? (PERMISSION_TEMPLATE_LABELS[selectedTemplateKey] || selectedTemplateKey) : 'None selected'}</span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{selectedTemplateKey ? (PERMISSION_TEMPLATE_LABELS[selectedTemplateKey] || selectedTemplateKey) : 'None selected'}</span>
           </div>
 
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {error && <div style={{ color: '#fca5a5', fontSize: '13px' }}>{error}</div>}
-            {success && <div style={{ color: '#86efac', fontSize: '13px' }}>{success}</div>}
+          <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {error && <div style={{ color: '#fca5a5', fontSize: '12px' }}>{error}</div>}
+            {success && <div style={{ color: '#86efac', fontSize: '12px' }}>{success}</div>}
 
             <div style={{ overflowX: 'auto' }}>
-              <div style={{ minWidth: 560 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 0.5fr 0.7fr 0.7fr', gap: 8, paddingBottom: 8, fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <div style={{ minWidth: 420 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(136px,1.6fr) 46px 58px 54px', gap: 4, paddingBottom: 5, fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   <div>Module</div>
                   <div style={{ textAlign: 'center' }}>View</div>
                   <div style={{ textAlign: 'center' }}>Manage</div>
@@ -211,8 +223,8 @@ export default function PermissionTemplatesPage() {
                 {permissionMatrix.map((row, index) => {
                   const isLockedView = LOCKED_BASELINE_VIEW_ROWS.includes(row.rowKey)
                   return (
-                    <div key={row.rowKey} style={{ display: 'grid', gridTemplateColumns: '1.6fr 0.5fr 0.7fr 0.7fr', gap: 8, alignItems: 'center', padding: '10px 0', borderTop: index === 0 ? '1px solid var(--border)' : '1px solid var(--border)' }}>
-                      <div style={{ fontSize: '13px', color: 'var(--text)' }}>{PERMISSION_ROW_LABELS[row.rowKey] || row.rowKey}</div>
+                    <div key={row.rowKey} style={{ display: 'grid', gridTemplateColumns: 'minmax(136px,1.6fr) 46px 58px 54px', gap: 4, alignItems: 'center', padding: '7px 0', borderTop: index === 0 ? '1px solid var(--border)' : '1px solid var(--border)' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text)', lineHeight: 1.2 }}>{PERMISSION_ROW_LABELS[row.rowKey] || row.rowKey}</div>
                       <div style={{ display: 'flex', justifyContent: 'center' }}>
                         <input type="checkbox" checked={row.canView} disabled={isLockedView} onChange={(e) => updatePermission(row.rowKey, 'canView', e.target.checked)} />
                       </div>
@@ -227,12 +239,12 @@ export default function PermissionTemplatesPage() {
                 })}
               </div>
             </div>
+          </div>
 
-            <div>
-              <button type="button" onClick={handleSave} style={solidBtnStyle} disabled={saving || !selectedTemplateKey}>
-                {saving ? 'Saving…' : 'Save Template'}
-              </button>
-            </div>
+          <div style={stickyActionBarStyle}>
+            <button type="button" onClick={handleSave} style={solidBtnStyle} disabled={saving || !selectedTemplateKey}>
+              {saving ? 'Saving…' : 'Save Template'}
+            </button>
           </div>
         </div>
       </div>
