@@ -767,18 +767,18 @@ export default function InternalUserDetailPage() {
               </div>
 
               <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 24px 24px 24px', gap: 2, paddingBottom: 4, fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 46px 58px 52px', gap: 4, paddingBottom: 4, fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   <div>Module</div>
-                  <div style={{ textAlign: 'center' }}>V</div>
-                  <div style={{ textAlign: 'center' }}>M</div>
-                  <div style={{ textAlign: 'center' }}>A</div>
+                  <div style={{ textAlign: 'center' }}>View</div>
+                  <div style={{ textAlign: 'center' }}>Manage</div>
+                  <div style={{ textAlign: 'center' }}>Assign</div>
                 </div>
 
-                {permissionMatrix.map((row, index) => {
+                {permissionMatrix.map((row) => {
                   const isLockedView = LOCKED_BASELINE_VIEW_ROWS.includes(row.rowKey)
                   return (
-                    <div key={row.rowKey} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 24px 24px 24px', gap: 2, alignItems: 'center', padding: '6px 0', borderTop: '1px solid var(--border)' }}>
-                      <div style={{ fontSize: '11px', color: 'var(--text)', lineHeight: 1.15, paddingRight: 4, wordBreak: 'break-word' }}>
+                    <div key={row.rowKey} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 46px 58px 52px', gap: 4, alignItems: 'center', padding: '7px 0', borderTop: '1px solid var(--border)' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text)', lineHeight: 1.15, paddingRight: 4, wordBreak: 'break-word' }}>
                         {PERMISSION_ROW_LABELS[row.rowKey as PermissionRowKey] || row.rowKey}
                       </div>
                       <div style={checkboxCellStyle}>
