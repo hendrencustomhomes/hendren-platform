@@ -154,10 +154,13 @@ export function normalizePermissionState(rowKey: PermissionRowKey, input: {
   canView?: boolean | null
   canManage?: boolean | null
   canAssign?: boolean | null
+  can_view?: boolean | null
+  can_manage?: boolean | null
+  can_assign?: boolean | null
 }) {
-  let canView = input.canView === true
-  let canManage = input.canManage === true
-  let canAssign = input.canAssign === true
+  let canView = input.canView === true || input.can_view === true
+  let canManage = input.canManage === true || input.can_manage === true
+  let canAssign = input.canAssign === true || input.can_assign === true
 
   if (LOCKED_BASELINE_VIEW_ROWS.includes(rowKey)) {
     canView = true
