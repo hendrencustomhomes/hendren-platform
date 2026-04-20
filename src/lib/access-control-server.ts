@@ -88,7 +88,7 @@ export async function getAccessControlCatalog() {
 
 export async function getTemplatePermissions() {
   const catalog = await getAccessControlCatalog()
-  if ('error' in catalog) return catalog
+  if ('error' in catalog) return { error: catalog.error }
 
   const admin = createAdminClient()
   const result = await admin.from('template_permissions').select('*')
@@ -127,7 +127,7 @@ export async function getTemplatePermissions() {
 
 export async function getUserAccessModel(profileId: string) {
   const catalog = await getAccessControlCatalog()
-  if ('error' in catalog) return catalog
+  if ('error' in catalog) return { error: catalog.error }
 
   const admin = createAdminClient()
   const [accessResult, workflowsResult, snapshotsResult, templatePermissionsResult] = await Promise.all([
@@ -212,7 +212,7 @@ export async function saveUserAccessModel(input: {
   permissions: Array<{ rowKey: PermissionRowKey; canView: boolean; canManage: boolean; canAssign: boolean }>
 }) {
   const catalog = await getAccessControlCatalog()
-  if ('error' in catalog) return catalog
+  if ('error' in catalog) return { error: catalog.error }
 
   const admin = createAdminClient()
   const template = catalog.templates.find((record) => record.key === input.templateKey)
@@ -300,7 +300,7 @@ export async function saveTemplatePermissionMatrix(input: {
   permissions: Array<{ rowKey: PermissionRowKey; canView: boolean; canManage: boolean; canAssign: boolean }>
 }) {
   const catalog = await getAccessControlCatalog()
-  if ('error' in catalog) return catalog
+  if ('error' in catalog) return { error: catalog.error }
 
   const admin = createAdminClient()
   const template = catalog.templates.find((record) => record.key === input.templateKey)
