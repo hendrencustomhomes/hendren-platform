@@ -232,9 +232,14 @@ export default function InternalUsersPage() {
               <button type="button" style={filterButtonStyle(view === 'inactive')} onClick={() => setView('inactive')}>Inactive</button>
               <button type="button" style={filterButtonStyle(view === 'archived')} onClick={() => setView('archived')}>Archived</button>
             </div>
-            <button type="button" style={ghostBtnStyle} onClick={() => setShowForm((v) => !v)}>
-              {showForm ? 'Cancel' : '+ Add User'}
-            </button>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <Link href="/more/internal-users/templates" style={{ ...ghostBtnStyle, textDecoration: 'none' }}>
+                Templates
+              </Link>
+              <button type="button" style={ghostBtnStyle} onClick={() => setShowForm((v) => !v)}>
+                {showForm ? 'Cancel' : '+ Add User'}
+              </button>
+            </div>
           </div>
         )}
 
