@@ -91,6 +91,11 @@ const editableCellOrder = [
   'notes',
 ] as const
 
+const virtualRowHeight = 70
+const virtualOverscan = 8
+const virtualMaxBodyHeight = 560
+const virtualThreshold = 20
+
 type EditableCellKey = (typeof editableCellOrder)[number]
 type CellDraftValue = string | boolean
 
@@ -299,6 +304,9 @@ export default function PricingWorksheetPage({
   const [activeDraft, setActiveDraft] = useState<CellDraftValue | null>(null)
   const [rowSaveState, setRowSaveState] = useState<Record<string, RowSaveState>>({})
   const [undoStack, setUndoStack] = useState<UndoEntry[]>([])
+  const [isMobileViewport, setIsMobileViewport] = useState(false)
+  const [tableScrollTop, setTableScrollTop] = useState(0)
+  const [tableViewportHeight, setTableViewportHeight] = useState(virtualMaxBodyHeight)
 
   const localRowsRef = useRef<PricingRow[]>([])
   const serverRowsRef = useRef<PricingRow[]>([])
@@ -307,6 +315,8 @@ export default function PricingWorksheetPage({
   const saveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const savingRowsRef = useRef<Set<string>>(new Set())
   const cellRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({})
+  const tableScrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const pendingFocusRef = useRef<ActiveCell | null>(null)
 
   useEffect(() => {
     localRowsRef.current = localRows
@@ -327,6 +337,22 @@ export default function PricingWorksheetPage({
   useEffect(() => {
     return () => {
       Object.values(saveTimersRef.current).forEach((timer) => clearTimeout(timer))
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const mediaQuery = window.matchMedia('(max-width: 767px)')
+    const syncViewportMode = () => {
+      setIsMobileViewport(mediaQuery.matches)
+    }
+
+    syncViewportMode()
+    mediaQuery.addEventListener('change', syncViewportMode)
+
+    return () => {
+      mediaQuery.removeEventListener('change', syncViewportMode)
     }
   }, [])
 
@@ -356,6 +382,81 @@ export default function PricingWorksheetPage({
       { saving: 0, dirty: 0, error: 0 }
     )
   }, [localRows, rowSaveState])
+
+  const shouldVirtualizeDesktop = !isMobileViewport && localRows.length > virtualThreshold
+
+  const desktopVisibleRange = useMemo(() => {
+    if (!shouldVirtualizeDesktop) {
+      return {
+        rows: localRows,
+        startIndex: 0,
+        endIndex: Math.max(0, localRows.length - 1),
+        topSpacerHeight: 0,
+        bottomSpacerHeight: 0,
+      }
+    }
+
+    const viewportHeight = Math.max(tableViewportHeight, virtualRowHeight)
+    const startIndex = Math.max(0, Math.floor(tableScrollTop / virtualRowHeight) - virtualOverscan)
+    const visibleCount = Math.ceil(viewportHeight / virtualRowHeight) + virtualOverscan * 2
+    const endIndex = Math.min(localRows.length - 1, startIndex + visibleCount - 1)
+
+    return {
+      rows: localRows.slice(startIndex, endIndex + 1),
+      startIndex,
+      endIndex,
+      topSpacerHeight: startIndex * virtualRowHeight,
+      bottomSpacerHeight: Math.max(0, (localRows.length - endIndex - 1) * virtualRowHeight),
+    }
+  }, [localRows, shouldVirtualizeDesktop, tableScrollTop, tableViewportHeight])
+
+  useEffect(() => {
+    if (isMobileViewport) {
+      setTableScrollTop(0)
+      return
+    }
+
+    const node = tableScrollContainerRef.current
+    if (!node) return
+
+    const updateViewportHeight = () => {
+      setTableViewportHeight(node.clientHeight || virtualMaxBodyHeight)
+    }
+
+    updateViewportHeight()
+
+    if (typeof ResizeObserver === 'undefined') return
+
+    const observer = new ResizeObserver(() => {
+      updateViewportHeight()
+    })
+
+    observer.observe(node)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [isMobileViewport, localRows.length, shouldVirtualizeDesktop])
+
+  useEffect(() => {
+    const pendingFocus = pendingFocusRef.current
+    if (!pendingFocus) return
+
+    const element = cellRefs.current[getCellDomKey(pendingFocus.rowId, pendingFocus.field)]
+    if (!element) return
+
+    pendingFocusRef.current = null
+
+    window.requestAnimationFrame(() => {
+      element.focus()
+      if (element instanceof HTMLInputElement && element.type !== 'checkbox') {
+        element.select()
+      }
+      if (element instanceof HTMLTextAreaElement) {
+        element.select()
+      }
+    })
+  }, [desktopVisibleRange, isMobileViewport, localRows])
 
   function setServerRowsSync(nextRows: PricingRow[]) {
     serverRowsRef.current = nextRows
@@ -463,19 +564,44 @@ export default function PricingWorksheetPage({
   }
 
   function focusCell(rowId: string, field: EditableCellKey) {
-    const key = getCellDomKey(rowId, field)
-    const element = cellRefs.current[key]
-    if (!element) return
+    const rowIndex = localRowsRef.current.findIndex((row) => row.id === rowId)
+    if (rowIndex < 0) return
 
-    window.requestAnimationFrame(() => {
-      element.focus()
-      if (element instanceof HTMLInputElement && element.type !== 'checkbox') {
-        element.select()
-      }
-      if (element instanceof HTMLTextAreaElement) {
-        element.select()
-      }
-    })
+    pendingFocusRef.current = { rowId, field }
+
+    const existingElement = cellRefs.current[getCellDomKey(rowId, field)]
+    if (existingElement) {
+      pendingFocusRef.current = null
+      window.requestAnimationFrame(() => {
+        existingElement.focus()
+        if (existingElement instanceof HTMLInputElement && existingElement.type !== 'checkbox') {
+          existingElement.select()
+        }
+        if (existingElement instanceof HTMLTextAreaElement) {
+          existingElement.select()
+        }
+      })
+      return
+    }
+
+    if (!shouldVirtualizeDesktop) return
+
+    const scrollContainer = tableScrollContainerRef.current
+    if (!scrollContainer) return
+
+    const rowTop = rowIndex * virtualRowHeight
+    const rowBottom = rowTop + virtualRowHeight
+    const viewportTop = scrollContainer.scrollTop
+    const viewportBottom = viewportTop + tableViewportHeight
+    let nextScrollTop = viewportTop
+
+    if (rowTop < viewportTop) nextScrollTop = rowTop
+    else if (rowBottom > viewportBottom) nextScrollTop = rowBottom - tableViewportHeight
+
+    if (nextScrollTop !== viewportTop) {
+      scrollContainer.scrollTop = nextScrollTop
+      setTableScrollTop(nextScrollTop)
+    }
   }
 
   function getNeighborCell(rowId: string, field: EditableCellKey, mode: 'left' | 'right' | 'up' | 'down') {
@@ -525,7 +651,10 @@ export default function PricingWorksheetPage({
     if (areRowEditableValuesEqual(currentRow, nextRow)) return currentRow
 
     replaceLocalRow(rowId, nextRow)
-    setUndoStack((current) => [...current.slice(-39), { rowId, previousRow: cloneRow(currentRow), nextRow: cloneRow(nextRow) }])
+    setUndoStack((current) => [
+      ...current.slice(-39),
+      { rowId, previousRow: cloneRow(currentRow), nextRow: cloneRow(nextRow) },
+    ])
 
     if (activeCellRef.current?.rowId === rowId && activeCellRef.current.field === field) {
       setActiveDraft(getEditableCellValue(nextRow, field))
@@ -575,10 +704,12 @@ export default function PricingWorksheetPage({
     if (!headerId) return
     setLoading(true)
     setError(null)
+    setTableScrollTop(0)
 
     Object.values(saveTimersRef.current).forEach((timer) => clearTimeout(timer))
     saveTimersRef.current = {}
     savingRowsRef.current = new Set()
+    pendingFocusRef.current = null
     clearActiveCell()
     setUndoStack([])
     setRowSaveState({})
@@ -598,9 +729,7 @@ export default function PricingWorksheetPage({
       setCompanies(companyRows)
       setTrades(tradeRows)
       setCostCodes(costCodeRows)
-      setRowSaveState(
-        Object.fromEntries(rowRows.map((row) => [row.id, 'idle' as RowSaveState]))
-      )
+      setRowSaveState(Object.fromEntries(rowRows.map((row) => [row.id, 'idle' as RowSaveState])))
 
       if (headerRow) {
         const catalogRows = await listCatalogItems(supabase, {
@@ -849,7 +978,10 @@ export default function PricingWorksheetPage({
       setNewLeadDays('')
       setNewNotes('')
 
-      focusCell(created.id, 'description_snapshot')
+      if (!isMobileViewport) {
+        focusCell(created.id, 'description_snapshot')
+      }
+
       return created
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to add row.')
@@ -1151,6 +1283,7 @@ export default function PricingWorksheetPage({
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {metaPill(`${localRows.length} ${localRows.length === 1 ? 'row' : 'rows'}`)}
               {activeCell ? metaPill('active cell', 'active') : null}
+              {shouldVirtualizeDesktop ? metaPill('virtualized', 'active') : null}
               {saveCounts.dirty > 0 ? metaPill(`${saveCounts.dirty} queued`, 'warning') : null}
               {saveCounts.saving > 0 ? metaPill(`${saveCounts.saving} saving`, 'default') : null}
               {saveCounts.error > 0 ? metaPill(`${saveCounts.error} failed`, 'danger') : null}
@@ -1263,10 +1396,20 @@ export default function PricingWorksheetPage({
             <div style={{ padding: '16px', fontSize: '13px', color: 'var(--text-muted)' }}>
               No pricing rows yet.
             </div>
-          ) : (
-            <>
-              <fieldset disabled={!access?.canManage} style={fieldsetResetStyle}>
-                <div style={{ overflowX: 'auto' }}>
+          ) : !isMobileViewport ? (
+            <fieldset disabled={!access?.canManage} style={fieldsetResetStyle}>
+              <div style={{ overflowX: 'auto' }}>
+                <div
+                  ref={tableScrollContainerRef}
+                  onScroll={(event) => {
+                    if (!shouldVirtualizeDesktop) return
+                    setTableScrollTop(event.currentTarget.scrollTop)
+                  }}
+                  style={{
+                    overflowY: shouldVirtualizeDesktop ? 'auto' : 'visible',
+                    maxHeight: shouldVirtualizeDesktop ? `${virtualMaxBodyHeight}px` : undefined,
+                  }}
+                >
                   <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1180px' }}>
                     <thead>
                       <tr>
@@ -1293,6 +1436,10 @@ export default function PricingWorksheetPage({
                               padding: '12px 14px',
                               borderBottom: '1px solid var(--border)',
                               whiteSpace: 'nowrap',
+                              position: shouldVirtualizeDesktop ? 'sticky' : 'static',
+                              top: 0,
+                              background: 'var(--surface)',
+                              zIndex: 1,
                             }}
                           >
                             {label}
@@ -1301,20 +1448,32 @@ export default function PricingWorksheetPage({
                       </tr>
                     </thead>
                     <tbody>
-                      {localRows.map((row) => {
+                      {shouldVirtualizeDesktop && desktopVisibleRange.topSpacerHeight > 0 ? (
+                        <tr aria-hidden="true">
+                          <td colSpan={10} style={{ padding: 0, height: `${desktopVisibleRange.topSpacerHeight}px`, borderBottom: 'none' }} />
+                        </tr>
+                      ) : null}
+
+                      {desktopVisibleRange.rows.map((row) => {
                         const rowStatus = getRowStatusLabel(row.id)
                         return (
-                          <tr key={row.id}>
+                          <tr key={row.id} style={{ height: `${virtualRowHeight}px` }}>
                             <td
                               style={{
                                 padding: '12px 14px',
                                 borderBottom: '1px solid var(--border)',
                                 fontSize: '13px',
                                 whiteSpace: 'nowrap',
+                                verticalAlign: 'middle',
                               }}
                             >
                               <div style={{ fontWeight: 700 }}>{row.source_sku}</div>
-                              <div style={{ fontSize: '11px', color: rowStatus.tone === 'danger' ? '#fca5a5' : 'var(--text-muted)' }}>
+                              <div
+                                style={{
+                                  fontSize: '11px',
+                                  color: rowStatus.tone === 'danger' ? '#fca5a5' : 'var(--text-muted)',
+                                }}
+                              >
                                 {rowStatus.text}
                               </div>
                             </td>
@@ -1324,11 +1483,12 @@ export default function PricingWorksheetPage({
                                 borderBottom: '1px solid var(--border)',
                                 fontSize: '13px',
                                 whiteSpace: 'nowrap',
+                                verticalAlign: 'middle',
                               }}
                             >
                               {row.catalog_sku}
                             </td>
-                            <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
                               <input
                                 ref={(element) => {
                                   cellRefs.current[getCellDomKey(row.id, 'description_snapshot')] = element
@@ -1344,7 +1504,7 @@ export default function PricingWorksheetPage({
                                 style={cellInputStyle}
                               />
                             </td>
-                            <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
                               <input
                                 ref={(element) => {
                                   cellRefs.current[getCellDomKey(row.id, 'vendor_sku')] = element
@@ -1360,7 +1520,7 @@ export default function PricingWorksheetPage({
                                 style={cellInputStyle}
                               />
                             </td>
-                            <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
                               <input
                                 ref={(element) => {
                                   cellRefs.current[getCellDomKey(row.id, 'unit')] = element
@@ -1376,7 +1536,7 @@ export default function PricingWorksheetPage({
                                 style={cellInputStyle}
                               />
                             </td>
-                            <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
                               <input
                                 ref={(element) => {
                                   cellRefs.current[getCellDomKey(row.id, 'unit_price')] = element
@@ -1393,7 +1553,7 @@ export default function PricingWorksheetPage({
                                 style={cellInputStyle}
                               />
                             </td>
-                            <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
                               <input
                                 ref={(element) => {
                                   cellRefs.current[getCellDomKey(row.id, 'lead_days')] = element
@@ -1410,7 +1570,7 @@ export default function PricingWorksheetPage({
                                 style={cellInputStyle}
                               />
                             </td>
-                            <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
                               <label style={{ display: 'flex', justifyContent: 'center', cursor: 'pointer' }}>
                                 <input
                                   ref={(element) => {
@@ -1433,7 +1593,7 @@ export default function PricingWorksheetPage({
                                 />
                               </label>
                             </td>
-                            <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
                               <textarea
                                 ref={(element) => {
                                   cellRefs.current[getCellDomKey(row.id, 'notes')] = element
@@ -1447,7 +1607,7 @@ export default function PricingWorksheetPage({
                                 onBlur={() => handleTextCellBlur(row.id, 'notes')}
                                 onKeyDown={(e) => handleTextCellKeyDown(e, row.id, 'notes')}
                                 rows={1}
-                                style={{ ...cellInputStyle, resize: 'vertical', minHeight: '38px' }}
+                                style={{ ...cellInputStyle, resize: 'none', height: '38px', minHeight: '38px' }}
                               />
                             </td>
                             <td
@@ -1456,6 +1616,7 @@ export default function PricingWorksheetPage({
                                 borderBottom: '1px solid var(--border)',
                                 fontSize: '13px',
                                 whiteSpace: 'nowrap',
+                                verticalAlign: 'middle',
                               }}
                             >
                               {costCodeMap.get(row.cost_code_id) ?? '—'}
@@ -1463,47 +1624,53 @@ export default function PricingWorksheetPage({
                           </tr>
                         )
                       })}
+
+                      {shouldVirtualizeDesktop && desktopVisibleRange.bottomSpacerHeight > 0 ? (
+                        <tr aria-hidden="true">
+                          <td colSpan={10} style={{ padding: 0, height: `${desktopVisibleRange.bottomSpacerHeight}px`, borderBottom: 'none' }} />
+                        </tr>
+                      ) : null}
                     </tbody>
                   </table>
                 </div>
-              </fieldset>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px', paddingTop: '14px' }}>
-                {localRows.map((row) => {
-                  const rowStatus = getRowStatusLabel(row.id)
-                  return (
-                    <div
-                      key={`${row.id}-mobile`}
-                      style={{
-                        border: '1px solid var(--border)',
-                        borderRadius: '10px',
-                        padding: '12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' }}>
-                        <div>
-                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text)' }}>{row.source_sku}</div>
-                          <div style={{ fontSize: '11px', color: rowStatus.tone === 'danger' ? '#fca5a5' : 'var(--text-muted)' }}>
-                            {rowStatus.text}
-                          </div>
-                        </div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{row.catalog_sku}</div>
-                      </div>
-                      <div style={{ fontSize: '13px', color: 'var(--text)' }}>{row.description_snapshot}</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
-                        <Field label="Vendor SKU" value={row.vendor_sku} />
-                        <Field label="Unit" value={row.unit} />
-                        <Field label="Unit Price" value={formatMoney(row.unit_price)} />
-                        <Field label="Lead Days" value={row.lead_days == null ? '—' : String(row.lead_days)} />
-                      </div>
-                    </div>
-                  )
-                })}
               </div>
-            </>
+            </fieldset>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px', paddingTop: '14px' }}>
+              {localRows.map((row) => {
+                const rowStatus = getRowStatusLabel(row.id)
+                return (
+                  <div
+                    key={`${row.id}-mobile`}
+                    style={{
+                      border: '1px solid var(--border)',
+                      borderRadius: '10px',
+                      padding: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text)' }}>{row.source_sku}</div>
+                        <div style={{ fontSize: '11px', color: rowStatus.tone === 'danger' ? '#fca5a5' : 'var(--text-muted)' }}>
+                          {rowStatus.text}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{row.catalog_sku}</div>
+                    </div>
+                    <div style={{ fontSize: '13px', color: 'var(--text)' }}>{row.description_snapshot}</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
+                      <Field label="Vendor SKU" value={row.vendor_sku} />
+                      <Field label="Unit" value={row.unit} />
+                      <Field label="Unit Price" value={formatMoney(row.unit_price)} />
+                      <Field label="Lead Days" value={row.lead_days == null ? '—' : String(row.lead_days)} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
       </div>
