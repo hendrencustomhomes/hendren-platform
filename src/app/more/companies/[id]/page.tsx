@@ -348,7 +348,7 @@ function ContactsSection({
 
   // New contact form
   const [showAdd, setShowAdd] = useState(false)
-  const [newContact, setNewContact] = useState({ name: '', position: '', phone: '', email: '' })
+  const [newContact, setNewContact] = useState({ full_name: '', title: '', phone: '', email: '' })
   const [creating, setCreating] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -367,19 +367,19 @@ function ContactsSection({
   useEffect(() => { load() }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleCreate() {
-    const name = newContact.name.trim()
-    if (!name) { setError('Contact name is required.'); return }
+    const full_name = newContact.full_name.trim()
+    if (!full_name) { setError('Contact name is required.'); return }
     setCreating(true)
     setError(null)
     try {
       await createCompanyContact(supabase, {
         company_id: companyId,
-        name,
-        position: newContact.position.trim() || null,
+        full_name,
+        title: newContact.title.trim() || null,
         phone: newContact.phone.trim() || null,
         email: newContact.email.trim() || null,
       })
-      setNewContact({ name: '', position: '', phone: '', email: '' })
+      setNewContact({ full_name: '', title: '', phone: '', email: '' })
       setShowAdd(false)
       await load()
     } catch (e) {
@@ -394,8 +394,8 @@ function ContactsSection({
     setError(null)
     try {
       await updateCompanyContact(supabase, id, {
-        name: editDraft.name?.trim() || undefined,
-        position: editDraft.position?.trim() || null,
+        full_name: editDraft.full_name?.trim() || undefined,
+        title: editDraft.title?.trim() || null,
         phone: editDraft.phone?.trim() || null,
         email: editDraft.email?.trim() || null,
       })
@@ -441,11 +441,11 @@ function ContactsSection({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle} htmlFor="nc-name">Name *</label>
-              <input id="nc-name" value={newContact.name} onChange={(e) => setNewContact((p) => ({ ...p, name: e.target.value }))} style={inputStyle} placeholder="Full name" />
+              <input id="nc-name" value={newContact.full_name} onChange={(e) => setNewContact((p) => ({ ...p, full_name: e.target.value }))} style={inputStyle} placeholder="Full name" />
             </div>
             <div>
               <label style={labelStyle} htmlFor="nc-pos">Position</label>
-              <input id="nc-pos" value={newContact.position} onChange={(e) => setNewContact((p) => ({ ...p, position: e.target.value }))} style={inputStyle} placeholder="Project Manager" />
+              <input id="nc-pos" value={newContact.title} onChange={(e) => setNewContact((p) => ({ ...p, title: e.target.value }))} style={inputStyle} placeholder="Project Manager" />
             </div>
             <div>
               <label style={labelStyle} htmlFor="nc-phone">Phone</label>
@@ -481,11 +481,11 @@ function ContactsSection({
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label style={labelStyle}>Name</label>
-                    <input value={editDraft.name ?? contact.name} onChange={(e) => setEditDraft((p) => ({ ...p, name: e.target.value }))} style={inputStyle} />
+                    <input value={editDraft.full_name ?? contact.full_name} onChange={(e) => setEditDraft((p) => ({ ...p, full_name: e.target.value }))} style={inputStyle} />
                   </div>
                   <div>
                     <label style={labelStyle}>Position</label>
-                    <input value={editDraft.position ?? contact.position ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, position: e.target.value }))} style={inputStyle} />
+                    <input value={editDraft.title ?? contact.title ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, title: e.target.value }))} style={inputStyle} />
                   </div>
                   <div>
                     <label style={labelStyle}>Phone</label>
@@ -504,8 +504,8 @@ function ContactsSection({
             ) : (
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
                 <div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)' }}>{contact.name}</div>
-                  {contact.position && <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{contact.position}</div>}
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)' }}>{contact.full_name}</div>
+                  {contact.title && <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{contact.title}</div>}
                   {contact.phone && <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{contact.phone}</div>}
                   {contact.email && <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{contact.email}</div>}
                 </div>

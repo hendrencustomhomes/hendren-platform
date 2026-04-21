@@ -20,8 +20,8 @@ export type Company = {
 export type CompanyContact = {
   id: string
   company_id: string
-  name: string
-  position: string | null
+  full_name: string
+  title: string | null
   phone: string | null
   email: string | null
   created_at: string | null
@@ -141,7 +141,7 @@ export async function getCompanyContacts(
 ): Promise<CompanyContact[]> {
   const { data, error } = await supabase
     .from('company_contacts')
-    .select('id, company_id, name, position, phone, email, created_at')
+    .select('id, company_id, full_name, title, phone, email, created_at')
     .eq('company_id', companyId)
     .order('created_at')
   if (error) throw new Error(error.message)
