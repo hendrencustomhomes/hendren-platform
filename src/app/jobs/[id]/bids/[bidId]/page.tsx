@@ -10,6 +10,7 @@ export default async function JobBidDetailPage({ params }: { params: Promise<{ i
       detailBasePath={`/jobs/${id}/bids`}
       navFallbackTitle="Bid"
       missingLabel="Bid"
+      permissionRowKey="bids"
     />
   )
 }
