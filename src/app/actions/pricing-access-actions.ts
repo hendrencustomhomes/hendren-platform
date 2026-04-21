@@ -6,7 +6,16 @@ import { createClient } from '@/utils/supabase/server'
 
 type SupportedPricingPermissionRowKey = Extract<PermissionRowKey, 'pricing_sources' | 'bids'>
 
-export async function getCurrentPricingAccess(rowKey: SupportedPricingPermissionRowKey) {
+type PricingAccessResult = {
+  canView: boolean
+  canManage: boolean
+  canAssign: boolean
+  error?: string
+}
+
+export async function getCurrentPricingAccess(
+  rowKey: SupportedPricingPermissionRowKey
+): Promise<PricingAccessResult> {
   const supabase = await createClient()
   const {
     data: { user },
@@ -17,7 +26,7 @@ export async function getCurrentPricingAccess(rowKey: SupportedPricingPermission
       canView: false,
       canManage: false,
       canAssign: false,
-      error: 'Not authenticated' as const,
+      error: 'Not authenticated',
     }
   }
 
@@ -43,7 +52,7 @@ export async function getCurrentPricingAccess(rowKey: SupportedPricingPermission
       canView: false,
       canManage: false,
       canAssign: false,
-      error: 'Internal user access required' as const,
+      error: 'Internal user access required',
     }
   }
 
@@ -67,7 +76,7 @@ export async function getCurrentPricingAccess(rowKey: SupportedPricingPermission
       canView: false,
       canManage: false,
       canAssign: false,
-      error: 'Permission row not found' as const,
+      error: 'Permission row not found',
     }
   }
 
