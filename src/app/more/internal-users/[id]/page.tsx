@@ -274,6 +274,7 @@ export default function InternalUserDetailPage() {
   const [selectedTemplateKey, setSelectedTemplateKey] = useState<PermissionTemplateKey | ''>('')
   const [selectedWorkflowKeys, setSelectedWorkflowKeys] = useState<string[]>([])
   const [permissionMatrix, setPermissionMatrix] = useState<PermissionMatrixCell[]>(PERMISSION_ROW_KEYS.map((rowKey) => ({ rowKey, ...normalizePermissionState(rowKey, { canView: false, canManage: false, canAssign: false }) })))
+  const [allTemplatePermissions, setAllTemplatePermissions] = useState<Record<string, PermissionMatrixCell[]>>({})
 
   const defaultWorkflowKeys = useMemo(() => {
     if (!selectedTemplateKey) return []
@@ -315,9 +316,11 @@ export default function InternalUserDetailPage() {
       const templatesData = (accessRes.templates || []) as CatalogOption[]
       const workflowsData = (accessRes.workflowRoles || []) as CatalogOption[]
       const permissionsData = (accessRes.permissionSnapshot || []) as PermissionMatrixCell[]
+      const tmplPerms = (accessRes as any).templatePermissions as Record<string, PermissionMatrixCell[]> | undefined
 
       setTemplates(templatesData)
       setWorkflowRoles(workflowsData)
+      setAllTemplatePermissions(tmplPerms || {})
       setSelectedTemplateKey((accessRes.selectedTemplate?.key as PermissionTemplateKey | undefined) || deriveTemplateFallbackFromRoles(nextUser.roles || []))
       setSelectedWorkflowKeys((accessRes.workflowKeys || []) as string[])
       setPermissionMatrix(permissionsData.length > 0 ? permissionsData : permissionMatrix)
@@ -719,7 +722,13 @@ export default function InternalUserDetailPage() {
                   <label style={labelStyle}>Permission Template</label>
                   <select
                     value={selectedTemplateKey}
-                    onChange={(e) => setSelectedTemplateKey(e.target.value as PermissionTemplateKey)}
+                    onChange={(e) => {
+                      const key = e.target.value as PermissionTemplateKey
+                      setSelectedTemplateKey(key)
+                      if (key && allTemplatePermissions[key]) {
+                        setPermissionMatrix(allTemplatePermissions[key])
+                      }
+                    }}
                     style={inputStyle}
                   >
                     <option value="">Select template</option>

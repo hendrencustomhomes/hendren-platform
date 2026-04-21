@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { fetchActiveTrades, type TradeOption } from '@/lib/trades'
 import { fetchActiveCostCodes, type CostCodeOption } from '@/lib/cost-codes'
@@ -57,11 +57,12 @@ function inputStyle() {
   }
 }
 
-export default function NewSubSchedulePage() {
+function NewSubScheduleForm() {
   const supabase = createClient()
   const router = useRouter()
+  const searchParams = useSearchParams()
 
-  const [jobId, setJobId] = useState<string | null>(null)
+  const jobId = searchParams.get('jobId')
   const [loading, setLoading] = useState(false)
   const [trades, setTrades] = useState<TradeOption[]>([])
   const [loadingTrades, setLoadingTrades] = useState(true)
@@ -90,12 +91,6 @@ export default function NewSubSchedulePage() {
     include_sunday: false,
     buffer_working_days: 0,
   })
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const params = new URLSearchParams(window.location.search)
-    setJobId(params.get('jobId'))
-  }, [])
 
   useEffect(() => {
     async function loadTrades() {
@@ -702,5 +697,13 @@ export default function NewSubSchedulePage() {
         </div>
       </form>
     </main>
+  )
+}
+
+export default function NewSubSchedulePage() {
+  return (
+    <Suspense fallback={null}>
+      <NewSubScheduleForm />
+    </Suspense>
   )
 }

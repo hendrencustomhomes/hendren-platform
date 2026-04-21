@@ -195,6 +195,24 @@ export async function getUserAccessModel(profileId: string) {
     }
   })
 
+  // Build per-template permission matrix so the UI can update the matrix
+  // immediately when the user changes the template dropdown.
+  const allTemplatePermissions: Record<string, PermissionMatrixCell[]> = {}
+  for (const template of catalog.templates) {
+    allTemplatePermissions[template.key] = buildDefaultPermissionMatrix()
+  }
+  for (const record of templatePermissionsResult.data || []) {
+    const template = templateById.get(String(record.permission_template_id))
+    const row = rowById.get(String(record.permission_row_id))
+    if (!template || !row) continue
+    const current = allTemplatePermissions[template.key] ?? buildDefaultPermissionMatrix()
+    allTemplatePermissions[template.key] = current.map((cell) =>
+      cell.rowKey === row.key
+        ? { rowKey: row.key, ...normalizePermissionState(row.key, record) }
+        : cell
+    )
+  }
+
   return {
     selectedTemplate,
     workflowKeys: mergeWorkflowEligibility(selectedTemplate?.key || 'media', workflowKeys).filter(isWorkflowRoleKey),
@@ -202,6 +220,7 @@ export async function getUserAccessModel(profileId: string) {
     templates: catalog.templates,
     workflowRoles: catalog.workflowRoles,
     permissionRows: catalog.permissionRows,
+    templatePermissions: allTemplatePermissions,
   }
 }
 

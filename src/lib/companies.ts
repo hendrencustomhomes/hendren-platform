@@ -117,7 +117,7 @@ export async function createCompany(
     .insert(payload)
     .select('id')
     .single()
-  if (error) throw error
+  if (error) throw new Error(error.message)
   return (data as { id: string }).id
 }
 
