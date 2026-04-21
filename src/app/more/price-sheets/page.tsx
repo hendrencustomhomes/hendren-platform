@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
+import { getCurrentPricingAccess } from '@/app/actions/pricing-access-actions'
 import { createClient } from '@/utils/supabase/client'
 import {
   createPricingHeader,
@@ -82,6 +83,7 @@ export default function PriceSheetsPage() {
   const [title, setTitle] = useState('')
   const [status, setStatus] = useState('draft')
   const [notes, setNotes] = useState('')
+  const [access, setAccess] = useState<{ canView: boolean; canManage: boolean; canAssign: boolean; error?: string } | null>(null)
 
   async function loadPage() {
     setLoading(true)
@@ -109,7 +111,20 @@ export default function PriceSheetsPage() {
   }
 
   useEffect(() => {
-    void loadPage()
+    async function initialize() {
+      const accessResult = await getCurrentPricingAccess('pricing_sources')
+      setAccess(accessResult)
+
+      if (!accessResult.canView) {
+        setLoading(false)
+        setError(accessResult.error || 'Pricing Sources access required.')
+        return
+      }
+
+      await loadPage()
+    }
+
+    void initialize()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -163,6 +178,11 @@ export default function PriceSheetsPage() {
   }, [headers, statusFilter, search, companyMap, tradeMap, costCodeMap])
 
   async function handleCreate() {
+    if (!access?.canManage) {
+      setError('Manage access required.')
+      return
+    }
+
     if (!companyId || !tradeId || !costCodeId) {
       setError('Company, trade, and cost code are required.')
       return
@@ -194,6 +214,19 @@ export default function PriceSheetsPage() {
     }
   }
 
+  if (!loading && access && !access.canView) {
+    return (
+      <>
+        <Nav title="Price Sheets" back="/more" />
+        <div style={{ padding: '16px' }}>
+          <div style={{ ...cardStyle(), padding: '20px 16px', fontSize: '13px', color: 'var(--text-muted)' }}>
+            Pricing Sources access required.
+          </div>
+        </div>
+      </>
+    )
+  }
+
   return (
     <>
       <Nav title="Price Sheets" back="/more" />
@@ -206,27 +239,29 @@ export default function PriceSheetsPage() {
             placeholder="Search price sheets…"
             style={inputStyle}
           />
-          <button
-            type="button"
-            onClick={() => {
-              setShowAdd((value) => !value)
-              setError(null)
-            }}
-            style={{
-              background: 'var(--text)',
-              color: 'var(--surface)',
-              border: 'none',
-              borderRadius: '10px',
-              padding: '10px 14px',
-              fontSize: '13px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-            }}
-          >
-            {showAdd ? 'Cancel' : 'Add'}
-          </button>
+          {access?.canManage && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowAdd((value) => !value)
+                setError(null)
+              }}
+              style={{
+                background: 'var(--text)',
+                color: 'var(--surface)',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '10px 14px',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              {showAdd ? 'Cancel' : 'Add'}
+            </button>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -241,7 +276,7 @@ export default function PriceSheetsPage() {
           </button>
         </div>
 
-        {showAdd && (
+        {showAdd && access?.canManage && (
           <div style={cardStyle()}>
             <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>
               New Price Sheet
@@ -380,7 +415,7 @@ export default function PriceSheetsPage() {
           )}
         </div>
 
-        {!loading && (
+        {!loading && access?.canView && (
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>
             {filteredHeaders.length} {filteredHeaders.length === 1 ? 'price sheet' : 'price sheets'}
           </div>
