@@ -112,9 +112,12 @@ export async function createCompany(
   supabase: SupabaseClient,
   payload: Omit<Company, 'id' | 'created_at'>
 ): Promise<string> {
+  // Include legacy `name` column (NOT NULL, no default) to satisfy the old schema
+  // while the app has migrated to company_name.
+  const insertPayload = { ...payload, name: payload.company_name ?? '' }
   const { data, error } = await supabase
     .from('companies')
-    .insert(payload)
+    .insert(insertPayload)
     .select('id')
     .single()
   if (error) throw new Error(error.message)
