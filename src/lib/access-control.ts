@@ -87,6 +87,11 @@ export const LOCKED_BASELINE_VIEW_ROWS: PermissionRowKey[] = [
   'files',
 ]
 
+export const ASSIGN_DISABLED_ROWS: PermissionRowKey[] = [
+  'pricing_sources',
+  'bids',
+]
+
 export const DEFAULT_WORKFLOWS_BY_TEMPLATE: Partial<Record<PermissionTemplateKey, WorkflowRoleKey[]>> = {
   operations: ['operations'],
   sales: ['sales'],
@@ -185,6 +190,10 @@ export function normalizePermissionState(rowKey: PermissionRowKey, input: {
   }
 
   if (!canManage) {
+    canAssign = false
+  }
+
+  if (ASSIGN_DISABLED_ROWS.includes(rowKey)) {
     canAssign = false
   }
 
