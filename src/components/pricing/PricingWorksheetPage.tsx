@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
+import { getCurrentPricingAccess } from '@/app/actions/pricing-access-actions'
 import { createClient } from '@/utils/supabase/client'
 import {
   createPricingHeaderRevision,
@@ -73,6 +74,13 @@ const cellInputStyle = {
   boxSizing: 'border-box' as const,
 } as const
 
+const fieldsetResetStyle = {
+  border: 'none',
+  padding: 0,
+  margin: 0,
+  minWidth: 0,
+} as const
+
 function metaPill(text: string, tone: 'default' | 'active' | 'warning' = 'default') {
   const color = tone === 'active' ? 'var(--blue)' : tone === 'warning' ? '#fbbf24' : 'var(--text-muted)'
   return (
@@ -109,6 +117,7 @@ type Props = {
   detailBasePath: string
   navFallbackTitle: string
   missingLabel: string
+  permissionRowKey: 'pricing_sources' | 'bids'
 }
 
 export default function PricingWorksheetPage({
@@ -117,6 +126,7 @@ export default function PricingWorksheetPage({
   detailBasePath,
   navFallbackTitle,
   missingLabel,
+  permissionRowKey,
 }: Props) {
   const router = useRouter()
   const supabase = createClient()
@@ -133,6 +143,7 @@ export default function PricingWorksheetPage({
   const [creatingRow, setCreatingRow] = useState(false)
   const [creatingRevision, setCreatingRevision] = useState(false)
   const [savingRowIds, setSavingRowIds] = useState<string[]>([])
+  const [access, setAccess] = useState<{ canView: boolean; canManage: boolean; canAssign: boolean; error?: string } | null>(null)
 
   const [headerTitle, setHeaderTitle] = useState('')
   const [headerStatus, setHeaderStatus] = useState('draft')
@@ -183,9 +194,22 @@ export default function PricingWorksheetPage({
   }
 
   useEffect(() => {
-    void loadPage()
+    async function initialize() {
+      const accessResult = await getCurrentPricingAccess(permissionRowKey)
+      setAccess(accessResult)
+
+      if (!accessResult.canView) {
+        setLoading(false)
+        setError(accessResult.error || `${missingLabel} access required.`)
+        return
+      }
+
+      await loadPage()
+    }
+
+    void initialize()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [headerId])
+  }, [headerId, permissionRowKey])
 
   const companyMap = useMemo(() => new Map(companies.map((row) => [row.id, row.company_name])), [companies])
   const tradeMap = useMemo(() => new Map(trades.map((row) => [row.id, row.name])), [trades])
@@ -197,6 +221,11 @@ export default function PricingWorksheetPage({
   }
 
   async function commitRow(rowId: string) {
+    if (!access?.canManage) {
+      setError('Manage access required.')
+      return
+    }
+
     const row = rows.find((item) => item.id === rowId)
     if (!row) return
     setSavingRowIds((current) => Array.from(new Set([...current, rowId])))
@@ -239,6 +268,10 @@ export default function PricingWorksheetPage({
   }
 
   async function handleSaveHeader() {
+    if (!access?.canManage) {
+      setError('Manage access required.')
+      return
+    }
     if (!header) return
     setSavingHeader(true)
     setError(null)
@@ -264,6 +297,10 @@ export default function PricingWorksheetPage({
   }
 
   async function handleCreateRevision() {
+    if (!access?.canManage) {
+      setError('Manage access required.')
+      return
+    }
     if (!header) return
     setCreatingRevision(true)
     setError(null)
@@ -278,6 +315,10 @@ export default function PricingWorksheetPage({
   }
 
   async function handleCreateRow() {
+    if (!access?.canManage) {
+      setError('Manage access required.')
+      return
+    }
     if (!header) return
     if (!newCatalogSku) {
       setError('Catalog item is required.')
@@ -320,6 +361,17 @@ export default function PricingWorksheetPage({
     )
   }
 
+  if (!loading && access && !access.canView) {
+    return (
+      <>
+        <Nav title={navFallbackTitle} back={backHref} />
+        <div style={{ padding: '20px 16px' }}>
+          <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{missingLabel} access required.</div>
+        </div>
+      </>
+    )
+  }
+
   if (error && !header) {
     return (
       <>
@@ -357,43 +409,45 @@ export default function PricingWorksheetPage({
             </div>
           </div>
 
-          <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Title</div>
-              <input value={headerTitle} onChange={(e) => setHeaderTitle(e.target.value)} style={inputStyle} />
+          <fieldset disabled={!access?.canManage} style={fieldsetResetStyle}>
+            <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Title</div>
+                <input value={headerTitle} onChange={(e) => setHeaderTitle(e.target.value)} style={inputStyle} />
+              </div>
+              <Field label="Company" value={companyMap.get(header.company_id)} />
+              <Field label="Trade" value={tradeMap.get(header.trade_id)} />
+              <Field label="Cost Code" value={costCodeMap.get(header.cost_code_id)} />
+              <div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Status</div>
+                <select value={headerStatus} onChange={(e) => setHeaderStatus(e.target.value)} style={inputStyle}>
+                  <option value="draft">draft</option>
+                  <option value="active">active</option>
+                  <option value="superseded">superseded</option>
+                  <option value="archived">archived</option>
+                  <option value="received">received</option>
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Effective Date</div>
+                <input type="date" value={headerEffectiveDate} onChange={(e) => setHeaderEffectiveDate(e.target.value)} style={inputStyle} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>
+                  <input type="checkbox" checked={headerIsActive} onChange={(e) => setHeaderIsActive(e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
+                  Active
+                </label>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Notes</div>
+                <textarea value={headerNotes} onChange={(e) => setHeaderNotes(e.target.value)} style={{ ...inputStyle, minHeight: '90px', resize: 'vertical' }} />
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                <button type="button" onClick={handleCreateRevision} disabled={creatingRevision} style={{ background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '10px', padding: '10px 14px', fontSize: '13px', fontWeight: 700, cursor: creatingRevision ? 'not-allowed' : 'pointer', opacity: creatingRevision ? 0.7 : 1 }}>{creatingRevision ? 'Creating Revision…' : 'Create Revision'}</button>
+                <button type="button" onClick={handleSaveHeader} disabled={savingHeader} style={{ background: 'var(--text)', color: 'var(--surface)', border: 'none', borderRadius: '10px', padding: '10px 14px', fontSize: '13px', fontWeight: 700, cursor: savingHeader ? 'not-allowed' : 'pointer', opacity: savingHeader ? 0.7 : 1 }}>{savingHeader ? 'Saving…' : 'Save Header'}</button>
+              </div>
             </div>
-            <Field label="Company" value={companyMap.get(header.company_id)} />
-            <Field label="Trade" value={tradeMap.get(header.trade_id)} />
-            <Field label="Cost Code" value={costCodeMap.get(header.cost_code_id)} />
-            <div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Status</div>
-              <select value={headerStatus} onChange={(e) => setHeaderStatus(e.target.value)} style={inputStyle}>
-                <option value="draft">draft</option>
-                <option value="active">active</option>
-                <option value="superseded">superseded</option>
-                <option value="archived">archived</option>
-                <option value="received">received</option>
-              </select>
-            </div>
-            <div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Effective Date</div>
-              <input type="date" value={headerEffectiveDate} onChange={(e) => setHeaderEffectiveDate(e.target.value)} style={inputStyle} />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>
-                <input type="checkbox" checked={headerIsActive} onChange={(e) => setHeaderIsActive(e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
-                Active
-              </label>
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Notes</div>
-              <textarea value={headerNotes} onChange={(e) => setHeaderNotes(e.target.value)} style={{ ...inputStyle, minHeight: '90px', resize: 'vertical' }} />
-            </div>
-            <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
-              <button type="button" onClick={handleCreateRevision} disabled={creatingRevision} style={{ background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '10px', padding: '10px 14px', fontSize: '13px', fontWeight: 700, cursor: creatingRevision ? 'not-allowed' : 'pointer', opacity: creatingRevision ? 0.7 : 1 }}>{creatingRevision ? 'Creating Revision…' : 'Create Revision'}</button>
-              <button type="button" onClick={handleSaveHeader} disabled={savingHeader} style={{ background: 'var(--text)', color: 'var(--surface)', border: 'none', borderRadius: '10px', padding: '10px 14px', fontSize: '13px', fontWeight: 700, cursor: savingHeader ? 'not-allowed' : 'pointer', opacity: savingHeader ? 0.7 : 1 }}>{savingHeader ? 'Saving…' : 'Save Header'}</button>
-            </div>
-          </div>
+          </fieldset>
         </div>
 
         <div style={sectionCardStyle}>
@@ -405,51 +459,55 @@ export default function PricingWorksheetPage({
             </div>
           </div>
 
-          <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'grid', gridTemplateColumns: 'minmax(180px, 1.2fr) repeat(6, minmax(110px, 1fr))', gap: '8px', overflowX: 'auto' }}>
-            <select value={newCatalogSku} onChange={(e) => applyCatalogDefaults(e.target.value)} onKeyDown={(e) => handleCellKeyDown(e)} style={cellInputStyle}>
-              <option value="">Select catalog item</option>
-              {catalogItems.map((item) => <option key={item.catalog_sku} value={item.catalog_sku}>{item.catalog_sku} · {item.title}</option>)}
-            </select>
-            <input value={newDescription} onChange={(e) => setNewDescription(e.target.value)} onKeyDown={(e) => handleCellKeyDown(e)} placeholder="Description" style={cellInputStyle} />
-            <input value={newVendorSku} onChange={(e) => setNewVendorSku(e.target.value)} onKeyDown={(e) => handleCellKeyDown(e)} placeholder="Vendor SKU" style={cellInputStyle} />
-            <input value={newUnit} onChange={(e) => setNewUnit(e.target.value)} onKeyDown={(e) => handleCellKeyDown(e)} placeholder="Unit" style={cellInputStyle} />
-            <input value={newUnitPrice} onChange={(e) => setNewUnitPrice(e.target.value)} onKeyDown={(e) => handleCellKeyDown(e)} inputMode="decimal" placeholder="Unit price" style={cellInputStyle} />
-            <input value={newLeadDays} onChange={(e) => setNewLeadDays(e.target.value)} onKeyDown={(e) => handleCellKeyDown(e)} inputMode="numeric" placeholder="Lead days" style={cellInputStyle} />
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input value={newNotes} onChange={(e) => setNewNotes(e.target.value)} onKeyDown={(e) => handleCellKeyDown(e, () => { void handleCreateRow() })} placeholder="Notes" style={cellInputStyle} />
-              <button type="button" onClick={() => void handleCreateRow()} disabled={creatingRow} style={{ background: 'var(--text)', color: 'var(--surface)', border: 'none', borderRadius: '8px', padding: '0 12px', fontSize: '12px', fontWeight: 700, cursor: creatingRow ? 'not-allowed' : 'pointer', opacity: creatingRow ? 0.7 : 1, whiteSpace: 'nowrap' }}>{creatingRow ? 'Adding…' : 'Add'}</button>
+          <fieldset disabled={!access?.canManage} style={fieldsetResetStyle}>
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'grid', gridTemplateColumns: 'minmax(180px, 1.2fr) repeat(6, minmax(110px, 1fr))', gap: '8px', overflowX: 'auto' }}>
+              <select value={newCatalogSku} onChange={(e) => applyCatalogDefaults(e.target.value)} onKeyDown={(e) => handleCellKeyDown(e)} style={cellInputStyle}>
+                <option value="">Select catalog item</option>
+                {catalogItems.map((item) => <option key={item.catalog_sku} value={item.catalog_sku}>{item.catalog_sku} · {item.title}</option>)}
+              </select>
+              <input value={newDescription} onChange={(e) => setNewDescription(e.target.value)} onKeyDown={(e) => handleCellKeyDown(e)} placeholder="Description" style={cellInputStyle} />
+              <input value={newVendorSku} onChange={(e) => setNewVendorSku(e.target.value)} onKeyDown={(e) => handleCellKeyDown(e)} placeholder="Vendor SKU" style={cellInputStyle} />
+              <input value={newUnit} onChange={(e) => setNewUnit(e.target.value)} onKeyDown={(e) => handleCellKeyDown(e)} placeholder="Unit" style={cellInputStyle} />
+              <input value={newUnitPrice} onChange={(e) => setNewUnitPrice(e.target.value)} onKeyDown={(e) => handleCellKeyDown(e)} inputMode="decimal" placeholder="Unit price" style={cellInputStyle} />
+              <input value={newLeadDays} onChange={(e) => setNewLeadDays(e.target.value)} onKeyDown={(e) => handleCellKeyDown(e)} inputMode="numeric" placeholder="Lead days" style={cellInputStyle} />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input value={newNotes} onChange={(e) => setNewNotes(e.target.value)} onKeyDown={(e) => handleCellKeyDown(e, () => { void handleCreateRow() })} placeholder="Notes" style={cellInputStyle} />
+                <button type="button" onClick={() => void handleCreateRow()} disabled={creatingRow} style={{ background: 'var(--text)', color: 'var(--surface)', border: 'none', borderRadius: '8px', padding: '0 12px', fontSize: '12px', fontWeight: 700, cursor: creatingRow ? 'not-allowed' : 'pointer', opacity: creatingRow ? 0.7 : 1, whiteSpace: 'nowrap' }}>{creatingRow ? 'Adding…' : 'Add'}</button>
+              </div>
             </div>
-          </div>
+          </fieldset>
 
           {rows.length === 0 ? (
             <div style={{ padding: '16px', fontSize: '13px', color: 'var(--text-muted)' }}>No pricing rows yet.</div>
           ) : (
             <>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1180px' }}>
-                  <thead>
-                    <tr>
-                      {['Source SKU', 'Catalog SKU', 'Description', 'Vendor SKU', 'Unit', 'Unit Price', 'Lead Days', 'Active', 'Notes', 'Cost Code'].map((label) => <th key={label} style={{ textAlign: 'left', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--text-muted)', padding: '12px 14px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{label}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => (
-                      <tr key={row.id}>
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', fontSize: '13px', fontWeight: 700, whiteSpace: 'nowrap' }}>{row.source_sku}</td>
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', fontSize: '13px', whiteSpace: 'nowrap' }}>{row.catalog_sku}</td>
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}><input value={row.description_snapshot} onChange={(e) => updateLocalRow(row.id, { description_snapshot: e.target.value })} onBlur={() => void commitRow(row.id)} onKeyDown={(e) => handleCellKeyDown(e, () => { void commitRow(row.id) })} style={cellInputStyle} /></td>
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}><input value={row.vendor_sku ?? ''} onChange={(e) => updateLocalRow(row.id, { vendor_sku: e.target.value || null })} onBlur={() => void commitRow(row.id)} onKeyDown={(e) => handleCellKeyDown(e, () => { void commitRow(row.id) })} style={cellInputStyle} /></td>
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}><input value={row.unit ?? ''} onChange={(e) => updateLocalRow(row.id, { unit: e.target.value || null })} onBlur={() => void commitRow(row.id)} onKeyDown={(e) => handleCellKeyDown(e, () => { void commitRow(row.id) })} style={cellInputStyle} /></td>
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}><input value={row.unit_price == null ? '' : String(row.unit_price)} onChange={(e) => updateLocalRow(row.id, { unit_price: parseNullableNumber(e.target.value) })} onBlur={() => void commitRow(row.id)} onKeyDown={(e) => handleCellKeyDown(e, () => { void commitRow(row.id) })} inputMode="decimal" style={cellInputStyle} /></td>
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}><input value={row.lead_days == null ? '' : String(row.lead_days)} onChange={(e) => updateLocalRow(row.id, { lead_days: parseNullableNumber(e.target.value) })} onBlur={() => void commitRow(row.id)} onKeyDown={(e) => handleCellKeyDown(e, () => { void commitRow(row.id) })} inputMode="numeric" style={cellInputStyle} /></td>
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}><label style={{ display: 'flex', justifyContent: 'center', cursor: 'pointer' }}><input type="checkbox" checked={row.is_active} onChange={(e) => { const next = e.target.checked; updateLocalRow(row.id, { is_active: next }); void commitRow(row.id) }} style={{ width: '16px', height: '16px', cursor: 'pointer' }} /></label></td>
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}><input value={row.notes ?? ''} onChange={(e) => updateLocalRow(row.id, { notes: e.target.value || null })} onBlur={() => void commitRow(row.id)} onKeyDown={(e) => handleCellKeyDown(e, () => { void commitRow(row.id) })} style={cellInputStyle} /></td>
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', fontSize: '13px', whiteSpace: 'nowrap' }}>{costCodeMap.get(row.cost_code_id) ?? '—'}</td>
+              <fieldset disabled={!access?.canManage} style={fieldsetResetStyle}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1180px' }}>
+                    <thead>
+                      <tr>
+                        {['Source SKU', 'Catalog SKU', 'Description', 'Vendor SKU', 'Unit', 'Unit Price', 'Lead Days', 'Active', 'Notes', 'Cost Code'].map((label) => <th key={label} style={{ textAlign: 'left', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--text-muted)', padding: '12px 14px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{label}</th>)}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {rows.map((row) => (
+                        <tr key={row.id}>
+                          <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', fontSize: '13px', fontWeight: 700, whiteSpace: 'nowrap' }}>{row.source_sku}</td>
+                          <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', fontSize: '13px', whiteSpace: 'nowrap' }}>{row.catalog_sku}</td>
+                          <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}><input value={row.description_snapshot} onChange={(e) => updateLocalRow(row.id, { description_snapshot: e.target.value })} onBlur={() => void commitRow(row.id)} onKeyDown={(e) => handleCellKeyDown(e, () => { void commitRow(row.id) })} style={cellInputStyle} /></td>
+                          <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}><input value={row.vendor_sku ?? ''} onChange={(e) => updateLocalRow(row.id, { vendor_sku: e.target.value || null })} onBlur={() => void commitRow(row.id)} onKeyDown={(e) => handleCellKeyDown(e, () => { void commitRow(row.id) })} style={cellInputStyle} /></td>
+                          <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}><input value={row.unit ?? ''} onChange={(e) => updateLocalRow(row.id, { unit: e.target.value || null })} onBlur={() => void commitRow(row.id)} onKeyDown={(e) => handleCellKeyDown(e, () => { void commitRow(row.id) })} style={cellInputStyle} /></td>
+                          <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}><input value={row.unit_price == null ? '' : String(row.unit_price)} onChange={(e) => updateLocalRow(row.id, { unit_price: parseNullableNumber(e.target.value) })} onBlur={() => void commitRow(row.id)} onKeyDown={(e) => handleCellKeyDown(e, () => { void commitRow(row.id) })} inputMode="decimal" style={cellInputStyle} /></td>
+                          <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}><input value={row.lead_days == null ? '' : String(row.lead_days)} onChange={(e) => updateLocalRow(row.id, { lead_days: parseNullableNumber(e.target.value) })} onBlur={() => void commitRow(row.id)} onKeyDown={(e) => handleCellKeyDown(e, () => { void commitRow(row.id) })} inputMode="numeric" style={cellInputStyle} /></td>
+                          <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}><label style={{ display: 'flex', justifyContent: 'center', cursor: 'pointer' }}><input type="checkbox" checked={row.is_active} onChange={(e) => { const next = e.target.checked; updateLocalRow(row.id, { is_active: next }); void commitRow(row.id) }} style={{ width: '16px', height: '16px', cursor: 'pointer' }} /></label></td>
+                          <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}><input value={row.notes ?? ''} onChange={(e) => updateLocalRow(row.id, { notes: e.target.value || null })} onBlur={() => void commitRow(row.id)} onKeyDown={(e) => handleCellKeyDown(e, () => { void commitRow(row.id) })} style={cellInputStyle} /></td>
+                          <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', fontSize: '13px', whiteSpace: 'nowrap' }}>{costCodeMap.get(row.cost_code_id) ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </fieldset>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px', paddingTop: '14px' }}>
                 {rows.map((row) => (
