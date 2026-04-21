@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { getCurrentPricingAccess } from '@/app/actions/pricing-access-actions'
 import { createClient } from '@/utils/supabase/client'
 import { createPricingHeader, fetchPricingCompanies, listPricingHeaders } from '@/lib/pricing-sources'
 import type { PricingCompanyOption, PricingCostCodeOption, PricingHeader, PricingTradeOption } from '@/lib/pricing-sources-types'
@@ -37,6 +38,7 @@ export default function BidsTab({ jobId, trades, costCodes }: Props) {
   const [tradeId, setTradeId] = useState('')
   const [costCodeId, setCostCodeId] = useState('')
   const [title, setTitle] = useState('')
+  const [access, setAccess] = useState<{ canView: boolean; canManage: boolean; canAssign: boolean; error?: string } | null>(null)
 
   async function load() {
     setLoading(true)
@@ -59,7 +61,20 @@ export default function BidsTab({ jobId, trades, costCodes }: Props) {
   }
 
   useEffect(() => {
-    void load()
+    async function initialize() {
+      const accessResult = await getCurrentPricingAccess('bids')
+      setAccess(accessResult)
+
+      if (!accessResult.canView) {
+        setLoading(false)
+        setError(accessResult.error || 'Bids access required.')
+        return
+      }
+
+      await load()
+    }
+
+    void initialize()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId])
 
@@ -75,6 +90,11 @@ export default function BidsTab({ jobId, trades, costCodes }: Props) {
   const filteredCostCodes = useMemo(() => costCodes.filter((x) => !tradeId || !x.trade_id || x.trade_id === tradeId), [costCodes, tradeId])
 
   async function handleCreate() {
+    if (!access?.canManage) {
+      setError('Manage access required.')
+      return
+    }
+
     if (!companyId || !tradeId || !costCodeId) {
       setError('Company, trade, and cost code are required.')
       return
@@ -102,14 +122,24 @@ export default function BidsTab({ jobId, trades, costCodes }: Props) {
     }
   }
 
+  if (!loading && access && !access.canView) {
+    return (
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '20px 14px', fontSize: '12px', color: 'var(--text-muted)' }}>
+        Bids access required.
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' }}>
         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{bids.length} bids</div>
-        <button onClick={() => setShowAdd((v) => !v)} style={{ padding: '7px 12px', background: 'var(--text)', color: 'var(--bg)', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>{showAdd ? 'Cancel' : '+ Bid'}</button>
+        {access?.canManage && (
+          <button onClick={() => setShowAdd((v) => !v)} style={{ padding: '7px 12px', background: 'var(--text)', color: 'var(--bg)', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>{showAdd ? 'Cancel' : '+ Bid'}</button>
+        )}
       </div>
 
-      {showAdd && (
+      {showAdd && access?.canManage && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px' }}>
           <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} style={inputStyle}>
             <option value="">Select company</option>
