@@ -7,6 +7,7 @@ import { createClient } from '@/utils/supabase/client'
 import ScopeTab from './ScopeTab'
 import TakeoffTab from './TakeoffTab'
 import SelectionsTab from './SelectionsTab'
+import BidsTab from './BidsTab'
 
 const STATE_ABBREV: Record<string, string> = {
   Alabama: 'AL',
@@ -363,6 +364,7 @@ export default function JobTabs(props: JobTabProps) {
     'scope',
     'takeoff',
     'selections',
+    'bids',
     'log',
     'issues',
     'tasks',
@@ -377,6 +379,7 @@ export default function JobTabs(props: JobTabProps) {
     scope: 'Scope',
     takeoff: 'Takeoff',
     selections: 'Selections',
+    bids: 'Bids',
     log: 'Log',
     issues: openIssueCount ? `Issues (${openIssueCount})` : 'Issues',
     tasks: openTaskCount ? `Tasks (${openTaskCount})` : 'Tasks',
@@ -1666,6 +1669,14 @@ export default function JobTabs(props: JobTabProps) {
 
       {activeTab === 'selections' && (
         <SelectionsTab jobId={jobId} selections={props.selections ?? []} />
+      )}
+
+      {activeTab === 'bids' && (
+        <BidsTab
+          jobId={jobId}
+          trades={props.trades ?? []}
+          costCodes={props.costCodes ?? []}
+        />
       )}
 
       {activeTab === 'log' && (
