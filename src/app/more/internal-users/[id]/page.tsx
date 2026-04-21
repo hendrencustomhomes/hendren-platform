@@ -23,6 +23,7 @@ import {
   type AppRole,
 } from '@/lib/permissions'
 import {
+  ASSIGN_DISABLED_ROWS,
   DEFAULT_WORKFLOWS_BY_TEMPLATE,
   LOCKED_BASELINE_VIEW_ROWS,
   normalizePermissionState,
@@ -785,6 +786,7 @@ export default function InternalUserDetailPage() {
 
                 {permissionMatrix.map((row) => {
                   const isLockedView = LOCKED_BASELINE_VIEW_ROWS.includes(row.rowKey)
+                  const isAssignDisabled = ASSIGN_DISABLED_ROWS.includes(row.rowKey)
                   return (
                     <div key={row.rowKey} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 46px 58px 52px', gap: 4, alignItems: 'center', padding: '7px 0', borderTop: '1px solid var(--border)' }}>
                       <div style={{ fontSize: '12px', color: 'var(--text)', lineHeight: 1.15, paddingRight: 4, wordBreak: 'break-word' }}>
@@ -797,7 +799,7 @@ export default function InternalUserDetailPage() {
                         <input type="checkbox" checked={row.canManage} onChange={(e) => updatePermission(row.rowKey, 'canManage', e.target.checked)} />
                       </div>
                       <div style={checkboxCellStyle}>
-                        <input type="checkbox" checked={row.canAssign} onChange={(e) => updatePermission(row.rowKey, 'canAssign', e.target.checked)} />
+                        <input type="checkbox" checked={row.canAssign} disabled={isAssignDisabled} onChange={(e) => updatePermission(row.rowKey, 'canAssign', e.target.checked)} />
                       </div>
                     </div>
                   )
