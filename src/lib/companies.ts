@@ -91,7 +91,7 @@ export async function getCompanies(supabase: SupabaseClient): Promise<Company[]>
     .from('companies')
     .select(COMPANY_COLS)
     .order('company_name')
-  if (error) throw error
+  if (error) throw new Error(error.message)
   return (data ?? []) as Company[]
 }
 
@@ -104,7 +104,7 @@ export async function getCompany(
     .select(COMPANY_COLS)
     .eq('id', id)
     .maybeSingle()
-  if (error) throw error
+  if (error) throw new Error(error.message)
   return data as Company | null
 }
 
@@ -130,7 +130,7 @@ export async function updateCompany(
   payload: Partial<Omit<Company, 'id' | 'created_at'>>
 ): Promise<void> {
   const { error } = await supabase.from('companies').update(payload).eq('id', id)
-  if (error) throw error
+  if (error) throw new Error(error.message)
 }
 
 // ─── Contacts ─────────────────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ export async function getCompanyContacts(
     .select('id, company_id, name, position, phone, email, created_at')
     .eq('company_id', companyId)
     .order('created_at')
-  if (error) throw error
+  if (error) throw new Error(error.message)
   return (data ?? []) as CompanyContact[]
 }
 
@@ -153,7 +153,7 @@ export async function createCompanyContact(
   payload: Omit<CompanyContact, 'id' | 'created_at'>
 ): Promise<void> {
   const { error } = await supabase.from('company_contacts').insert(payload)
-  if (error) throw error
+  if (error) throw new Error(error.message)
 }
 
 export async function updateCompanyContact(
@@ -162,7 +162,7 @@ export async function updateCompanyContact(
   payload: Partial<Omit<CompanyContact, 'id' | 'company_id' | 'created_at'>>
 ): Promise<void> {
   const { error } = await supabase.from('company_contacts').update(payload).eq('id', id)
-  if (error) throw error
+  if (error) throw new Error(error.message)
 }
 
 export async function deleteCompanyContact(
@@ -170,7 +170,7 @@ export async function deleteCompanyContact(
   id: string
 ): Promise<void> {
   const { error } = await supabase.from('company_contacts').delete().eq('id', id)
-  if (error) throw error
+  if (error) throw new Error(error.message)
 }
 
 // ─── Trade assignments ────────────────────────────────────────────────────────
@@ -183,7 +183,7 @@ export async function getCompanyTradeIds(
     .from('company_trade_assignments')
     .select('trade_id')
     .eq('company_id', companyId)
-  if (error) throw error
+  if (error) throw new Error(error.message)
   return (data ?? []).map((r: { trade_id: string }) => r.trade_id)
 }
 
@@ -196,7 +196,7 @@ export async function setCompanyTrades(
     .from('company_trade_assignments')
     .delete()
     .eq('company_id', companyId)
-  if (delError) throw delError
+  if (delError) throw new Error(delError.message)
 
   if (tradeIds.length === 0) return
 
@@ -204,7 +204,7 @@ export async function setCompanyTrades(
   const { error: insError } = await supabase
     .from('company_trade_assignments')
     .insert(rows)
-  if (insError) throw insError
+  if (insError) throw new Error(insError.message)
 }
 
 // ─── Compliance documents ─────────────────────────────────────────────────────
@@ -218,6 +218,6 @@ export async function getCompanyComplianceDocs(
     .select('id, company_id, doc_type, expires_at, created_at')
     .eq('company_id', companyId)
     .order('doc_type')
-  if (error) throw error
+  if (error) throw new Error(error.message)
   return (data ?? []) as CompanyComplianceDocument[]
 }

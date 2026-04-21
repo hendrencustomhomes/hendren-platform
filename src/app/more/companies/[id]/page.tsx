@@ -357,7 +357,7 @@ function ContactsSection({
     try {
       setContacts(await getCompanyContacts(supabase, companyId))
     } catch (e) {
-      setError('Failed to load contacts.')
+      setError(e instanceof Error ? e.message : 'Failed to load contacts.')
       console.error(e)
     } finally {
       setLoading(false)
@@ -565,7 +565,7 @@ function TradesSection({
       setAllTrades(trades)
       setAssignedIds(new Set(ids))
     } catch (e) {
-      setError('Failed to load trades.')
+      setError(e instanceof Error ? e.message : 'Failed to load trades.')
       console.error(e)
     } finally {
       setLoading(false)
