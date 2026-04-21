@@ -94,6 +94,7 @@ export default async function JobDetailPage({params}:{params:Promise<{id:string}
 
             <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
               <JobArchiveControls jobId={id} counts={counts}/>
+              <a href={`/jobs/${id}/bids`} style={{fontSize:'12px',padding:'7px 10px',border:'1px solid var(--border)',borderRadius:'7px'}}>💵 Bids</a>
               <a href={`/schedule?job=${id}`} style={{fontSize:'12px',padding:'7px 10px',border:'1px solid var(--border)',borderRadius:'7px'}}>📅 Master Schedule</a>
             </div>
           </div>
