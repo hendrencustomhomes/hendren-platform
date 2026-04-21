@@ -10,6 +10,7 @@ export default async function PriceSheetDetailPage({ params }: { params: Promise
       detailBasePath="/more/price-sheets"
       navFallbackTitle="Price Sheet"
       missingLabel="Price sheet"
+      permissionRowKey="pricing_sources"
     />
   )
 }
