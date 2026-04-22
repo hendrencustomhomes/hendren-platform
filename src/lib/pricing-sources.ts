@@ -367,17 +367,27 @@ export async function createPricingRow(
   supabase: DbClient,
   input: CreatePricingRowInput
 ): Promise<PricingRow> {
-  const [header, catalogItem, nextSortOrder] = await Promise.all([
+  const [header, nextSortOrder] = await Promise.all([
     getPricingHeader(supabase, input.pricing_header_id),
-    getCatalogItemBySku(supabase, input.catalog_sku),
     getNextPricingRowSortOrder(supabase, input.pricing_header_id),
   ])
 
   if (!header) throw new Error('Pricing header not found')
-  if (!catalogItem) throw new Error('Catalog item not found')
 
-  const descriptionSnapshot = input.description_snapshot?.trim() || catalogItem.title
-  const costCodeId = catalogItem.cost_code_id
+  let catalogItem: CatalogItem | null = null
+
+  if (input.catalog_sku) {
+    catalogItem = await getCatalogItemBySku(supabase, input.catalog_sku)
+    if (!catalogItem) throw new Error('Catalog item not found')
+  }
+
+  const descriptionSnapshot = input.description_snapshot?.trim() || catalogItem?.title
+
+  if (!descriptionSnapshot) {
+    throw new Error('Description is required')
+  }
+
+  const costCodeId = catalogItem?.cost_code_id || header.cost_code_id
   const sourceSku = await generateSourceSku(
     supabase,
     header.company_id,
@@ -389,12 +399,12 @@ export async function createPricingRow(
     .from('pricing_rows')
     .insert({
       pricing_header_id: input.pricing_header_id,
-      catalog_sku: catalogItem.catalog_sku,
+      catalog_sku: catalogItem?.catalog_sku ?? null,
       cost_code_id: costCodeId,
       source_sku: sourceSku,
       vendor_sku: input.vendor_sku?.trim() || null,
       description_snapshot: descriptionSnapshot,
-      unit: input.unit?.trim() || catalogItem.default_unit || null,
+      unit: input.unit?.trim() || catalogItem?.default_unit || null,
       unit_price: input.unit_price ?? null,
       lead_days: input.lead_days ?? null,
       notes: input.notes?.trim() || null,
