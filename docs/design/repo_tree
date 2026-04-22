@@ -29,8 +29,6 @@ Tree last updated: 2026-04-22. Reflects the current state of dev and the complet
 ```text
 hendren-platform/
 ├── README.md
-├── decisions.md
-├── index.html
 ├── package.json
 ├── tsconfig.json
 ├── next.config.ts
@@ -43,6 +41,7 @@ hendren-platform/
 │   ├── package.json
 │   └── package-lock.json
 ├── docs/
+│   ├── decisions.md
 │   ├── instructions.md
 │   ├── env_vars.md
 │   ├── claude/
