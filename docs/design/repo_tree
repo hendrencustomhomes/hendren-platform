@@ -22,7 +22,7 @@ No exceptions.
 
 ## Status
 
-Tree last updated: 2026-04-22. Reflects the current state of dev (shared foundation complete, module rewrites pending) and the completed target tree for the current repo state after rewrite.
+Tree last updated: 2026-04-22 11:17 AM America/Chicago. Reflects the current state of dev (shared foundation complete, pricing cleanup plan written, module rewrites pending) and the completed target tree for the current repo state after rewrite.
 
 ## Current Tree
 
@@ -63,6 +63,8 @@ hendren-platform/
 │       │   └── validation.md
 │       ├── internal-users/
 │       │   └── permissions_recovery.md
+│       ├── pricing/
+│       │   └── cleanup_plan_r01.md
 │       ├── schedule/
 │       │   ├── audit.md
 │       │   └── baseline.md
