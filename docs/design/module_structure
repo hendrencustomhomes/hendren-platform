@@ -1,0 +1,490 @@
+# Module Structure Design Standard
+
+## Purpose
+
+This document defines the required module structure standard for the Hendren Platform.
+
+This is not a suggestion.
+This is not a style preference.
+This is the repo standard.
+
+The platform is moving to a repo-as-source-of-truth model. That means the repo must become structurally trustworthy, predictable, and maintainable. A growing platform cannot be allowed to grow structurally messy at the same time.
+
+Clean things stay clean.
+Messy things get messier.
+We are choosing the first path on purpose.
+
+## Core Decision
+
+The Hendren Platform will use a **module-first, route-local, composition-based inheritance model**.
+
+That means:
+
+- every substantial feature follows the same module shape,
+- route files stay thin,
+- shared behavior flows downward from common layers,
+- shared UI is inherited through primitives and section shells,
+- domain logic is centralized,
+- module-specific code stays local to the module,
+- no module is allowed to become a one-file god object.
+
+## What Inheritance Means Here
+
+Inheritance in this repo does **not** mean React class inheritance.
+
+Inheritance here means **layered reuse through composition**.
+
+The reuse hierarchy is:
+
+1. **Design tokens**
+   - colors
+   - spacing
+   - radii
+   - shadows
+   - type scale
+   - semantic state colors
+
+2. **UI primitives**
+   - Button
+   - Input
+   - Select
+   - Textarea
+   - Checkbox
+   - Card
+   - Badge
+   - Tabs
+   - Modal
+   - Spinner
+
+3. **Shared app patterns**
+   - PageShell
+   - PageHeader
+   - ModuleToolbar
+   - SectionHeader
+   - FormSection
+   - SaveCancelBar
+   - EmptyState
+   - ErrorState
+   - LoadingState
+   - DataTable
+   - MetricCard
+
+4. **Domain patterns**
+   - permission matrix editor pattern
+   - schedule editor pattern
+   - procurement linking pattern
+   - issue/task list pattern
+   - contact management pattern
+
+5. **Module assembly**
+   - Jobs
+   - Schedule
+   - Companies
+   - Internal Users
+   - future modules
+
+That is the inheritance model.
+Changes to shared behavior must happen as high in that ladder as practical.
+
+## Non-Negotiable Rules
+
+### 1. Thin route files
+
+`page.tsx` is a route entry point, not a dumping ground.
+
+A route file may:
+
+- read params,
+- gate access,
+- load data,
+- choose which components to assemble,
+- pass props down.
+
+A route file may not become the permanent home for:
+
+- many helper utilities,
+- repeated style definitions,
+- several unrelated forms,
+- deep mutation logic,
+- multiple large sections,
+- domain rules,
+- editor orchestration.
+
+### 2. Module-local before global
+
+If code is only used by one module, it belongs inside that module.
+
+Do not move code into global folders just because it feels reusable.
+It is only global when it is truly cross-module.
+
+### 3. One source of truth per concern
+
+Every concern gets one owner.
+
+Examples:
+
+- one owner for design tokens,
+- one owner for a button primitive,
+- one owner for permission rules,
+- one owner for schedule dependency logic,
+- one owner for a form schema,
+- one owner for route state.
+
+No duplicated logic across sibling files.
+No duplicated style decisions across modules.
+No duplicated state ownership.
+
+### 4. Shared UI is inherited, not copied
+
+If three modules use the same pattern, that is one primitive or one shared shell.
+It is not three copied versions.
+
+### 5. Domain logic does not live in UI files
+
+Presentation helpers can live in route-local `_lib`.
+Business rules cannot.
+
+Anything authoritative belongs in shared domain code.
+
+### 6. No god components
+
+Any file that owns all of the following is already wrong:
+
+- page shell,
+- tab system,
+- local state,
+- CRUD handlers,
+- helper utilities,
+- formatting,
+- section rendering,
+- and repeated style objects.
+
+That file must be split.
+
+## Standard Module Template
+
+Every substantial module should follow this shape.
+
+```text
+src/
+  app/
+    (app)/
+      <module>/
+        page.tsx
+        loading.tsx                # if useful
+        error.tsx                  # if useful
+        actions.ts                 # route-local server actions only
+        types.ts                   # route-local derived types only
+        _components/
+          <Module>Page.tsx
+          <Module>Header.tsx
+          <Module>Toolbar.tsx
+          <Module>List.tsx
+          <Module>Form.tsx
+          sections/
+            <Module>InfoSection.tsx
+            <Module>ActivitySection.tsx
+            <Module>FilesSection.tsx
+        _hooks/
+          use<Module>Filters.ts
+          use<Module>Draft.ts
+          use<Module>Editor.ts
+        _lib/
+          constants.ts
+          formatters.ts
+          mappers.ts
+          selectors.ts
+          validators.ts
+        [id]/
+          page.tsx
+          loading.tsx
+          error.tsx
+          actions.ts
+          _components/
+            <Module>DetailPage.tsx
+            <Module>Tabs.tsx
+            sections/
+              InfoSection.tsx
+              ActivitySection.tsx
+              RelatedRecordsSection.tsx
+          _hooks/
+            use<Module>DetailState.ts
+          _lib/
+            formatters.ts
+            validators.ts
+```
+
+## Shared Platform Structure
+
+The following folders exist to support inheritance across modules.
+
+```text
+src/
+  components/
+    ui/
+      Button.tsx
+      Input.tsx
+      Select.tsx
+      Textarea.tsx
+      Checkbox.tsx
+      Badge.tsx
+      Card.tsx
+      Tabs.tsx
+      Modal.tsx
+      Spinner.tsx
+    layout/
+      AppShell.tsx
+      Nav.tsx
+      PageHeader.tsx
+      ModuleToolbar.tsx
+      SectionHeader.tsx
+    feedback/
+      EmptyState.tsx
+      ErrorState.tsx
+      LoadingState.tsx
+      ConfirmDialog.tsx
+    data-display/
+      DataTable.tsx
+      KeyValueList.tsx
+      StatusPill.tsx
+      MetricCard.tsx
+    forms/
+      FormSection.tsx
+      FieldRow.tsx
+      SaveCancelBar.tsx
+
+  lib/
+    auth/
+    db/
+    permissions/
+    schedule/
+    companies/
+    jobs/
+    selections/
+    procurement/
+    shared/
+      dates.ts
+      numbers.ts
+      strings.ts
+      ids.ts
+      errors.ts
+      result.ts
+```
+
+## Folder Definitions
+
+### `src/components/ui`
+Visual primitives only.
+No domain decisions.
+No module labels.
+No module-specific assumptions.
+
+### `src/components/layout`
+Shared structural pieces.
+Headers, shells, toolbars, section wrappers, navigation.
+
+### `src/components/feedback`
+Shared empty, loading, error, and confirm experiences.
+
+### `src/components/data-display`
+Tables, metrics, key-value layouts, badges, pills.
+
+### `src/components/forms`
+Shared form scaffolding.
+Do not rebuild common form section layout per module.
+
+### `src/lib/<domain>`
+Authoritative business/domain logic.
+Rules, services, repositories, normalizers, validators, mappers, domain types.
+
+### `src/lib/shared`
+Tiny generic helpers only.
+No hidden domain ownership.
+No dumping ground.
+
+### `actions.ts`
+Route-local server actions.
+Only for actions tied directly to that route subtree.
+
+### `_components/`
+Route-local implementation components.
+Private to the route subtree.
+
+### `_hooks/`
+Route-local interaction and orchestration hooks.
+
+### `_lib/`
+Route-local formatting, mapping, selectors, validation helpers, and constants.
+No core business logic.
+
+## Styling Strategy
+
+The styling system must be inherited, not improvised.
+
+The order of authority is:
+
+1. tokens
+2. primitives
+3. shared section shells
+4. module assembly
+
+### Required styling rules
+
+- shared primitives before custom one-off components,
+- shared section shells before local card/header/button clones,
+- semantic design tokens before hard-coded per-module values,
+- one visual language across modules,
+- one spacing system across modules,
+- one badge/button/input behavior system across modules.
+
+### What to avoid
+
+- repeated `sectionCardStyle`, `sectionHeaderStyle`, `solidBtnStyle`, `ghostBtnStyle` across route files,
+- giant inline style blocks per page,
+- unique layout behavior per module unless functionally necessary,
+- module-specific reimplementation of shared controls.
+
+## Density Standard
+
+Dense is not bad by itself.
+Bad density is bad.
+
+### Acceptable density
+
+A file may be dense when:
+
+- it owns one responsibility,
+- it has one clear mental model,
+- it is easy to scan,
+- it does not mix unrelated concerns.
+
+### Unacceptable density
+
+A file is too dense when:
+
+- it owns both rendering and business logic,
+- it contains several major sections,
+- it handles many independent flows,
+- it mixes orchestration, formatting, mutation, and layout,
+- a future change would touch many unrelated parts of the file.
+
+## Anti-Patterns We Are Banning
+
+### Banned pattern 1 — Route god file
+One file containing tabs, forms, mutations, helpers, state, formatting, sections, and styles.
+
+### Banned pattern 2 — Copy-paste reuse
+Copied style objects or copied interaction logic across modules.
+
+### Banned pattern 3 — Premature globalization
+Throwing module-specific code into global folders without proven multi-module reuse.
+
+### Banned pattern 4 — Business logic in JSX files
+No domain rules hidden in render files.
+
+### Banned pattern 5 — Multiple owners of the same state
+State gets one owner.
+Not two.
+Not three.
+
+### Banned pattern 6 — Misc dump folders
+No vague catch-all dumping grounds.
+No structural junk drawers.
+
+## Rewrite Strategy
+
+We are doing a **full repo rewrite to this standard**.
+
+Not all at once.
+Not recklessly.
+Not as an aesthetic exercise.
+
+But yes: **full repo rewrite**.
+
+The repo is not going to remain half-old and half-new forever.
+We are not adopting a permanent “clean only what we touch” strategy.
+That approach is too slow and preserves structural drift for too long.
+
+The actual strategy is:
+
+- define the standard once,
+- enforce it immediately for all new work,
+- restructure existing modules in deliberate passes,
+- continue until the repo conforms end to end.
+
+This is a controlled full-house cleanup.
+
+### Why
+
+Because clean things stay clean.
+
+A structurally clean repo:
+
+- is easier to maintain,
+- is easier to onboard into,
+- is easier to improve,
+- is safer to refactor,
+- is faster to navigate,
+- and makes future work cheaper.
+
+A structurally inconsistent repo does the opposite.
+
+### Rewrite rules
+
+- no new work should deepen an old anti-pattern,
+- any rewritten module must be brought fully to standard, not partially cleaned,
+- shared patterns must be extracted when identified,
+- duplicated styling should be eliminated during rewrite,
+- route-local junk must be pushed into the correct ownership layer,
+- rewritten modules become templates for later modules.
+
+## Priority Order
+
+The worst structural offenders should be rewritten first.
+
+### First targets
+
+1. Jobs detail module
+2. Schedule editor module
+3. Internal Users detail module
+4. Companies detail module as a lighter cleanup/template pass
+
+## Extraction Rule
+
+A file must be split when any two of the following are true:
+
+- it has more than one clear concern,
+- it contains multiple major sections,
+- it owns both orchestration and rendering,
+- it contains repeated helper blocks,
+- it contains repeated style systems,
+- it is difficult to scan on one screen,
+- a normal change would touch unrelated logic in the same file.
+
+## Definition of Done for a Module
+
+A module is not structurally done until all of the following are true:
+
+- route shell is thin,
+- route-local internals are private and colocated,
+- authoritative domain logic is in shared domain code,
+- shared UI is inherited rather than copied,
+- state ownership is singular and clear,
+- style comes from tokens and primitives,
+- no god file remains,
+- file ownership is obvious.
+
+## Final Directive
+
+From this point forward, every module must be built or rewritten as:
+
+- thin route entry,
+- route-local private internals,
+- shared domain logic,
+- inherited UI,
+- single source of truth,
+- no copied styling systems,
+- no god components,
+- no structural drift.
+
+This is the design standard.
