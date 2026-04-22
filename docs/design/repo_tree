@@ -8,7 +8,7 @@ Whenever modules are added, moved, split, consolidated, or removed, this file mu
 
 ## Status
 
-Tree last updated: 2026-04-22 (Slice 1 pricing worksheet pattern split complete, build green)
+Tree last updated: 2026-04-22 (Pricing Slice 1 + Slice 2 complete, build green)
 
 ## Current Tree (relevant excerpt)
 
@@ -24,14 +24,25 @@ src/components/
 │       ├── PricingWorksheetMetaBar.tsx
 │       ├── PricingWorksheetNewRowBar.tsx
 │       └── PricingWorksheetMobileList.tsx
+
+src/lib/
+└── pricing/
+    ├── types.ts
+    ├── lookups.ts
+    ├── catalog.ts
+    ├── headers.ts
+    ├── rows.ts
+    └── revisions.ts
 ```
 
 ## Notes
 
 - Pricing worksheet is now a shared pattern layer
-- Old monolith replaced with compatibility wrapper
-- Stitch file removed (no longer needed)
-- Pattern is now consumed by both price sheets and bids
+- Old worksheet monolith replaced with compatibility wrapper
+- Stitch file removed
+- Pattern is consumed by both price sheets and bids
+- Pricing domain split is complete under `src/lib/pricing/`
+- Legacy `pricing-sources.ts` and `pricing-sources-types.ts` removed
 
 ## Maintenance Requirement
 
