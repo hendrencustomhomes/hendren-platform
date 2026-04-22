@@ -44,64 +44,28 @@ hendren-platform/
 │   └── package-lock.json
 ├── docs/
 │   ├── instructions.md
-│   ├── env_var_inventory.md
-│   ├── scope_r2.md
-│   ├── scope_r3.md
-│   ├── bids_first_class_tab_r01.md
-│   ├── companies_r01.md
-│   ├── companies_r02.md
-│   ├── company_audit_R1.md
-│   ├── internal_users_permissions_recovery_audit_r01.md
-│   ├── internal_users_permissions_recovery_audit_r02.md
-│   ├── _stitch_test/
-│   │   └── takeoff_stitch_test.txt
+│   ├── env_vars.md
 │   ├── claude/
-│   │   ├── bugfix-sweep-r01.md
-│   │   ├── bugfix-sweep-r02.md
-│   │   └── pricing-worksheet-stitch-report.md
+│   │   ├── bugfix_sweep_01.md
+│   │   ├── bugfix_sweep_02.md
+│   │   └── pricing_worksheet_stitch.md
 │   ├── design/
 │   │   ├── module_structure
 │   │   ├── repo_tree
 │   │   └── rewrite_rollout
-│   ├── schedule_module/
-│   │   ├── baseline_model.md
-│   │   ├── schedule_audit.md
-│   │   ├── schedule_docs_move.md
-│   │   ├── schedule_r01.md
-│   │   ├── schedule_r02.md
-│   │   ├── schedule_r03.md
-│   │   ├── schedule_r04.md
-│   │   ├── schedule_r05.md
-│   │   ├── schedule_r06.md
-│   │   ├── schedule_r07.md
-│   │   ├── schedule_r08.md
-│   │   ├── schedule_r09.md
-│   │   ├── schedule_r10.md
-│   │   ├── schedule_r11.md
-│   │   ├── schedule_r12.md
-│   │   ├── schedule_r13.md
-│   │   ├── schedule_r14.md
-│   │   ├── schedule_r15.md
-│   │   ├── schedule_r16.md
-│   │   ├── schedule_r17.md
-│   │   ├── schedule_r18.md
-│   │   ├── schedule_r19.md
-│   │   ├── schedule_r20.md
-│   │   ├── schedule_r21.md
-│   │   ├── schedule_r22.md
-│   │   ├── schedule_r23.md
-│   │   ├── schedule_r24.md
-│   │   ├── schedule_r25.md
-│   │   ├── schedule_r26.md
-│   │   ├── schedule_r27.md
-│   │   ├── schedule_r28.md
-│   │   ├── schedule_r29.md
-│   │   ├── schedule_r30.md
-│   │   ├── schedule_r31.md
-│   │   ├── schedule_r32.md
-│   │   └── schedule_r33.md
-│   └── takeoff/
-│       └── takeoff_v11_r01.md
+│   └── modules/
+│       ├── bids/
+│       │   └── implementation.md
+│       ├── companies/
+│       │   ├── implementation.md
+│       │   └── validation.md
+│       ├── internal-users/
+│       │   └── permissions_recovery.md
+│       ├── schedule/
+│       │   ├── audit.md
+│       │   └── baseline.md
+│       └── takeoff/
+│           └── anchor.md
 ├── public/
 │   ├── file.svg
 │   ├── globe.svg

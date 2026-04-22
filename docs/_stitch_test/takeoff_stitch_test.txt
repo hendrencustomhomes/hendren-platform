@@ -1,8 +1,0 @@
-TAKEOFF STITCH TEST
-PART 1
-alpha
-beta
-PART 2
-gamma
-delta
-END TEST
