@@ -5,19 +5,14 @@ import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
 import { getCurrentPricingAccess } from '@/app/actions/pricing-access-actions'
 import { createClient } from '@/utils/supabase/client'
-import {
-  createPricingHeader,
-  fetchPricingCompanies,
-  fetchPricingCostCodes,
-  fetchPricingTrades,
-  listPricingHeaders,
-} from '@/lib/pricing-sources'
+import { createPricingHeader, listPricingHeaders } from '@/lib/pricing/headers'
+import { fetchPricingCompanies, fetchPricingCostCodes, fetchPricingTrades } from '@/lib/pricing/lookups'
 import type {
   PricingCompanyOption,
   PricingCostCodeOption,
   PricingHeader,
   PricingTradeOption,
-} from '@/lib/pricing-sources-types'
+} from '@/lib/pricing/types'
 
 const inputStyle = {
   flex: 1,
