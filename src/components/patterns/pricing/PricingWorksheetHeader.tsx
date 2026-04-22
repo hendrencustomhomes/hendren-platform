@@ -1,7 +1,7 @@
 import { Card } from '@/components/ui/Card'
 import { SectionHeader } from '@/components/layout/SectionHeader'
 import { StatusPill } from '@/components/data-display/StatusPill'
-import type { PricingHeader } from '@/lib/pricing-sources-types'
+import type { PricingHeader } from '@/lib/pricing/types'
 
 type Props = {
   header: PricingHeader
