@@ -1,6 +1,7 @@
 # Pricing Module Cleanup Plan — R01
 
 Status: active cleanup plan
+Last updated: 2026-04-22 11:17 AM America/Chicago
 Branch target: `dev`
 Purpose: define the pricing-module cleanup sequence so restructuring does not get lost across chat handoffs.
 
