@@ -47,7 +47,8 @@ hendren-platform/
 │   ├── claude/
 │   │   ├── bugfix_sweep_01.md
 │   │   ├── bugfix_sweep_02.md
-│   │   └── pricing_worksheet_stitch.md
+│   │   ├── pricing_worksheet_stitch.md
+│   │   └── shared_foundation_r01.md
 │   ├── design/
 │   │   ├── module_design_architecture_r01.md
 │   │   ├── module_design_strategy_r01.md
