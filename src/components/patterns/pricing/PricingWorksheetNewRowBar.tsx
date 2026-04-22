@@ -1,4 +1,4 @@
-import type { CatalogItem } from '@/lib/pricing-sources-types'
+import type { CatalogItem } from '@/lib/pricing/types'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 
 type Props = {
