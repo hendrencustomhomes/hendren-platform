@@ -25,6 +25,8 @@ No exceptions.
 This is the initial canonical tree record created during the repo structure standardization effort.
 It should be expanded and kept current as the rewrite proceeds.
 
+The tree below reflects currently verified paths from the connected repo. It is still expected to grow more complete as additional paths are verified during rewrite work.
+
 ## Current Tree
 
 ```text
@@ -34,13 +36,36 @@ hendren-platform/
 ├── index.html
 ├── package.json
 ├── tsconfig.json
-├── design/
-│   └── (intentionally kept empty after doc relocation)
 ├── docs/
-│   └── design/
-│       ├── module_structure
-│       ├── repo_tree
-│       └── rewrite_rollout
+│   ├── instructions.md
+│   ├── scope_r2.md
+│   ├── scope_r3.md
+│   ├── companies_r01.md
+│   ├── companies_r02.md
+│   ├── company_audit_R1.md
+│   ├── design/
+│   │   ├── module_structure
+│   │   ├── repo_tree
+│   │   └── rewrite_rollout
+│   └── schedule_module/
+│       ├── schedule_audit.md
+│       ├── schedule_docs_move.md
+│       ├── schedule_r02.md
+│       ├── schedule_r03.md
+│       ├── schedule_r10.md
+│       ├── schedule_r15.md
+│       ├── schedule_r18.md
+│       ├── schedule_r19.md
+│       ├── schedule_r20.md
+│       ├── schedule_r21.md
+│       ├── schedule_r22.md
+│       ├── schedule_r26.md
+│       ├── schedule_r27.md
+│       ├── schedule_r28.md
+│       ├── schedule_r29.md
+│       ├── schedule_r30.md
+│       ├── schedule_r31.md
+│       └── schedule_r32.md
 ├── supabase/
 │   └── migrations/
 │       └── 20260415000000_initial_schema.sql
@@ -144,6 +169,18 @@ Schema and migration files belong in:
 ```text
 supabase/migrations/
 ```
+
+### Historical working docs
+
+Legacy or historical working docs currently live under:
+
+```text
+docs/
+docs/schedule_module/
+```
+
+These should not be treated as the structural source of truth.
+The structural source of truth lives in `docs/design/` plus the actual repo tree.
 
 ## Target Direction
 
