@@ -1,4 +1,4 @@
-import type { PricingRow } from '@/lib/pricing-sources-types'
+import type { PricingRow } from '@/lib/pricing/types'
 import { formatMoney } from '@/lib/shared/numbers'
 
 type Props = {
