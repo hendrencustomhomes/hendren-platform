@@ -22,7 +22,7 @@ No exceptions.
 
 ## Status
 
-Tree last updated: 2026-04-22. Reflects the current state of dev.
+Tree last updated: 2026-04-22. Reflects the current state of dev and the completed target tree for the current repo state after rewrite.
 
 ## Current Tree
 
@@ -261,6 +261,401 @@ hendren-platform/
             └── server.ts
 ```
 
+## Completed Tree
+
+### Purpose of this section
+
+This is the completed target tree for the **current repo state after rewrite**.
+
+It is not a future-scope wish list.
+It assumes the current product scope remains the same and the repo is reorganized to match the approved module structure standard.
+
+### Rewrite assumptions for the completed tree
+
+- legacy root artifacts are removed from the active root,
+- duplicate framework helper locations are consolidated,
+- old working docs are retained but moved under archive,
+- route files become thin,
+- current large modules are decomposed into route-local private internals,
+- shared UI is centralized into reusable inherited layers,
+- current pricing worksheet UI becomes a shared pattern used by both price sheets and bids,
+- current product scope is preserved rather than expanded.
+
+```text
+hendren-platform/
+├── README.md
+├── decisions.md
+├── package.json
+├── tsconfig.json
+├── next.config.ts
+├── eslint.config.mjs
+├── postcss.config.mjs
+├── next-env.d.ts
+├── public/
+│   ├── file.svg
+│   ├── globe.svg
+│   ├── next.svg
+│   ├── vercel.svg
+│   └── window.svg
+├── supabase/
+│   └── migrations/
+│       └── 20260415000000_initial_schema.sql
+├── docs/
+│   ├── design/
+│   │   ├── module_structure
+│   │   ├── repo_tree
+│   │   └── rewrite_rollout
+│   ├── operations/
+│   │   ├── env_var_inventory.md
+│   │   └── instructions.md
+│   └── archive/
+│       ├── claude/
+│       │   ├── bugfix-sweep-r01.md
+│       │   ├── bugfix-sweep-r02.md
+│       │   └── pricing-worksheet-stitch-report.md
+│       ├── companies/
+│       │   ├── companies_r01.md
+│       │   ├── companies_r02.md
+│       │   └── company_audit_R1.md
+│       ├── internal-users/
+│       │   ├── internal_users_permissions_recovery_audit_r01.md
+│       │   └── internal_users_permissions_recovery_audit_r02.md
+│       ├── pricing/
+│       │   └── bids_first_class_tab_r01.md
+│       ├── scope/
+│       │   ├── scope_r2.md
+│       │   └── scope_r3.md
+│       ├── schedule/
+│       │   ├── baseline_model.md
+│       │   ├── schedule_audit.md
+│       │   ├── schedule_docs_move.md
+│       │   ├── schedule_r01.md
+│       │   ├── schedule_r02.md
+│       │   ├── schedule_r03.md
+│       │   ├── schedule_r04.md
+│       │   ├── schedule_r05.md
+│       │   ├── schedule_r06.md
+│       │   ├── schedule_r07.md
+│       │   ├── schedule_r08.md
+│       │   ├── schedule_r09.md
+│       │   ├── schedule_r10.md
+│       │   ├── schedule_r11.md
+│       │   ├── schedule_r12.md
+│       │   ├── schedule_r13.md
+│       │   ├── schedule_r14.md
+│       │   ├── schedule_r15.md
+│       │   ├── schedule_r16.md
+│       │   ├── schedule_r17.md
+│       │   ├── schedule_r18.md
+│       │   ├── schedule_r19.md
+│       │   ├── schedule_r20.md
+│       │   ├── schedule_r21.md
+│       │   ├── schedule_r22.md
+│       │   ├── schedule_r23.md
+│       │   ├── schedule_r24.md
+│       │   ├── schedule_r25.md
+│       │   ├── schedule_r26.md
+│       │   ├── schedule_r27.md
+│       │   ├── schedule_r28.md
+│       │   ├── schedule_r29.md
+│       │   ├── schedule_r30.md
+│       │   ├── schedule_r31.md
+│       │   ├── schedule_r32.md
+│       │   └── schedule_r33.md
+│       ├── stitch-tests/
+│       │   └── takeoff_stitch_test.txt
+│       └── takeoff/
+│           └── takeoff_v11_r01.md
+└── src/
+    ├── proxy.ts
+    ├── app/
+    │   ├── layout.tsx
+    │   ├── globals.css
+    │   ├── favicon.ico
+    │   ├── api/
+    │   │   └── files/
+    │   │       ├── list/
+    │   │       │   └── route.ts
+    │   │       ├── signed-url/
+    │   │       │   └── route.ts
+    │   │       ├── update/
+    │   │       │   └── route.ts
+    │   │       └── upload/
+    │   │           └── route.ts
+    │   ├── auth/
+    │   │   └── confirm/
+    │   │       └── route.ts
+    │   ├── (public)/
+    │   │   ├── login/
+    │   │   │   ├── page.tsx
+    │   │   │   └── actions.ts
+    │   │   └── reset-password/
+    │   │       ├── page.tsx
+    │   │       └── actions.ts
+    │   └── (app)/
+    │       ├── layout.tsx
+    │       ├── page.tsx
+    │       ├── jobs/
+    │       │   ├── page.tsx
+    │       │   ├── actions.ts
+    │       │   ├── _components/
+    │       │   │   └── JobsPage.tsx
+    │       │   ├── new/
+    │       │   │   ├── page.tsx
+    │       │   │   ├── actions.ts
+    │       │   │   ├── _components/
+    │       │   │   │   └── JobForm.tsx
+    │       │   │   └── _lib/
+    │       │   │       └── validators.ts
+    │       │   └── [id]/
+    │       │       ├── page.tsx
+    │       │       ├── actions.ts
+    │       │       ├── _components/
+    │       │       │   ├── JobArchiveControls.tsx
+    │       │       │   ├── JobDetailPage.tsx
+    │       │       │   ├── JobHeader.tsx
+    │       │       │   ├── JobTabs.tsx
+    │       │       │   ├── takeoff/
+    │       │       │   │   ├── TakeoffDesktopReviewTable.tsx
+    │       │       │   │   ├── TakeoffFilterBar.tsx
+    │       │       │   │   ├── TakeoffMobileReviewList.tsx
+    │       │       │   │   ├── TakeoffOverviewStrip.tsx
+    │       │       │   │   ├── TakeoffScopeContext.tsx
+    │       │       │   │   ├── TakeoffSearchSelect.tsx
+    │       │       │   │   ├── TakeoffWorkspace.tsx
+    │       │       │   │   ├── takeoffReviewUtils.ts
+    │       │       │   │   ├── takeoffTypes.ts
+    │       │       │   │   └── takeoffUtils.ts
+    │       │       │   └── tabs/
+    │       │       │       ├── BidsTab.tsx
+    │       │       │       ├── InfoTab.tsx
+    │       │       │       ├── IssuesTab.tsx
+    │       │       │       ├── LogTab.tsx
+    │       │       │       ├── PipelineTab.tsx
+    │       │       │       ├── ProcurementTab.tsx
+    │       │       │       ├── ScheduleTab.tsx
+    │       │       │       ├── SelectionsTab.tsx
+    │       │       │       ├── TakeoffTab.tsx
+    │       │       │       └── TasksTab.tsx
+    │       │       ├── _hooks/
+    │       │       │   ├── useJobDetail.ts
+    │       │       │   └── useJobTabs.ts
+    │       │       ├── _lib/
+    │       │       │   ├── formatters.ts
+    │       │       │   ├── selectors.ts
+    │       │       │   └── validators.ts
+    │       │       └── bids/
+    │       │           ├── page.tsx
+    │       │           ├── _components/
+    │       │           │   └── BidsPage.tsx
+    │       │           └── [bidId]/
+    │       │               ├── page.tsx
+    │       │               └── _components/
+    │       │                   └── BidWorksheetPage.tsx
+    │       ├── schedule/
+    │       │   ├── page.tsx
+    │       │   ├── actions.ts
+    │       │   ├── presenceActions.ts
+    │       │   ├── _components/
+    │       │   │   ├── ScheduleEditPage.tsx
+    │       │   │   ├── SchedulePage.tsx
+    │       │   │   └── sections/
+    │       │   │       ├── DependenciesSection.tsx
+    │       │   │       ├── LaborScheduleSection.tsx
+    │       │   │       ├── MaterialScheduleSection.tsx
+    │       │   │       └── RiskListSection.tsx
+    │       │   ├── _hooks/
+    │       │   │   └── useScheduleEditor.ts
+    │       │   ├── _lib/
+    │       │   │   ├── formatters.ts
+    │       │   │   └── selectors.ts
+    │       │   ├── baseline/
+    │       │   │   └── page.tsx
+    │       │   ├── order/
+    │       │   │   ├── new/
+    │       │   │   │   └── page.tsx
+    │       │   │   └── [id]/
+    │       │   │       └── edit/
+    │       │   │           └── page.tsx
+    │       │   └── sub/
+    │       │       ├── new/
+    │       │       │   └── page.tsx
+    │       │       └── [id]/
+    │       │           └── edit/
+    │       │               └── page.tsx
+    │       └── more/
+    │           ├── page.tsx
+    │           ├── clients/
+    │           │   ├── page.tsx
+    │           │   └── _components/
+    │           │       └── ClientsPage.tsx
+    │           ├── companies/
+    │           │   ├── page.tsx
+    │           │   ├── actions.ts
+    │           │   ├── _components/
+    │           │   │   └── CompaniesPage.tsx
+    │           │   ├── new/
+    │           │   │   ├── page.tsx
+    │           │   │   └── _components/
+    │           │   │       └── CompanyForm.tsx
+    │           │   └── [id]/
+    │           │       ├── page.tsx
+    │           │       ├── _components/
+    │           │       │   ├── CompanyDetailPage.tsx
+    │           │       │   └── sections/
+    │           │       │       ├── ComplianceSection.tsx
+    │           │       │       ├── ContactsSection.tsx
+    │           │       │       ├── InfoSection.tsx
+    │           │       │       └── TradesSection.tsx
+    │           │       └── _hooks/
+    │           │           └── useCompanyDetail.ts
+    │           ├── cost-codes/
+    │           │   ├── page.tsx
+    │           │   └── _components/
+    │           │       └── CostCodesPage.tsx
+    │           ├── internal-users/
+    │           │   ├── page.tsx
+    │           │   ├── actions.ts
+    │           │   ├── _components/
+    │           │   │   └── InternalUsersPage.tsx
+    │           │   ├── templates/
+    │           │   │   ├── page.tsx
+    │           │   │   └── _components/
+    │           │   │       └── PermissionTemplatesPage.tsx
+    │           │   └── [id]/
+    │           │       ├── page.tsx
+    │           │       ├── _components/
+    │           │       │   ├── InternalUserDetailPage.tsx
+    │           │       │   └── sections/
+    │           │       │       ├── AccessSection.tsx
+    │           │       │       ├── PermissionsSection.tsx
+    │           │       │       └── ProfileSection.tsx
+    │           │       ├── _hooks/
+    │           │       │   └── useInternalUserDetail.ts
+    │           │       └── _lib/
+    │           │           ├── formatters.ts
+    │           │           └── validators.ts
+    │           ├── price-sheets/
+    │           │   ├── page.tsx
+    │           │   ├── actions.ts
+    │           │   ├── _components/
+    │           │   │   └── PriceSheetsPage.tsx
+    │           │   └── [id]/
+    │           │       ├── page.tsx
+    │           │       └── _components/
+    │           │           └── PriceSheetWorksheetPage.tsx
+    │           └── trades/
+    │               ├── page.tsx
+    │               └── _components/
+    │                   └── TradesPage.tsx
+    ├── components/
+    │   ├── ui/
+    │   │   ├── Badge.tsx
+    │   │   ├── Button.tsx
+    │   │   ├── Card.tsx
+    │   │   ├── Checkbox.tsx
+    │   │   ├── Input.tsx
+    │   │   ├── Modal.tsx
+    │   │   ├── Select.tsx
+    │   │   ├── Spinner.tsx
+    │   │   ├── Tabs.tsx
+    │   │   └── Textarea.tsx
+    │   ├── layout/
+    │   │   ├── AppShell.tsx
+    │   │   ├── ModuleToolbar.tsx
+    │   │   ├── Nav.tsx
+    │   │   ├── PageHeader.tsx
+    │   │   └── SectionHeader.tsx
+    │   ├── feedback/
+    │   │   ├── ConfirmDialog.tsx
+    │   │   ├── EmptyState.tsx
+    │   │   ├── ErrorState.tsx
+    │   │   └── LoadingState.tsx
+    │   ├── data-display/
+    │   │   ├── DataTable.tsx
+    │   │   ├── KeyValueList.tsx
+    │   │   ├── MetricCard.tsx
+    │   │   └── StatusPill.tsx
+    │   ├── forms/
+    │   │   ├── FieldRow.tsx
+    │   │   ├── FormSection.tsx
+    │   │   └── SaveCancelBar.tsx
+    │   └── patterns/
+    │       ├── files/
+    │       │   └── FilesTab.tsx
+    │       └── pricing/
+    │           └── PricingWorksheetPage.tsx
+    └── lib/
+        ├── auth/
+        ├── companies/
+        │   ├── index.ts
+        │   ├── queries.ts
+        │   ├── types.ts
+        │   └── validators.ts
+        ├── cost-codes/
+        │   ├── index.ts
+        │   ├── queries.ts
+        │   └── types.ts
+        ├── jobs/
+        │   ├── index.ts
+        │   ├── queries.ts
+        │   ├── types.ts
+        │   └── validators.ts
+        ├── logs/
+        │   ├── index.ts
+        │   └── types.ts
+        ├── permissions/
+        │   ├── access-control.ts
+        │   ├── access-control-server.ts
+        │   └── index.ts
+        ├── pricing/
+        │   ├── access.ts
+        │   ├── bids.ts
+        │   ├── sheets.ts
+        │   ├── types.ts
+        │   └── worksheet.ts
+        ├── scope/
+        │   ├── index.ts
+        │   ├── queries.ts
+        │   └── types.ts
+        ├── schedule/
+        │   ├── apply.ts
+        │   ├── baseline.ts
+        │   ├── baselineReset.ts
+        │   ├── dependencies.ts
+        │   ├── dependencyBehavior.ts
+        │   ├── dependencyLabels.ts
+        │   ├── editPresence.ts
+        │   ├── engine.ts
+        │   ├── impacts.ts
+        │   ├── importCompiler.ts
+        │   ├── labor.ts
+        │   ├── logs.ts
+        │   ├── manualShift.ts
+        │   ├── nodes.ts
+        │   ├── operations.ts
+        │   ├── procurement.ts
+        │   ├── resolver.ts
+        │   ├── runApplyPipeline.ts
+        │   └── taskTriggers.ts
+        ├── supabase/
+        │   ├── admin.ts
+        │   ├── client.ts
+        │   ├── middleware.ts
+        │   └── server.ts
+        ├── trades/
+        │   ├── index.ts
+        │   ├── queries.ts
+        │   └── types.ts
+        └── shared/
+            ├── dates.ts
+            ├── errors.ts
+            ├── ids.ts
+            ├── numbers.ts
+            ├── result.ts
+            └── strings.ts
+```
+
 ## Canonical Placement Rules
 
 ### Shared standards docs
@@ -308,8 +703,7 @@ supabase/migrations/
 Legacy or historical working docs currently live under:
 
 ```text
-docs/
-docs/schedule_module/
+docs/archive/
 ```
 
 These should not be treated as the structural source of truth.
