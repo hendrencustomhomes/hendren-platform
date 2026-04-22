@@ -12,6 +12,21 @@ import type {
 const PRICING_ROW_COLS =
   'id, pricing_header_id, catalog_sku, cost_code_id, source_sku, vendor_sku, description_snapshot, unit, unit_price, lead_days, notes, sort_order, is_active, created_at, updated_at'
 
+function toError(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim()) return error
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const maybeMessage = (error as { message?: unknown }).message
+    if (typeof maybeMessage === 'string' && maybeMessage.trim()) {
+      return new Error(maybeMessage)
+    }
+  }
+  try {
+    const serialized = JSON.stringify(error)
+    if (serialized && serialized !== '{}') return new Error(serialized)
+  } catch {}
+  return new Error(fallback)
+}
+
 async function generateSourceSku(
   supabase: DbClient,
   companyId: string,
@@ -62,55 +77,59 @@ export async function createPricingRow(
   supabase: DbClient,
   input: CreatePricingRowInput
 ): Promise<PricingRow> {
-  const [header, nextSortOrder] = await Promise.all([
-    getPricingHeader(supabase, input.pricing_header_id),
-    getNextPricingRowSortOrder(supabase, input.pricing_header_id),
-  ])
+  try {
+    const [header, nextSortOrder] = await Promise.all([
+      getPricingHeader(supabase, input.pricing_header_id),
+      getNextPricingRowSortOrder(supabase, input.pricing_header_id),
+    ])
 
-  if (!header) throw new Error('Pricing header not found')
+    if (!header) throw new Error('Pricing header not found')
 
-  let catalogItem: CatalogItem | null = null
+    let catalogItem: CatalogItem | null = null
 
-  if (input.catalog_sku) {
-    catalogItem = await getCatalogItemBySku(supabase, input.catalog_sku)
-    if (!catalogItem) throw new Error('Catalog item not found')
+    if (input.catalog_sku) {
+      catalogItem = await getCatalogItemBySku(supabase, input.catalog_sku)
+      if (!catalogItem) throw new Error('Catalog item not found')
+    }
+
+    const descriptionSnapshot = input.description_snapshot?.trim() || catalogItem?.title
+
+    if (!descriptionSnapshot) {
+      throw new Error('Description is required')
+    }
+
+    const costCodeId = catalogItem?.cost_code_id || header.cost_code_id
+    const sourceSku = await generateSourceSku(
+      supabase,
+      header.company_id,
+      costCodeId,
+      descriptionSnapshot
+    )
+
+    const { data, error } = await supabase
+      .from('pricing_rows')
+      .insert({
+        pricing_header_id: input.pricing_header_id,
+        catalog_sku: catalogItem?.catalog_sku ?? null,
+        cost_code_id: costCodeId,
+        source_sku: sourceSku,
+        vendor_sku: input.vendor_sku?.trim() || null,
+        description_snapshot: descriptionSnapshot,
+        unit: input.unit?.trim() || catalogItem?.default_unit || null,
+        unit_price: input.unit_price ?? null,
+        lead_days: input.lead_days ?? null,
+        notes: input.notes?.trim() || null,
+        sort_order: nextSortOrder,
+        is_active: input.is_active ?? true,
+      })
+      .select(PRICING_ROW_COLS)
+      .single()
+
+    if (error) throw error
+    return data as PricingRow
+  } catch (error) {
+    throw toError(error, 'Failed to create pricing row')
   }
-
-  const descriptionSnapshot = input.description_snapshot?.trim() || catalogItem?.title
-
-  if (!descriptionSnapshot) {
-    throw new Error('Description is required')
-  }
-
-  const costCodeId = catalogItem?.cost_code_id || header.cost_code_id
-  const sourceSku = await generateSourceSku(
-    supabase,
-    header.company_id,
-    costCodeId,
-    descriptionSnapshot
-  )
-
-  const { data, error } = await supabase
-    .from('pricing_rows')
-    .insert({
-      pricing_header_id: input.pricing_header_id,
-      catalog_sku: catalogItem?.catalog_sku ?? null,
-      cost_code_id: costCodeId,
-      source_sku: sourceSku,
-      vendor_sku: input.vendor_sku?.trim() || null,
-      description_snapshot: descriptionSnapshot,
-      unit: input.unit?.trim() || catalogItem?.default_unit || null,
-      unit_price: input.unit_price ?? null,
-      lead_days: input.lead_days ?? null,
-      notes: input.notes?.trim() || null,
-      sort_order: nextSortOrder,
-      is_active: input.is_active ?? true,
-    })
-    .select(PRICING_ROW_COLS)
-    .single()
-
-  if (error) throw error
-  return data as PricingRow
 }
 
 export async function updatePricingRow(
@@ -118,27 +137,31 @@ export async function updatePricingRow(
   id: string,
   patch: UpdatePricingRowPatch
 ): Promise<PricingRow> {
-  const payload = {
-    ...patch,
-    vendor_sku:
-      typeof patch.vendor_sku === 'string' ? patch.vendor_sku.trim() || null : patch.vendor_sku,
-    description_snapshot:
-      typeof patch.description_snapshot === 'string'
-        ? patch.description_snapshot.trim()
-        : patch.description_snapshot,
-    unit: typeof patch.unit === 'string' ? patch.unit.trim() || null : patch.unit,
-    notes: typeof patch.notes === 'string' ? patch.notes.trim() || null : patch.notes,
+  try {
+    const payload = {
+      ...patch,
+      vendor_sku:
+        typeof patch.vendor_sku === 'string' ? patch.vendor_sku.trim() || null : patch.vendor_sku,
+      description_snapshot:
+        typeof patch.description_snapshot === 'string'
+          ? patch.description_snapshot.trim()
+          : patch.description_snapshot,
+      unit: typeof patch.unit === 'string' ? patch.unit.trim() || null : patch.unit,
+      notes: typeof patch.notes === 'string' ? patch.notes.trim() || null : patch.notes,
+    }
+
+    const { data, error } = await supabase
+      .from('pricing_rows')
+      .update(payload)
+      .eq('id', id)
+      .select(PRICING_ROW_COLS)
+      .single()
+
+    if (error) throw error
+    return data as PricingRow
+  } catch (error) {
+    throw toError(error, 'Failed to update pricing row')
   }
-
-  const { data, error } = await supabase
-    .from('pricing_rows')
-    .update(payload)
-    .eq('id', id)
-    .select(PRICING_ROW_COLS)
-    .single()
-
-  if (error) throw error
-  return data as PricingRow
 }
 
 export async function reorderPricingRows(
