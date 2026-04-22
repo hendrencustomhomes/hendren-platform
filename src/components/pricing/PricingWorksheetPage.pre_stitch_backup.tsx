@@ -167,7 +167,7 @@ function formatMoney(value: number | null) {
 }
 
 function parseNullableNumber(value: string) {
-  const trimmed = value.trim().replace(/[$,]/g, '')
+  const trimmed = value.trim()
   if (!trimmed) return null
   const parsed = Number(trimmed)
   return Number.isFinite(parsed) ? parsed : null
@@ -945,8 +945,8 @@ export default function PricingWorksheetPage({
       return null
     }
     if (!header) return null
-    if (!newDescription.trim()) {
-      setError('Description is required.')
+    if (!newCatalogSku) {
+      setError('Catalog item is required.')
       return null
     }
 
@@ -956,8 +956,8 @@ export default function PricingWorksheetPage({
     try {
       const created = await createPricingRow(supabase, {
         pricing_header_id: header.id,
-        catalog_sku: newCatalogSku || null,
-        description_snapshot: newDescription,
+        catalog_sku: newCatalogSku,
+        description_snapshot: newDescription || null,
         vendor_sku: newVendorSku || null,
         unit: newUnit || null,
         unit_price: parseNullableNumber(newUnitPrice),
@@ -1318,7 +1318,7 @@ export default function PricingWorksheetPage({
                 onKeyDown={(e) => handleNewRowKeyDown(e)}
                 style={cellInputStyle}
               >
-                <option value="">Optional catalog link</option>
+                <option value="">Select catalog item</option>
                 {catalogItems.map((item) => (
                   <option key={item.catalog_sku} value={item.catalog_sku}>
                     {item.catalog_sku} · {item.title}
@@ -1552,13 +1552,7 @@ export default function PricingWorksheetPage({
                                 ref={(element) => {
                                   cellRefs.current[getCellDomKey(row.id, 'unit_price')] = element
                                 }}
-                                value={
-                                  activeCell?.rowId === row.id && activeCell.field === 'unit_price'
-                                    ? String(activeDraft ?? '')
-                                    : row.unit_price != null
-                                      ? formatMoney(row.unit_price)
-                                      : ''
-                                }
+                                value={String(getRenderedCellValue(row, 'unit_price'))}
                                 onFocus={(e) => handleTextCellFocus(row.id, 'unit_price', e.currentTarget)}
                                 onChange={(e) => {
                                   setActiveDraft(e.target.value)
