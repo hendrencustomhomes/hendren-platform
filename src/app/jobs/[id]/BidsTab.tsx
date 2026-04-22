@@ -4,8 +4,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getCurrentPricingAccess } from '@/app/actions/pricing-access-actions'
 import { createClient } from '@/utils/supabase/client'
-import { createPricingHeader, fetchPricingCompanies, listPricingHeaders } from '@/lib/pricing-sources'
-import type { PricingCompanyOption, PricingCostCodeOption, PricingHeader, PricingTradeOption } from '@/lib/pricing-sources-types'
+import { createPricingHeader, listPricingHeaders } from '@/lib/pricing/headers'
+import { fetchPricingCompanies } from '@/lib/pricing/lookups'
+import type {
+  PricingCompanyOption,
+  PricingCostCodeOption,
+  PricingHeader,
+  PricingTradeOption,
+} from '@/lib/pricing/types'
 
 type Props = {
   jobId: string
