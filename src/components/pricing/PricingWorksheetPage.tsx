@@ -933,7 +933,7 @@ export default function PricingWorksheetPage({
       const result = await createPricingHeaderRevision(supabase, header.id)
       router.push(`${detailBasePath}/${result.header.id}`)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create revision.')
+      setError(e instanceof Error ? e.message : 'Failed to create new revision.')
     } finally {
       setCreatingRevision(false)
     }
@@ -1231,47 +1231,58 @@ export default function PricingWorksheetPage({
                 style={{
                   gridColumn: '1 / -1',
                   display: 'flex',
-                  justifyContent: 'space-between',
-                  gap: '8px',
-                  flexWrap: 'wrap',
+                  flexDirection: 'column',
+                  gap: '10px',
                 }}
               >
-                <button
-                  type="button"
-                  onClick={handleCreateRevision}
-                  disabled={creatingRevision}
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  Saving here edits the current {missingLabel.toLowerCase()}. Creating a new revision makes a separate updated {missingLabel.toLowerCase()} record.
+                </div>
+                <div
                   style={{
-                    background: 'transparent',
-                    color: 'var(--text)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '10px',
-                    padding: '10px 14px',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    cursor: creatingRevision ? 'not-allowed' : 'pointer',
-                    opacity: creatingRevision ? 0.7 : 1,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: '8px',
+                    flexWrap: 'wrap',
                   }}
                 >
-                  {creatingRevision ? 'Creating Revision…' : 'Create Revision'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveHeader}
-                  disabled={savingHeader}
-                  style={{
-                    background: 'var(--text)',
-                    color: 'var(--surface)',
-                    border: 'none',
-                    borderRadius: '10px',
-                    padding: '10px 14px',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    cursor: savingHeader ? 'not-allowed' : 'pointer',
-                    opacity: savingHeader ? 0.7 : 1,
-                  }}
-                >
-                  {savingHeader ? 'Saving…' : 'Save Header'}
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateRevision}
+                    disabled={creatingRevision}
+                    style={{
+                      background: 'transparent',
+                      color: 'var(--text)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '10px',
+                      padding: '10px 14px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: creatingRevision ? 'not-allowed' : 'pointer',
+                      opacity: creatingRevision ? 0.7 : 1,
+                    }}
+                  >
+                    {creatingRevision ? 'Creating New Revision…' : 'Create New Revision'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveHeader}
+                    disabled={savingHeader}
+                    style={{
+                      background: 'var(--text)',
+                      color: 'var(--surface)',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '10px 14px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: savingHeader ? 'not-allowed' : 'pointer',
+                      opacity: savingHeader ? 0.7 : 1,
+                    }}
+                  >
+                    {savingHeader ? 'Saving Current Sheet…' : 'Save Current Sheet'}
+                  </button>
+                </div>
               </div>
             </div>
           </fieldset>
