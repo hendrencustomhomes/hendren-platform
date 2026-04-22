@@ -1,9 +1,7 @@
-import type { CatalogItem } from '@/lib/pricing/types'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 
 type Props = {
   canManage: boolean
-  catalogItems: CatalogItem[]
   newCatalogSku: string
   newDescription: string
   newVendorSku: string
@@ -32,20 +30,23 @@ const fieldsetResetStyle = {
 
 const cellInputStyle = {
   width: '100%',
-  background: 'var(--background)',
-  border: '1px solid var(--border)',
-  borderRadius: '8px',
-  padding: '8px 10px',
+  background: 'transparent',
+  border: 'none',
+  padding: '6px 8px',
   color: 'var(--text)',
   fontSize: '13px',
   outline: 'none',
   boxSizing: 'border-box' as const,
 } as const
 
+const cellWrapStyle = {
+  border: '1px solid var(--border)',
+  background: 'var(--surface)',
+  minWidth: 0,
+} as const
+
 export function PricingWorksheetNewRowBar({
   canManage,
-  catalogItems,
-  newCatalogSku,
   newDescription,
   newVendorSku,
   newUnit,
@@ -53,7 +54,6 @@ export function PricingWorksheetNewRowBar({
   newLeadDays,
   newNotes,
   creatingRow,
-  onCatalogSkuChange,
   onDescriptionChange,
   onVendorSkuChange,
   onUnitChange,
@@ -67,70 +67,65 @@ export function PricingWorksheetNewRowBar({
     <fieldset disabled={!canManage} style={fieldsetResetStyle}>
       <div
         style={{
-          padding: '14px 16px',
-          borderBottom: '1px solid var(--border)',
           display: 'grid',
-          gridTemplateColumns: 'minmax(180px, 1.2fr) repeat(6, minmax(110px, 1fr))',
-          gap: '8px',
+          gridTemplateColumns: '2.2fr 1.2fr 0.8fr 0.9fr 0.9fr 1.5fr auto',
           overflowX: 'auto',
+          borderBottom: '1px solid var(--border)',
         }}
       >
-        <select
-          value={newCatalogSku}
-          onChange={(e) => onCatalogSkuChange(e.target.value)}
-          onKeyDown={(e) => onKeyDown(e)}
-          style={cellInputStyle}
-        >
-          <option value="">Optional catalog link</option>
-          {catalogItems.map((item) => (
-            <option key={item.catalog_sku} value={item.catalog_sku}>
-              {item.catalog_sku} · {item.title}
-            </option>
-          ))}
-        </select>
-        <input
-          value={newDescription}
-          onChange={(e) => onDescriptionChange(e.target.value)}
-          onFocus={(e) => e.currentTarget.select()}
-          onKeyDown={(e) => onKeyDown(e)}
-          placeholder="Description"
-          style={cellInputStyle}
-        />
-        <input
-          value={newVendorSku}
-          onChange={(e) => onVendorSkuChange(e.target.value)}
-          onFocus={(e) => e.currentTarget.select()}
-          onKeyDown={(e) => onKeyDown(e)}
-          placeholder="Vendor SKU"
-          style={cellInputStyle}
-        />
-        <input
-          value={newUnit}
-          onChange={(e) => onUnitChange(e.target.value)}
-          onFocus={(e) => e.currentTarget.select()}
-          onKeyDown={(e) => onKeyDown(e)}
-          placeholder="Unit"
-          style={cellInputStyle}
-        />
-        <input
-          value={newUnitPrice}
-          onChange={(e) => onUnitPriceChange(e.target.value)}
-          onFocus={(e) => e.currentTarget.select()}
-          onKeyDown={(e) => onKeyDown(e)}
-          inputMode="decimal"
-          placeholder="Unit price"
-          style={cellInputStyle}
-        />
-        <input
-          value={newLeadDays}
-          onChange={(e) => onLeadDaysChange(e.target.value)}
-          onFocus={(e) => e.currentTarget.select()}
-          onKeyDown={(e) => onKeyDown(e)}
-          inputMode="numeric"
-          placeholder="Lead days"
-          style={cellInputStyle}
-        />
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={cellWrapStyle}>
+          <input
+            value={newDescription}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
+            onKeyDown={(e) => onKeyDown(e)}
+            placeholder="Description"
+            style={cellInputStyle}
+          />
+        </div>
+        <div style={cellWrapStyle}>
+          <input
+            value={newVendorSku}
+            onChange={(e) => onVendorSkuChange(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
+            onKeyDown={(e) => onKeyDown(e)}
+            placeholder="Vendor SKU"
+            style={cellInputStyle}
+          />
+        </div>
+        <div style={cellWrapStyle}>
+          <input
+            value={newUnit}
+            onChange={(e) => onUnitChange(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
+            onKeyDown={(e) => onKeyDown(e)}
+            placeholder="Unit"
+            style={cellInputStyle}
+          />
+        </div>
+        <div style={cellWrapStyle}>
+          <input
+            value={newUnitPrice}
+            onChange={(e) => onUnitPriceChange(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
+            onKeyDown={(e) => onKeyDown(e)}
+            inputMode="decimal"
+            placeholder="Unit price"
+            style={cellInputStyle}
+          />
+        </div>
+        <div style={cellWrapStyle}>
+          <input
+            value={newLeadDays}
+            onChange={(e) => onLeadDaysChange(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
+            onKeyDown={(e) => onKeyDown(e)}
+            inputMode="numeric"
+            placeholder="Lead days"
+            style={cellInputStyle}
+          />
+        </div>
+        <div style={cellWrapStyle}>
           <input
             value={newNotes}
             onChange={(e) => onNotesChange(e.target.value)}
@@ -143,21 +138,28 @@ export function PricingWorksheetNewRowBar({
             placeholder="Notes"
             style={cellInputStyle}
           />
+        </div>
+        <div
+          style={{
+            ...cellWrapStyle,
+            display: 'flex',
+            alignItems: 'stretch',
+            minWidth: '72px',
+          }}
+        >
           <button
             type="button"
             onClick={() => void onCreateRow()}
             disabled={creatingRow}
             style={{
-              background: 'var(--text)',
-              color: 'var(--surface)',
+              background: 'transparent',
+              color: 'var(--text)',
               border: 'none',
-              borderRadius: '8px',
-              padding: '0 12px',
+              width: '100%',
               fontSize: '12px',
               fontWeight: 700,
               cursor: creatingRow ? 'not-allowed' : 'pointer',
               opacity: creatingRow ? 0.7 : 1,
-              whiteSpace: 'nowrap',
             }}
           >
             {creatingRow ? 'Adding…' : 'Add'}
