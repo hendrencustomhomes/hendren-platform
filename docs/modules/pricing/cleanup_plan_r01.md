@@ -46,15 +46,20 @@ At time of writing, pricing-related structure still has these major issues:
 ### 2.4 Pricing domain logic is still too concentrated
 
 `src/lib/pricing-sources.ts`
-- owns too many pricing concerns in one file
-- mixes lookups, headers, rows, catalog, revisions, and generation helpers
-- weakens ownership clarity and makes future expansion riskier
+- owned too many pricing concerns in one file
+- mixed lookups, headers, rows, catalog, revisions, and generation helpers
+- weakened ownership clarity and made future expansion riskier
 
-### 2.5 Transitional stitch artifact still exists
+### 2.5 Catalog import workflow does not yet exist
 
-`src/components/pricing/PricingWorksheetPage.stitch.ts`
-- should be treated as transitional debt
-- should not become part of the long-term structure
+The intended pricing workflow is now clarified as:
+- price-sheet and bid rows are created source-first
+- `source_sku` is the operative row key at creation time
+- `catalog_sku` is optional at creation time
+- catalog linkage/import happens later from a dedicated workflow
+- bids may remain job-specific forever and never be imported into catalog
+
+That means the future catalog workflow needs a dedicated page rather than being implied inside row creation.
 
 ---
 
@@ -119,6 +124,14 @@ Default rule:
 - structure changes should preserve current behavior
 - do not smuggle feature redesign into the cleanup pass unless explicitly approved
 
+### 5.5 Source rows are created before catalog linkage
+
+This is now a fixed workflow rule:
+- do not require `catalog_sku` during price-sheet or bid row creation
+- do not design the row-create UI around immediate catalog linkage
+- source rows should remain usable by estimates without catalog import
+- catalog linkage should happen later from a dedicated import/review workflow
+
 ---
 
 ## 6. Target structure for the pricing cleanup
@@ -175,6 +188,7 @@ Notes:
 - this is the shared worksheet-family pricing pattern
 - it should be reused by Price Sheets and later Bids
 - it should no longer live under the old `src/components/pricing/` path long-term
+- row creation UI should be source-first and should not imply immediate catalog linkage
 
 ### 6.3 Pricing domain target
 
@@ -194,6 +208,28 @@ Notes:
 - exact naming may adjust slightly if repo reality requires it
 - the key rule is that header/row/catalog/revision behavior must stop living in one god file
 - `worksheet.ts` should only hold worksheet-specific orchestration that is genuinely shared
+
+### 6.4 Future catalog import target
+
+```text
+src/app/more/pricing/import-to-catalog/
+  page.tsx
+  _components/
+    UnlinkedSourceItemsPage.tsx
+    UnlinkedSourceItemsTable.tsx
+    CatalogMatchPanel.tsx
+    ImportSelectionBar.tsx
+  _lib/
+    matching.ts
+    selectors.ts
+```
+
+Notes:
+- page should show source items with no catalog linkage
+- user should be able to link one-by-one or bulk import
+- matching should be as smart as practical
+- revisions should strongly reuse prior linkage when the earlier revision was already linked
+- bids may remain intentionally unlinked if they are only job-specific
 
 ---
 
@@ -229,6 +265,7 @@ Scope:
 - move types out of `pricing-sources-types.ts` into `src/lib/pricing/types.ts`
 - split functions by concern: headers, rows, catalog, revisions, lookups, access if needed
 - keep temporary compatibility exports only if needed during the transition
+- preserve source-first row creation with optional catalog linkage
 
 Expected result:
 - no more pricing domain god file
@@ -268,7 +305,24 @@ Expected result:
 - shared pricing pattern is reused cleanly
 - module-specific detail behavior is route-local
 
-### Slice 5 — Transitional debt cleanup
+### Slice 5 — Catalog import / linkage workflow
+
+Goal:
+- add a dedicated workflow for importing source rows into catalog and linking existing unlinked rows
+
+Scope:
+- build an unlinked-source-items page
+- show all source rows without catalog linkage
+- support individual linkage, bulk import, and smart auto-assignment
+- use revision-aware matching so later revisions inherit prior linkage wherever safe
+- keep bids usable even if never imported into catalog
+
+Expected result:
+- catalog linkage is deliberate and reviewable
+- source-first creation remains fast
+- future reuse gets catalog structure without slowing source entry
+
+### Slice 6 — Transitional debt cleanup
 
 Goal:
 - remove transition artifacts after replacements are live
@@ -282,13 +336,13 @@ Scope:
 Expected result:
 - no stale pricing structure remains to confuse future work
 
-### Slice 6 — Resume feature work cleanly
+### Slice 7 — Resume feature work cleanly
 
 Goal:
 - continue Price Sheets work on the cleaned structure
 
 Scope:
-- only after slices 1–5 are complete or explicitly bounded
+- only after slices 1–6 are complete or explicitly bounded
 - continue worksheet-family improvements, not before
 
 Expected result:
@@ -374,6 +428,11 @@ Over-abstracting too early.
 Only extract shared pattern pieces that are truly shared by Price Sheets and Bids.
 Do not build hypothetical abstractions for modules that are not using them yet.
 
+### 10.4 Workflow drift risk
+
+If the app reintroduces catalog linkage into source-row creation, it will slow entry and conflict with the intended source-first flow.
+Catalog linkage belongs in the later import/review workflow, not the initial row-create bar.
+
 ---
 
 ## 11. Recommended immediate next action
@@ -382,8 +441,8 @@ The next session should start with:
 
 1. fresh repo search
 2. confirm current pricing files still match this document
-3. plan **Slice 1 only** in exact file terms
-4. execute the shared pricing worksheet split
+3. clean the worksheet row-create UI so it no longer exposes catalog linkage
+4. plan the next bounded pricing slice in exact file terms
 5. hand off before context gets too large
 
 Do not try to complete all slices in one giant session.
@@ -396,6 +455,7 @@ This doc remains active until:
 - shared pricing worksheet split is done
 - pricing domain split is done
 - Price Sheets list/detail follow the module pattern
+- dedicated catalog import/linkage workflow exists
 - transitional pricing cleanup is complete
 
 After that, this doc becomes historical record and the module can continue under normal implementation docs.
