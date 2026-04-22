@@ -15,18 +15,11 @@ import { LoadingState } from '@/components/feedback/LoadingState'
 import { PageShell } from '@/components/layout/PageShell'
 import { Card } from '@/components/ui/Card'
 import { createClient } from '@/utils/supabase/client'
-import {
-  createPricingHeaderRevision,
-  createPricingRow,
-  fetchPricingCompanies,
-  fetchPricingCostCodes,
-  fetchPricingTrades,
-  getPricingHeader,
-  listCatalogItems,
-  listPricingRowsForHeader,
-  updatePricingHeader,
-  updatePricingRow,
-} from '@/lib/pricing-sources'
+import { listCatalogItems } from '@/lib/pricing/catalog'
+import { fetchPricingCompanies, fetchPricingCostCodes, fetchPricingTrades } from '@/lib/pricing/lookups'
+import { getPricingHeader, updatePricingHeader } from '@/lib/pricing/headers'
+import { createPricingHeaderRevision } from '@/lib/pricing/revisions'
+import { createPricingRow, listPricingRowsForHeader, updatePricingRow } from '@/lib/pricing/rows'
 import type {
   CatalogItem,
   PricingCompanyOption,
@@ -34,7 +27,7 @@ import type {
   PricingHeader,
   PricingRow,
   PricingTradeOption,
-} from '@/lib/pricing-sources-types'
+} from '@/lib/pricing/types'
 import { PricingWorksheetGrid } from './PricingWorksheetGrid'
 import { PricingWorksheetHeader } from './PricingWorksheetHeader'
 import { PricingWorksheetMetaBar } from './PricingWorksheetMetaBar'
