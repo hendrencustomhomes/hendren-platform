@@ -1,0 +1,176 @@
+# Canonical Repo Tree
+
+## Purpose
+
+This file is the human-maintained structure source of truth for the Hendren Platform repo.
+
+Whenever modules are added, moved, split, consolidated, or removed, this file must be updated.
+
+This file exists so that:
+
+- the repo has one visible structural map,
+- module placement stays intentional,
+- folder drift is easier to catch,
+- future cleanup and onboarding are faster,
+- new modules have a canonical home.
+
+## Rule
+
+If the repo structure changes, this file changes in the same pass.
+
+No exceptions.
+
+## Status
+
+This is the initial canonical tree record created during the repo structure standardization effort.
+It should be expanded and kept current as the rewrite proceeds.
+
+## Current Tree
+
+```text
+hendren-platform/
+├── README.md
+├── decisions.md
+├── index.html
+├── package.json
+├── tsconfig.json
+├── design/
+│   └── (intentionally kept empty after doc relocation)
+├── docs/
+│   └── design/
+│       ├── module_structure
+│       ├── repo_tree
+│       └── rewrite_rollout
+├── supabase/
+│   └── migrations/
+│       └── 20260415000000_initial_schema.sql
+└── src/
+    ├── app/
+    │   ├── api/
+    │   │   └── files/
+    │   │       ├── list/
+    │   │       │   └── route.ts
+    │   │       ├── update/
+    │   │       │   └── route.ts
+    │   │       └── upload/
+    │   │           └── route.ts
+    │   ├── jobs/
+    │   │   ├── page.tsx
+    │   │   └── [id]/
+    │   │       ├── page.tsx
+    │   │       ├── JobTabs.tsx
+    │   │       ├── TakeoffScopeContext.tsx
+    │   │       ├── TakeoffSearchSelect.tsx
+    │   │       └── TakeoffWorkspace.tsx
+    │   ├── more/
+    │   │   ├── page.tsx
+    │   │   ├── companies/
+    │   │   │   ├── page.tsx
+    │   │   │   ├── new/
+    │   │   │   │   └── page.tsx
+    │   │   │   └── [id]/
+    │   │   │       └── page.tsx
+    │   │   └── internal-users/
+    │   │       ├── page.tsx
+    │   │       ├── access-actions.ts
+    │   │       ├── templates/
+    │   │       │   └── page.tsx
+    │   │       └── [id]/
+    │   │           └── page.tsx
+    │   └── schedule/
+    │       ├── page.tsx
+    │       └── ScheduleEditClient.tsx
+    ├── components/
+    │   ├── FilesTab.tsx
+    │   └── Nav.tsx
+    ├── lib/
+    │   ├── access-control.ts
+    │   ├── access-control-server.ts
+    │   ├── companies.ts
+    │   ├── db.ts
+    │   └── schedule/
+    │       ├── apply.ts
+    │       ├── baseline.ts
+    │       ├── dependencies.ts
+    │       ├── editPresence.ts
+    │       ├── engine.ts
+    │       ├── impacts.ts
+    │       └── logs.ts
+    └── utils/
+        └── supabase/
+            ├── admin.ts
+            ├── client.ts
+            └── server.ts
+```
+
+## Canonical Placement Rules
+
+### Shared standards docs
+
+All repo-structure governance docs belong in:
+
+```text
+docs/design/
+```
+
+### App routes
+
+User-facing app routes belong in:
+
+```text
+src/app/
+```
+
+### Shared UI
+
+Shared reusable UI belongs in:
+
+```text
+src/components/
+```
+
+### Shared domain logic
+
+Authoritative business logic belongs in:
+
+```text
+src/lib/
+```
+
+### Supabase database changes
+
+Schema and migration files belong in:
+
+```text
+supabase/migrations/
+```
+
+## Target Direction
+
+As the rewrite proceeds, the tree should move toward the approved module structure standard defined in:
+
+```text
+docs/design/module_structure
+```
+
+That means future module areas should increasingly adopt:
+
+- thin route files,
+- route-local private internals,
+- clearer shared UI inheritance,
+- clearer shared domain ownership,
+- fewer large god files.
+
+## Maintenance Requirement
+
+Whenever any of the following happens, update this file:
+
+- new module added,
+- module folder moved,
+- route subtree reorganized,
+- shared component area introduced or renamed,
+- shared lib area introduced or renamed,
+- major structural cleanup completed.
+
+This file is not optional documentation.
+It is part of the structure system.
