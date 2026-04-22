@@ -176,10 +176,17 @@ hendren-platform/
     │               └── edit/
     │                   └── page.tsx
     ├── components/
+    │   ├── data-display/
+    │   │   └── StatusPill.tsx
     │   ├── feedback/
     │   │   ├── EmptyState.tsx
     │   │   ├── ErrorMessage.tsx
     │   │   └── LoadingState.tsx
+    │   ├── layout/
+    │   │   ├── PageShell.tsx
+    │   │   └── SectionHeader.tsx
+    │   ├── ui/
+    │   │   └── Card.tsx
     │   ├── FilesTab.tsx
     │   ├── Nav.tsx
     │   └── pricing/
