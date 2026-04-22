@@ -39,7 +39,7 @@ export type PricingHeader = {
 export type PricingRow = {
   id: string
   pricing_header_id: string
-  catalog_sku: string
+  catalog_sku: string | null
   cost_code_id: string
   source_sku: string
   vendor_sku: string | null
@@ -123,7 +123,7 @@ export type UpdatePricingHeaderPatch = Partial<{
 
 export type CreatePricingRowInput = {
   pricing_header_id: string
-  catalog_sku: string
+  catalog_sku?: string | null
   vendor_sku?: string | null
   description_snapshot?: string | null
   unit?: string | null
