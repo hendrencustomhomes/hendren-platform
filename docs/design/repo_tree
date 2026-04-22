@@ -22,10 +22,7 @@ No exceptions.
 
 ## Status
 
-This is the initial canonical tree record created during the repo structure standardization effort.
-It should be expanded and kept current as the rewrite proceeds.
-
-The tree below reflects currently verified paths from the connected repo. It is still expected to grow more complete as additional paths are verified during rewrite work.
+Tree last updated: 2026-04-22. Reflects the current state of dev.
 
 ## Current Tree
 
@@ -36,95 +33,231 @@ hendren-platform/
 ├── index.html
 ├── package.json
 ├── tsconfig.json
+├── next.config.ts
+├── eslint.config.mjs
+├── postcss.config.mjs
+├── next-env.d.ts
+├── _legacy/
+│   ├── README.md
+│   ├── index.html
+│   ├── package.json
+│   └── package-lock.json
 ├── docs/
 │   ├── instructions.md
+│   ├── env_var_inventory.md
 │   ├── scope_r2.md
 │   ├── scope_r3.md
+│   ├── bids_first_class_tab_r01.md
 │   ├── companies_r01.md
 │   ├── companies_r02.md
 │   ├── company_audit_R1.md
+│   ├── internal_users_permissions_recovery_audit_r01.md
+│   ├── internal_users_permissions_recovery_audit_r02.md
+│   ├── _stitch_test/
+│   │   └── takeoff_stitch_test.txt
+│   ├── claude/
+│   │   ├── bugfix-sweep-r01.md
+│   │   ├── bugfix-sweep-r02.md
+│   │   └── pricing-worksheet-stitch-report.md
 │   ├── design/
 │   │   ├── module_structure
 │   │   ├── repo_tree
 │   │   └── rewrite_rollout
-│   └── schedule_module/
-│       ├── schedule_audit.md
-│       ├── schedule_docs_move.md
-│       ├── schedule_r02.md
-│       ├── schedule_r03.md
-│       ├── schedule_r10.md
-│       ├── schedule_r15.md
-│       ├── schedule_r18.md
-│       ├── schedule_r19.md
-│       ├── schedule_r20.md
-│       ├── schedule_r21.md
-│       ├── schedule_r22.md
-│       ├── schedule_r26.md
-│       ├── schedule_r27.md
-│       ├── schedule_r28.md
-│       ├── schedule_r29.md
-│       ├── schedule_r30.md
-│       ├── schedule_r31.md
-│       └── schedule_r32.md
-├── supabase/
-│   └── migrations/
-│       └── 20260415000000_initial_schema.sql
+│   ├── schedule_module/
+│   │   ├── baseline_model.md
+│   │   ├── schedule_audit.md
+│   │   ├── schedule_docs_move.md
+│   │   ├── schedule_r01.md
+│   │   ├── schedule_r02.md
+│   │   ├── schedule_r03.md
+│   │   ├── schedule_r04.md
+│   │   ├── schedule_r05.md
+│   │   ├── schedule_r06.md
+│   │   ├── schedule_r07.md
+│   │   ├── schedule_r08.md
+│   │   ├── schedule_r09.md
+│   │   ├── schedule_r10.md
+│   │   ├── schedule_r11.md
+│   │   ├── schedule_r12.md
+│   │   ├── schedule_r13.md
+│   │   ├── schedule_r14.md
+│   │   ├── schedule_r15.md
+│   │   ├── schedule_r16.md
+│   │   ├── schedule_r17.md
+│   │   ├── schedule_r18.md
+│   │   ├── schedule_r19.md
+│   │   ├── schedule_r20.md
+│   │   ├── schedule_r21.md
+│   │   ├── schedule_r22.md
+│   │   ├── schedule_r23.md
+│   │   ├── schedule_r24.md
+│   │   ├── schedule_r25.md
+│   │   ├── schedule_r26.md
+│   │   ├── schedule_r27.md
+│   │   ├── schedule_r28.md
+│   │   ├── schedule_r29.md
+│   │   ├── schedule_r30.md
+│   │   ├── schedule_r31.md
+│   │   ├── schedule_r32.md
+│   │   └── schedule_r33.md
+│   └── takeoff/
+│       └── takeoff_v11_r01.md
+├── public/
+│   ├── file.svg
+│   ├── globe.svg
+│   ├── next.svg
+│   ├── vercel.svg
+│   └── window.svg
 └── src/
+    ├── proxy.ts
     ├── app/
+    │   ├── layout.tsx
+    │   ├── page.tsx
+    │   ├── globals.css
+    │   ├── favicon.ico
+    │   ├── actions/
+    │   │   └── pricing-access-actions.ts
     │   ├── api/
     │   │   └── files/
     │   │       ├── list/
+    │   │       │   └── route.ts
+    │   │       ├── signed-url/
     │   │       │   └── route.ts
     │   │       ├── update/
     │   │       │   └── route.ts
     │   │       └── upload/
     │   │           └── route.ts
+    │   ├── auth/
+    │   │   └── confirm/
+    │   │       └── route.ts
     │   ├── jobs/
     │   │   ├── page.tsx
+    │   │   ├── actions.ts
+    │   │   ├── new/
+    │   │   │   ├── page.tsx
+    │   │   │   ├── JobForm.tsx
+    │   │   │   └── actions.ts
     │   │   └── [id]/
     │   │       ├── page.tsx
     │   │       ├── JobTabs.tsx
+    │   │       ├── JobArchiveControls.tsx
+    │   │       ├── ScopeTab.tsx
+    │   │       ├── SelectionsTab.tsx
+    │   │       ├── BidsTab.tsx
+    │   │       ├── TakeoffTab.tsx
+    │   │       ├── TakeoffWorkspace.tsx
     │   │       ├── TakeoffScopeContext.tsx
     │   │       ├── TakeoffSearchSelect.tsx
-    │   │       └── TakeoffWorkspace.tsx
+    │   │       ├── TakeoffFilterBar.tsx
+    │   │       ├── TakeoffOverviewStrip.tsx
+    │   │       ├── TakeoffDesktopReviewTable.tsx
+    │   │       ├── TakeoffMobileReviewList.tsx
+    │   │       ├── takeoffTypes.ts
+    │   │       ├── takeoffUtils.ts
+    │   │       ├── takeoffReviewUtils.ts
+    │   │       └── bids/
+    │   │           ├── page.tsx
+    │   │           └── [bidId]/
+    │   │               └── page.tsx
+    │   ├── login/
+    │   │   ├── page.tsx
+    │   │   └── actions.ts
     │   ├── more/
     │   │   ├── page.tsx
+    │   │   ├── clients/
+    │   │   │   └── page.tsx
     │   │   ├── companies/
     │   │   │   ├── page.tsx
     │   │   │   ├── new/
     │   │   │   │   └── page.tsx
     │   │   │   └── [id]/
     │   │   │       └── page.tsx
-    │   │   └── internal-users/
-    │   │       ├── page.tsx
-    │   │       ├── access-actions.ts
-    │   │       ├── templates/
-    │   │       │   └── page.tsx
-    │   │       └── [id]/
-    │   │           └── page.tsx
+    │   │   ├── cost-codes/
+    │   │   │   └── page.tsx
+    │   │   ├── internal-users/
+    │   │   │   ├── page.tsx
+    │   │   │   ├── actions.ts
+    │   │   │   ├── access-actions.ts
+    │   │   │   ├── templates/
+    │   │   │   │   └── page.tsx
+    │   │   │   └── [id]/
+    │   │   │       └── page.tsx
+    │   │   ├── price-sheets/
+    │   │   │   ├── page.tsx
+    │   │   │   └── [id]/
+    │   │   │       └── page.tsx
+    │   │   └── trades/
+    │   │       └── page.tsx
+    │   ├── reset-password/
+    │   │   ├── page.tsx
+    │   │   └── actions.ts
     │   └── schedule/
     │       ├── page.tsx
-    │       └── ScheduleEditClient.tsx
+    │       ├── ScheduleEditClient.tsx
+    │       ├── actions.ts
+    │       ├── presenceActions.ts
+    │       ├── baseline/
+    │       │   └── page.tsx
+    │       ├── order/
+    │       │   ├── new/
+    │       │   │   └── page.tsx
+    │       │   └── [id]/
+    │       │       └── edit/
+    │       │           └── page.tsx
+    │       └── sub/
+    │           ├── new/
+    │           │   └── page.tsx
+    │           └── [id]/
+    │               └── edit/
+    │                   └── page.tsx
     ├── components/
     │   ├── FilesTab.tsx
-    │   └── Nav.tsx
+    │   ├── Nav.tsx
+    │   └── pricing/
+    │       ├── PricingWorksheetPage.tsx
+    │       └── PricingWorksheetPage.stitch.ts
     ├── lib/
     │   ├── access-control.ts
     │   ├── access-control-server.ts
     │   ├── companies.ts
+    │   ├── cost-codes.ts
     │   ├── db.ts
-    │   └── schedule/
-    │       ├── apply.ts
-    │       ├── baseline.ts
-    │       ├── dependencies.ts
-    │       ├── editPresence.ts
-    │       ├── engine.ts
-    │       ├── impacts.ts
-    │       └── logs.ts
+    │   ├── permissions.ts
+    │   ├── pricing-sources.ts
+    │   ├── pricing-sources-types.ts
+    │   ├── scope.ts
+    │   ├── trades.ts
+    │   ├── logs/
+    │   │   ├── index.ts
+    │   │   └── types.ts
+    │   ├── schedule/
+    │   │   ├── apply.ts
+    │   │   ├── baseline.ts
+    │   │   ├── baselineReset.ts
+    │   │   ├── dependencies.ts
+    │   │   ├── dependencyBehavior.ts
+    │   │   ├── dependencyLabels.ts
+    │   │   ├── editPresence.ts
+    │   │   ├── engine.ts
+    │   │   ├── impacts.ts
+    │   │   ├── importCompiler.ts
+    │   │   ├── labor.ts
+    │   │   ├── logs.ts
+    │   │   ├── manualShift.ts
+    │   │   ├── nodes.ts
+    │   │   ├── operations.ts
+    │   │   ├── procurement.ts
+    │   │   ├── resolver.ts
+    │   │   ├── runApplyPipeline.ts
+    │   │   └── taskTriggers.ts
+    │   └── supabase/
+    │       ├── admin.ts
+    │       └── server.ts
     └── utils/
         └── supabase/
             ├── admin.ts
             ├── client.ts
+            ├── middleware.ts
             └── server.ts
 ```
 
