@@ -22,7 +22,7 @@ No exceptions.
 
 ## Status
 
-Tree last updated: 2026-04-22. Reflects the current state of dev and the completed target tree for the current repo state after rewrite.
+Tree last updated: 2026-04-22. Reflects the current state of dev (shared foundation complete, module rewrites pending) and the completed target tree for the current repo state after rewrite.
 
 ## Current Tree
 
@@ -49,6 +49,8 @@ hendren-platform/
 │   │   ├── bugfix_sweep_02.md
 │   │   └── pricing_worksheet_stitch.md
 │   ├── design/
+│   │   ├── module_design_architecture_r01.md
+│   │   ├── module_design_strategy_r01.md
 │   │   ├── module_structure
 │   │   ├── repo_tree
 │   │   └── rewrite_rollout
