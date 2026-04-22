@@ -174,12 +174,19 @@ hendren-platform/
     │               └── edit/
     │                   └── page.tsx
     ├── components/
+    │   ├── feedback/
+    │   │   ├── EmptyState.tsx
+    │   │   ├── ErrorMessage.tsx
+    │   │   └── LoadingState.tsx
     │   ├── FilesTab.tsx
     │   ├── Nav.tsx
     │   └── pricing/
     │       ├── PricingWorksheetPage.tsx
     │       └── PricingWorksheetPage.stitch.ts
     ├── lib/
+    │   ├── shared/
+    │   │   ├── dates.ts
+    │   │   └── numbers.ts
     │   ├── access-control.ts
     │   ├── access-control-server.ts
     │   ├── companies.ts

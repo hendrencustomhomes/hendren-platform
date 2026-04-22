@@ -31,14 +31,7 @@ export function parseNumberOrNull(value: string) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-export function formatCurrency(value: number | null | undefined) {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '—'
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(value)
-}
+export { formatMoney as formatCurrency } from '@/lib/shared/numbers'
 
 export function normalizeRowKind(value: TakeoffRowKind | string | null | undefined): TakeoffRowKind {
   return value === 'assembly' ? 'assembly' : 'item'
