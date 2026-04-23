@@ -49,6 +49,8 @@ const cellWrapStyle = {
 
 export function PricingWorksheetNewRowBar({
   canManage,
+  catalogItems = [],
+  newCatalogSku,
   newDescription,
   newVendorSku,
   newUnit,
@@ -56,6 +58,7 @@ export function PricingWorksheetNewRowBar({
   newLeadDays,
   newNotes,
   creatingRow,
+  onCatalogSkuChange,
   onDescriptionChange,
   onVendorSkuChange,
   onUnitChange,
@@ -70,11 +73,21 @@ export function PricingWorksheetNewRowBar({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '2.2fr 1.2fr 0.8fr 0.9fr 0.9fr 1.5fr auto',
+          gridTemplateColumns: '1.2fr 2.2fr 1.2fr 0.8fr 0.9fr 0.9fr 1.5fr auto',
           overflowX: 'auto',
           borderBottom: '1px solid var(--border)',
         }}
       >
+        <div style={cellWrapStyle}>
+          <select value={newCatalogSku} onChange={(e) => onCatalogSkuChange(e.target.value)} onKeyDown={(e) => onKeyDown(e)} style={cellInputStyle}>
+            <option value="">Catalog</option>
+            {catalogItems.map((item) => (
+              <option key={item.catalog_sku} value={item.catalog_sku}>
+                {item.catalog_sku}
+              </option>
+            ))}
+          </select>
+        </div>
         <div style={cellWrapStyle}>
           <input
             value={newDescription}
@@ -132,23 +145,14 @@ export function PricingWorksheetNewRowBar({
             value={newNotes}
             onChange={(e) => onNotesChange(e.target.value)}
             onFocus={(e) => e.currentTarget.select()}
-            onKeyDown={(e) =>
-              onKeyDown(e, () => {
-                void onCreateRow()
-              })
-            }
+            onKeyDown={(e) => onKeyDown(e, () => {
+              void onCreateRow()
+            })}
             placeholder="Notes"
             style={cellInputStyle}
           />
         </div>
-        <div
-          style={{
-            ...cellWrapStyle,
-            display: 'flex',
-            alignItems: 'stretch',
-            minWidth: '72px',
-          }}
-        >
+        <div style={{ ...cellWrapStyle, display: 'flex', alignItems: 'stretch', minWidth: '72px' }}>
           <button
             type="button"
             onClick={() => void onCreateRow()}
