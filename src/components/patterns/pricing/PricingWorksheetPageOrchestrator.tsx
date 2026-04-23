@@ -98,7 +98,13 @@ export default function PricingWorksheetPageOrchestrator({
 
   async function handleCreateRow() {
     const created = await persistence.createRowRecord()
-    if (created) worksheet.appendRow(created)
+    if (created) {
+      worksheet.appendRow(created)
+      if (!isMobile) {
+        worksheet.setActiveCell({ rowId: created.id, field: 'description_snapshot' })
+        worksheet.setActiveDraft(created.description_snapshot)
+      }
+    }
   }
 
   if (persistence.loading) return <LoadingState />
@@ -139,7 +145,8 @@ export default function PricingWorksheetPageOrchestrator({
 
       <PricingWorksheetNewRowBar
         canManage={!!persistence.access?.canManage}
-        newCatalogSku=""
+        catalogItems={persistence.catalogItems}
+        newCatalogSku={persistence.newCatalogSku}
         newDescription={persistence.newDescription}
         newVendorSku={persistence.newVendorSku}
         newUnit={persistence.newUnit}
@@ -147,7 +154,7 @@ export default function PricingWorksheetPageOrchestrator({
         newLeadDays={persistence.newLeadDays}
         newNotes={persistence.newNotes}
         creatingRow={persistence.creatingRow}
-        onCatalogSkuChange={() => {}}
+        onCatalogSkuChange={persistence.applyCatalogDefaults}
         onDescriptionChange={persistence.setNewDescription}
         onVendorSkuChange={persistence.setNewVendorSku}
         onUnitChange={persistence.setNewUnit}
