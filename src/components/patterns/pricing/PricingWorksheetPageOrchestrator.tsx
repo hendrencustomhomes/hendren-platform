@@ -12,11 +12,33 @@ import { PricingWorksheetTableAdapter } from './PricingWorksheetTableAdapter'
 import { usePricingWorksheetPersistence } from './_hooks/usePricingWorksheetPersistence'
 import { usePricingWorksheetState } from './_hooks/usePricingWorksheetState'
 
-export default function PricingWorksheetPageOrchestrator(props: any) {
-  const { headerId, backHref, detailBasePath, navFallbackTitle, missingLabel, permissionRowKey } = props
+type Props = {
+  headerId: string
+  backHref: string
+  detailBasePath: string
+  navFallbackTitle: string
+  missingLabel: string
+  permissionRowKey: 'pricing_sources' | 'bids'
+}
 
-  const persistence = usePricingWorksheetPersistence({ headerId, detailBasePath, missingLabel, permissionRowKey })
-  const worksheet = usePricingWorksheetState({ initialRows: persistence.loadedRows, onPersistRow: persistence.persistRow })
+export default function PricingWorksheetPageOrchestrator({
+  headerId,
+  backHref,
+  detailBasePath,
+  navFallbackTitle,
+  missingLabel,
+  permissionRowKey,
+}: Props) {
+  const persistence = usePricingWorksheetPersistence({
+    headerId,
+    detailBasePath,
+    missingLabel,
+    permissionRowKey,
+  })
+  const worksheet = usePricingWorksheetState({
+    initialRows: persistence.loadedRows,
+    onPersistRow: persistence.persistRow,
+  })
 
   const [isMobile, setIsMobile] = useState(false)
 
@@ -29,14 +51,47 @@ export default function PricingWorksheetPageOrchestrator(props: any) {
     return () => mq.removeEventListener('change', update)
   }, [])
 
-  function handleNewRowKeyDown(e: ReactKeyboardEvent<HTMLInputElement | HTMLSelectElement>, onCommit?: () => void) {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      e.preventDefault()
+  const companyName = useMemo(() => {
+    const map = new Map(persistence.companies.map((company) => [company.id, company.company_name]))
+    return persistence.header ? map.get(persistence.header.company_id) : undefined
+  }, [persistence.companies, persistence.header])
+
+  const tradeName = useMemo(() => {
+    const map = new Map(persistence.trades.map((trade) => [trade.id, trade.name]))
+    return persistence.header ? map.get(persistence.header.trade_id) : undefined
+  }, [persistence.trades, persistence.header])
+
+  const costCodeLabel = useMemo(() => {
+    const map = new Map(
+      persistence.costCodes.map((costCode) => [costCode.id, `${costCode.cost_code} · ${costCode.title}`])
+    )
+    return persistence.header ? map.get(persistence.header.cost_code_id) : undefined
+  }, [persistence.costCodes, persistence.header])
+
+  const costCodeMap = useMemo(
+    () => new Map(persistence.costCodes.map((costCode) => [costCode.id, `${costCode.cost_code} · ${costCode.title}`])),
+    [persistence.costCodes]
+  )
+
+  function getRowStatusLabel(rowId: string) {
+    const state = worksheet.rowSaveState[rowId] ?? 'idle'
+    if (state === 'saving') return { text: 'Saving…', tone: 'default' as const }
+    if (state === 'dirty') return { text: 'Queued', tone: 'warning' as const }
+    if (state === 'error') return { text: 'Failed', tone: 'danger' as const }
+    return { text: 'Ready', tone: 'active' as const }
+  }
+
+  function handleNewRowKeyDown(
+    event: ReactKeyboardEvent<HTMLInputElement | HTMLSelectElement>,
+    onCommit?: () => void
+  ) {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault()
       onCommit?.()
       return
     }
-    if (e.key === 'Enter' && onCommit) {
-      e.preventDefault()
+    if (event.key === 'Enter' && onCommit) {
+      event.preventDefault()
       onCommit()
     }
   }
@@ -47,16 +102,17 @@ export default function PricingWorksheetPageOrchestrator(props: any) {
   }
 
   if (persistence.loading) return <LoadingState />
-  if (persistence.error) return <ErrorMessage message={persistence.error} />
-  if (!persistence.header) return <ErrorMessage message={`Missing ${missingLabel}.`} />
-
-  const costCodeMap = new Map(persistence.costCodes.map((c) => [c.id, `${c.cost_code} · ${c.title}`]))
+  if (persistence.error) return <ErrorMessage error={persistence.error} />
+  if (!persistence.header) return <ErrorMessage error={`Missing ${missingLabel}.`} />
 
   return (
     <PageShell title={persistence.header.title || navFallbackTitle} backHref={backHref}>
       <PricingWorksheetHeader
         header={persistence.header}
         missingLabel={missingLabel}
+        companyName={companyName}
+        tradeName={tradeName}
+        costCodeLabel={costCodeLabel}
         canManage={!!persistence.access?.canManage}
         savingHeader={persistence.savingHeader}
         creatingRevision={persistence.creatingRevision}
@@ -103,7 +159,7 @@ export default function PricingWorksheetPageOrchestrator(props: any) {
       />
 
       {isMobile ? (
-        <PricingWorksheetMobileList rows={worksheet.localRows} rowSaveState={worksheet.rowSaveState} />
+        <PricingWorksheetMobileList rows={worksheet.localRows} getRowStatusLabel={getRowStatusLabel} />
       ) : (
         <PricingWorksheetTableAdapter
           rows={worksheet.localRows}
