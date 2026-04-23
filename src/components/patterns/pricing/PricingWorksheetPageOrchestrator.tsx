@@ -177,6 +177,7 @@ export default function PricingWorksheetPageOrchestrator({
           setActiveDraft={worksheet.setActiveDraft}
           commitCellValue={worksheet.commitCellValue}
           handleUndo={worksheet.handleUndo}
+          onCreateRow={handleCreateRow}
           canManage={!!persistence.access?.canManage}
           costCodeMap={costCodeMap}
         />
