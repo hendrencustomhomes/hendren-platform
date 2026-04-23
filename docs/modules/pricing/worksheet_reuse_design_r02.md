@@ -3,25 +3,23 @@
 Status: active design/control document
 Last updated: 2026-04-22 America/Chicago
 Branch target: `dev`
-Purpose: update the worksheet-reuse design after pricing successfully cut over to the orchestrated worksheet stack, while preserving discipline around what is truly reusable versus what is still pricing-local.
+Supersedes: prior worksheet reuse design revisions
+Purpose: define the worksheet-reuse design after pricing successfully cut over to the orchestrated worksheet stack, while preserving discipline around what is truly reusable versus what is still pricing-local.
 
 ---
 
-## 1. Why this revision exists
+## 1. Why this document exists
 
-R01 was written while pricing was still in a transitional state.
-At that time, the live worksheet had been moved back to the legacy page for safety and the new stack was still a parked path undergoing parity work.
-
-That is no longer the repo reality.
+This document exists because pricing is no longer in the transitional state described by earlier worksheet-reuse revisions.
 
 Pricing has now been cut over live to the orchestrated worksheet stack and the branch is green.
-That means this document must now shift from:
+That means this document must stand on its own as the current design/control source for worksheet reuse.
 
-- “how to get safely to cutover”
+It should answer a simple question for future chats:
 
-to:
-
-- “how to use pricing as the active reference implementation without overstating system-wide reuse”
+- what does pricing now prove?
+- what still is not proven for cross-module worksheet reuse?
+- what should happen next?
 
 ---
 
@@ -38,7 +36,7 @@ The repo now has a working live worksheet stack in pricing that includes:
 - thin orchestrated composition layer
 - live wrapper routing through the orchestrated stack
 
-This means worksheet centralization is no longer theoretical in pricing.
+Worksheet centralization is no longer theoretical in pricing.
 
 ### 2.2 What is still not proven
 
@@ -170,7 +168,7 @@ Pricing business rules still belong in pricing-local files.
 
 ### Rule 5 — clean up the reference implementation before adding the second adopter
 
-Pricing should be clarified and cleaned enough that future adoption copies the architecture, not the transitional mess.
+Pricing should be clarified and cleaned enough that future adoption copies the architecture, not transitional clutter.
 
 ---
 
@@ -214,20 +212,19 @@ Until then, the system is improved and live — but not fully generalized.
 
 ---
 
-## 9. What future chats should read
+## 9. Read-first rule for future chats
 
-While this active task continues, future chats should reference:
+Future chats should use the **latest docs only** as operating context.
+
+Read first:
 
 1. `docs/design/module_structure`
-2. `docs/design/module_design_strategy_r01.md`
-3. `docs/design/module_design_strategy_r02.md`
-4. `docs/modules/pricing/cleanup_plan_r01.md`
-5. `docs/modules/pricing/cleanup_plan_r02.md`
-6. `docs/modules/pricing/cleanup_plan_r03.md`
-7. `docs/modules/pricing/worksheet_reuse_design_r02.md`
-8. `docs/modules/pricing/worksheet_centralization_handoff_r02.md`
+2. `docs/design/module_design_strategy_r02.md`
+3. `docs/modules/pricing/cleanup_plan_r03.md`
+4. `docs/modules/pricing/worksheet_reuse_design_r02.md`
+5. `docs/modules/pricing/worksheet_centralization_handoff_r02.md`
 
-This document should now replace R01 as the primary worksheet-reuse design/control doc for the pricing task.
+Older revisions should only be used if a future audit specifically needs history comparison or regression checking.
 
 ---
 
@@ -237,7 +234,7 @@ When future chats resume this task, they should explicitly answer these before m
 
 1. Is `dev` green right now?
 2. Is the live pricing wrapper still on the orchestrated stack?
-3. Is the next change reducing cleanup ambiguity, improving shared extraction, or just adding more structure without removing any?
+3. Is the next change reducing cleanup ambiguity, improving shared extraction, or just adding more structure without removing ambiguity?
 
 If the answer to question 3 is “adding more structure without removing ambiguity,” stop and redesign before coding.
 
