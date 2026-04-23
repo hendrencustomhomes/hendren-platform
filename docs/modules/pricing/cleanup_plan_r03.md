@@ -3,23 +3,24 @@
 Status: active cleanup plan
 Last updated: 2026-04-22 America/Chicago
 Branch target: `dev`
+Supersedes: prior pricing cleanup plan revisions
 Purpose: record the pricing worksheet state after successful live cutover to the orchestrated worksheet stack, and define the next cleanup sequence without reopening solved parity work casually.
 
 ---
 
-## 1. Why this revision exists
+## 1. Why this document exists
 
-R02 was the control document for getting through worksheet centralization Slice 3 without leaving the repo in a broken hybrid state.
+The pricing worksheet is no longer in the same state described by earlier cleanup-plan revisions.
 
-That phase has now materially advanced.
+The pricing worksheet has now been cut over live to the orchestrated stack, and the build is green.
+That means future chats should not operate from any pre-cutover assumptions.
 
-The pricing worksheet has been cut over live to the orchestrated stack, and the build is green.
-That means the repo is no longer in the same “adapter missing / page still overloaded / grid still active” state described in R02.
-
-This revision exists to prevent future chats from doing one of two bad things:
+This document exists to prevent future chats from doing either of these:
 
 - acting like worksheet centralization is still stuck before cutover
-- acting like all cleanup is done and immediately jumping into a second-module rollout without finishing pricing cleanup properly
+- acting like cleanup is already finished and immediately jumping into second-module rollout
+
+This document is intended to stand on its own as the active cleanup plan.
 
 ---
 
@@ -53,7 +54,7 @@ During the parity passes, the pricing worksheet regained:
 - catalog-linked row creation flow
 - `Ctrl/Cmd+Enter` create-row behavior from worksheet cells
 
-That means future chats should treat the current pricing worksheet stack as the active reference implementation, not as an experimental parked path.
+Future chats should treat the current pricing worksheet stack as the active reference implementation, not as a parked experimental path.
 
 ### 2.3 What is still not complete
 
@@ -63,7 +64,7 @@ Remaining work includes:
 
 - removing dead old-path usage deliberately
 - deciding what parts of worksheet interaction belong in a truly shared worksheet layer instead of pricing-local adapter/state code
-- validating whether the legacy monolithic page should remain temporarily as rollback reference or be removed now
+- deciding whether the legacy monolithic page should remain temporarily as rollback reference or be removed now
 - deciding when another module is mature enough to adopt the worksheet stack
 
 So the current repo state is:
@@ -87,7 +88,7 @@ These should not be reopened casually.
 The worksheet architecture is no longer theoretical.
 Pricing is the live proving ground.
 
-That means future chats should not route the live pricing wrapper back to the old page unless a concrete regression forces rollback.
+Future chats should not route the live pricing wrapper back to the old page unless a concrete regression forces rollback.
 
 ### 3.2 Shared UI still must not own pricing business logic
 
@@ -196,8 +197,6 @@ The following are no longer the primary problem:
 - live pricing still trapped on the monolithic page
 - cutover blocked by parity basics
 
-Those problems were the R02 phase.
-
 ---
 
 ## 7. Definition of done for the next cleanup phase
@@ -227,9 +226,25 @@ Do not rush that sequence.
 
 ---
 
-## 9. Final directive
+## 9. Read-first rule for future chats
 
-R03 is the active cleanup control document for pricing after live worksheet cutover.
+Future chats should use the **latest docs only** as operating context.
+
+Read first:
+
+1. `docs/design/module_structure`
+2. `docs/design/module_design_strategy_r02.md`
+3. `docs/modules/pricing/cleanup_plan_r03.md`
+4. `docs/modules/pricing/worksheet_reuse_design_r02.md`
+5. `docs/modules/pricing/worksheet_centralization_handoff_r02.md`
+
+Older revisions should only be used if a future audit specifically needs history comparison or regression checking.
+
+---
+
+## 10. Final directive
+
+This is the active cleanup control document for pricing after live worksheet cutover.
 
 Future chats should treat the orchestrated pricing stack as the active path,
 keep `dev` green,
