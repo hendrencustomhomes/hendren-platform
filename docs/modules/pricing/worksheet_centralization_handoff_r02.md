@@ -1,5 +1,8 @@
 # Worksheet Centralization — Handoff (R02)
 
+Status: active handoff
+Supersedes: prior worksheet centralization handoff revisions
+
 ## Status
 
 - build green
@@ -60,13 +63,15 @@ Post-cutover cleanup and reference-implementation tightening.
 
 ## Read first in future chats
 
+Use the **latest docs only** as operating context:
+
 1. `docs/design/module_structure`
-2. `docs/design/module_design_strategy_r01.md`
-3. `docs/design/module_design_strategy_r02.md`
-4. `docs/modules/pricing/cleanup_plan_r02.md`
-5. `docs/modules/pricing/cleanup_plan_r03.md`
-6. `docs/modules/pricing/worksheet_reuse_design_r02.md`
-7. `docs/modules/pricing/worksheet_centralization_handoff_r02.md`
+2. `docs/design/module_design_strategy_r02.md`
+3. `docs/modules/pricing/cleanup_plan_r03.md`
+4. `docs/modules/pricing/worksheet_reuse_design_r02.md`
+5. `docs/modules/pricing/worksheet_centralization_handoff_r02.md`
+
+Older revisions should only be used if a future audit specifically needs history comparison or regression checking.
 
 ## Final note
 
