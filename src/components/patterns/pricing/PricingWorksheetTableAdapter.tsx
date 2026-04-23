@@ -65,6 +65,7 @@ export function PricingWorksheetTableAdapter({
   setActiveDraft,
   commitCellValue,
   handleUndo,
+  onCreateRow,
   canManage,
   costCodeMap,
 }: {
@@ -76,6 +77,7 @@ export function PricingWorksheetTableAdapter({
   setActiveDraft: Dispatch<SetStateAction<CellDraftValue>>
   commitCellValue: (rowId: string, field: PricingWorksheetEditableCellKey, value: string | boolean) => void
   handleUndo: () => void
+  onCreateRow: () => void | Promise<unknown>
   canManage: boolean
   costCodeMap: Map<string, string>
 }) {
@@ -300,6 +302,13 @@ export function PricingWorksheetTableAdapter({
       return
     }
 
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault()
+      commitActiveCell()
+      void onCreateRow()
+      return
+    }
+
     if (event.key === 'Escape') {
       event.preventDefault()
       abandonActiveCellDraft()
@@ -388,6 +397,11 @@ export function PricingWorksheetTableAdapter({
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
           event.preventDefault()
           handleUndo()
+          return
+        }
+        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+          event.preventDefault()
+          void onCreateRow()
           return
         }
         if (event.key === 'Tab') {
