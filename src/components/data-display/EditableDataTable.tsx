@@ -3,6 +3,7 @@
 import type {
   Dispatch,
   HTMLInputTypeAttribute,
+  InputHTMLAttributes,
   KeyboardEvent as ReactKeyboardEvent,
   MutableRefObject,
   SetStateAction,
@@ -31,7 +32,7 @@ export type EditableDataTableColumn<Row> = {
   kind: 'static' | 'text' | 'textarea' | 'checkbox'
   width?: string
   editable?: boolean
-  inputMode?: HTMLInputElement['inputMode']
+  inputMode?: InputHTMLAttributes<HTMLInputElement>['inputMode']
   inputType?: HTMLInputTypeAttribute
   textAreaRows?: number
   getValue?: (row: Row) => string | boolean | null | undefined
