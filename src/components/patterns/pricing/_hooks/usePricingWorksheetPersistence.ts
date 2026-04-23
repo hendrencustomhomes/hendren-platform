@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getCurrentPricingAccess } from '@/app/actions/pricing-access-actions'
 import { createClient } from '@/utils/supabase/client'
@@ -68,12 +68,15 @@ export function usePricingWorksheetPersistence({
   const [headerNotes, setHeaderNotes] = useState('')
   const [headerIsActive, setHeaderIsActive] = useState(true)
 
+  const [newCatalogSku, setNewCatalogSku] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const [newVendorSku, setNewVendorSku] = useState('')
   const [newUnit, setNewUnit] = useState('')
   const [newUnitPrice, setNewUnitPrice] = useState('')
   const [newLeadDays, setNewLeadDays] = useState('')
   const [newNotes, setNewNotes] = useState('')
+
+  const catalogMap = useMemo(() => new Map(catalogItems.map((item) => [item.catalog_sku, item])), [catalogItems])
 
   async function loadPage() {
     if (!headerId) return
@@ -133,6 +136,14 @@ export function usePricingWorksheetPersistence({
     void initialize()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headerId, permissionRowKey])
+
+  function applyCatalogDefaults(catalogSku: string) {
+    setNewCatalogSku(catalogSku)
+    const item = catalogMap.get(catalogSku)
+    if (!item) return
+    setNewDescription(item.title)
+    setNewUnit(item.default_unit ?? '')
+  }
 
   async function persistRow(rowId: string, patch: UpdatePricingRowPatch) {
     return updatePricingRow(supabase, rowId, patch)
@@ -207,7 +218,7 @@ export function usePricingWorksheetPersistence({
     try {
       const created = await createPricingRow(supabase, {
         pricing_header_id: header.id,
-        catalog_sku: null,
+        catalog_sku: newCatalogSku || null,
         description_snapshot: newDescription,
         vendor_sku: newVendorSku || null,
         unit: newUnit || null,
@@ -216,6 +227,7 @@ export function usePricingWorksheetPersistence({
         notes: newNotes || null,
       })
 
+      setNewCatalogSku('')
       setNewDescription('')
       setNewVendorSku('')
       setNewUnit('')
@@ -256,12 +268,15 @@ export function usePricingWorksheetPersistence({
     setHeaderEffectiveDate,
     setHeaderNotes,
     setHeaderIsActive,
+    newCatalogSku,
     newDescription,
     newVendorSku,
     newUnit,
     newUnitPrice,
     newLeadDays,
     newNotes,
+    setNewCatalogSku,
+    applyCatalogDefaults,
     setNewDescription,
     setNewVendorSku,
     setNewUnit,
