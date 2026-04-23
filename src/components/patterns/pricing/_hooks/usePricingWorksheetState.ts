@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { PricingRow } from '@/lib/pricing/types'
-import type { UpdatePricingRowPatch } from '@/lib/pricing/types'
+import type { PricingRow, UpdatePricingRowPatch } from '@/lib/pricing/types'
 
 const editableCellOrder = [
   'description_snapshot',
@@ -37,6 +36,10 @@ function parseNullableNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function cloneRow(row: PricingRow): PricingRow {
+  return { ...row }
+}
+
 function applyEditableCellValue(
   row: PricingRow,
   field: EditableCellKey,
@@ -68,7 +71,9 @@ function applyEditableCellValue(
   }
 }
 
-function areEqual(a: PricingRow, b: PricingRow) {
+function areEqual(a: PricingRow | null | undefined, b: PricingRow | null | undefined) {
+  if (!a || !b) return false
+
   return (
     a.description_snapshot === b.description_snapshot &&
     (a.vendor_sku ?? null) === (b.vendor_sku ?? null) &&
@@ -95,33 +100,88 @@ export function usePricingWorksheetState({
   const [activeCell, setActiveCell] = useState<ActiveCell | null>(null)
   const [activeDraft, setActiveDraft] = useState<CellDraftValue | null>(null)
 
+  const localRowsRef = useRef<PricingRow[]>([])
+  const serverRowsRef = useRef<PricingRow[]>([])
+  const activeCellRef = useRef<ActiveCell | null>(null)
+  const activeDraftRef = useRef<CellDraftValue | null>(null)
   const saveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const savingRowsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
+    localRowsRef.current = localRows
+  }, [localRows])
+
+  useEffect(() => {
+    serverRowsRef.current = serverRows
+  }, [serverRows])
+
+  useEffect(() => {
+    activeCellRef.current = activeCell
+  }, [activeCell])
+
+  useEffect(() => {
+    activeDraftRef.current = activeDraft
+  }, [activeDraft])
+
+  useEffect(() => {
+    return () => {
+      Object.values(saveTimersRef.current).forEach((timer) => clearTimeout(timer))
+    }
+  }, [])
+
+  useEffect(() => {
+    Object.values(saveTimersRef.current).forEach((timer) => clearTimeout(timer))
+    saveTimersRef.current = {}
+    savingRowsRef.current = new Set()
     setLocalRows(initialRows)
     setServerRows(initialRows)
-    setRowSaveState(Object.fromEntries(initialRows.map((r) => [r.id, 'idle'])))
+    localRowsRef.current = initialRows
+    serverRowsRef.current = initialRows
+    setRowSaveState(Object.fromEntries(initialRows.map((r) => [r.id, 'idle' as RowSaveState])))
+    setUndoStack([])
+    setActiveCell(null)
+    setActiveDraft(null)
+    activeCellRef.current = null
+    activeDraftRef.current = null
   }, [initialRows])
 
+  function setLocalRowsSync(nextRows: PricingRow[]) {
+    localRowsRef.current = nextRows
+    setLocalRows(nextRows)
+  }
+
+  function setServerRowsSync(nextRows: PricingRow[]) {
+    serverRowsRef.current = nextRows
+    setServerRows(nextRows)
+  }
+
   function replaceLocalRow(rowId: string, nextRow: PricingRow) {
-    setLocalRows((rows) => rows.map((r) => (r.id === rowId ? nextRow : r)))
+    const nextRows = localRowsRef.current.map((row) => (row.id === rowId ? nextRow : row))
+    setLocalRowsSync(nextRows)
   }
 
   function replaceServerRow(rowId: string, nextRow: PricingRow) {
-    setServerRows((rows) => rows.map((r) => (r.id === rowId ? nextRow : r)))
+    const nextRows = serverRowsRef.current.map((row) => (row.id === rowId ? nextRow : row))
+    setServerRowsSync(nextRows)
   }
 
   function getLocalRow(rowId: string) {
-    return localRows.find((r) => r.id === rowId)
+    return localRowsRef.current.find((r) => r.id === rowId) ?? null
   }
 
   function getServerRow(rowId: string) {
-    return serverRows.find((r) => r.id === rowId)
+    return serverRowsRef.current.find((r) => r.id === rowId) ?? null
   }
 
   function setRowState(rowId: string, state: RowSaveState) {
     setRowSaveState((prev) => ({ ...prev, [rowId]: state }))
+  }
+
+  function syncRowStateFromRows(rowId: string, row?: PricingRow | null) {
+    const localRow = row ?? getLocalRow(rowId)
+    const serverRow = getServerRow(rowId)
+    if (!localRow || !serverRow) return
+    setRowState(rowId, areEqual(localRow, serverRow) ? 'idle' : 'dirty')
   }
 
   async function flushRow(rowId: string) {
@@ -136,23 +196,35 @@ export function usePricingWorksheetState({
       return
     }
 
+    const requestRow = cloneRow(local)
     savingRowsRef.current.add(rowId)
     setRowState(rowId, 'saving')
 
     try {
       const updated = await onPersistRow(rowId, {
-        description_snapshot: local.description_snapshot,
-        vendor_sku: local.vendor_sku,
-        unit: local.unit,
-        unit_price: local.unit_price,
-        lead_days: local.lead_days,
-        notes: local.notes,
-        is_active: local.is_active,
+        description_snapshot: requestRow.description_snapshot,
+        vendor_sku: requestRow.vendor_sku,
+        unit: requestRow.unit,
+        unit_price: requestRow.unit_price,
+        lead_days: requestRow.lead_days,
+        notes: requestRow.notes,
+        is_active: requestRow.is_active,
       })
 
       replaceServerRow(rowId, updated)
-      replaceLocalRow(rowId, updated)
-      setRowState(rowId, 'idle')
+
+      const latestLocalRow = getLocalRow(rowId)
+      if (latestLocalRow && areEqual(latestLocalRow, requestRow)) {
+        replaceLocalRow(rowId, updated)
+      }
+
+      const refreshedLocalRow = getLocalRow(rowId)
+      if (refreshedLocalRow && !areEqual(refreshedLocalRow, updated)) {
+        setRowState(rowId, 'dirty')
+        scheduleFlush(rowId, 220)
+      } else {
+        setRowState(rowId, 'idle')
+      }
     } catch {
       setRowState(rowId, 'error')
     } finally {
@@ -160,9 +232,11 @@ export function usePricingWorksheetState({
     }
   }
 
-  function scheduleFlush(rowId: string, delay = 600) {
+  function scheduleFlush(rowId: string, delay = 650) {
     if (saveTimersRef.current[rowId]) clearTimeout(saveTimersRef.current[rowId])
-    saveTimersRef.current[rowId] = setTimeout(() => flushRow(rowId), delay)
+    saveTimersRef.current[rowId] = setTimeout(() => {
+      void flushRow(rowId)
+    }, delay)
   }
 
   function commitCellValue(rowId: string, field: EditableCellKey, value: CellDraftValue) {
@@ -170,13 +244,20 @@ export function usePricingWorksheetState({
     if (!row) return
 
     const next = applyEditableCellValue(row, field, value)
-    if (areEqual(row, next)) return
+    if (areEqual(row, next)) return row
 
     replaceLocalRow(rowId, next)
-    setUndoStack((u) => [...u.slice(-39), { rowId, previousRow: row, nextRow: next }])
+    setUndoStack((u) => [...u.slice(-39), { rowId, previousRow: cloneRow(row), nextRow: cloneRow(next) }])
 
-    setRowState(rowId, 'dirty')
+    if (activeCellRef.current?.rowId === rowId && activeCellRef.current.field === field) {
+      const nextDraft = next[field] as unknown as CellDraftValue
+      setActiveDraft(nextDraft)
+      activeDraftRef.current = nextDraft
+    }
+
+    syncRowStateFromRows(rowId, next)
     scheduleFlush(rowId)
+    return next
   }
 
   function handleUndo() {
@@ -184,17 +265,26 @@ export function usePricingWorksheetState({
       const last = stack[stack.length - 1]
       if (!last) return stack
 
-      replaceLocalRow(last.rowId, last.previousRow)
-      setRowState(last.rowId, 'dirty')
-      scheduleFlush(last.rowId, 100)
+      replaceLocalRow(last.rowId, cloneRow(last.previousRow))
+      syncRowStateFromRows(last.rowId, last.previousRow)
+      scheduleFlush(last.rowId, 120)
+
+      const currentActiveCell = activeCellRef.current
+      if (currentActiveCell?.rowId === last.rowId) {
+        const restoredValue = last.previousRow[currentActiveCell.field] as unknown as CellDraftValue
+        setActiveDraft(restoredValue)
+        activeDraftRef.current = restoredValue
+      }
 
       return stack.slice(0, -1)
     })
   }
 
   function appendRow(row: PricingRow) {
-    setLocalRows((r) => [...r, row])
-    setServerRows((r) => [...r, row])
+    const nextLocalRows = [...localRowsRef.current, row]
+    const nextServerRows = [...serverRowsRef.current, row]
+    setLocalRowsSync(nextLocalRows)
+    setServerRowsSync(nextServerRows)
     setRowState(row.id, 'idle')
   }
 
@@ -202,9 +292,9 @@ export function usePricingWorksheetState({
     return localRows.reduce(
       (acc, row) => {
         const s = rowSaveState[row.id] || 'idle'
-        if (s === 'saving') acc.saving++
-        if (s === 'dirty') acc.dirty++
-        if (s === 'error') acc.error++
+        if (s === 'saving') acc.saving += 1
+        if (s === 'dirty') acc.dirty += 1
+        if (s === 'error') acc.error += 1
         return acc
       },
       { saving: 0, dirty: 0, error: 0 }
