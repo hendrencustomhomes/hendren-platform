@@ -58,10 +58,9 @@ type Props = {
 
 const cellInputStyle = {
   width: '100%',
-  background: 'var(--background)',
-  border: '1px solid var(--border)',
-  borderRadius: '8px',
-  padding: '8px 10px',
+  background: 'transparent',
+  border: 'none',
+  padding: '6px 8px',
   color: 'var(--text)',
   fontSize: '13px',
   outline: 'none',
@@ -75,10 +74,43 @@ const fieldsetResetStyle = {
   minWidth: 0,
 } as const
 
+const tableCellStyle = {
+  border: '1px solid var(--border)',
+  padding: 0,
+  verticalAlign: 'middle' as const,
+  background: 'var(--surface)',
+} as const
+
+const headerCellStyle = {
+  border: '1px solid var(--border)',
+  textAlign: 'left' as const,
+  fontSize: '11px',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '.04em',
+  color: 'var(--text-muted)',
+  padding: '8px',
+  whiteSpace: 'nowrap' as const,
+  position: 'sticky' as const,
+  top: 0,
+  background: 'var(--surface)',
+  zIndex: 1,
+} as const
+
+const staticCellStyle = {
+  padding: '8px',
+  fontSize: '13px',
+  whiteSpace: 'nowrap' as const,
+} as const
+
 const virtualMaxBodyHeight = 560
 
 function getCellDomKey(rowId: string, field: EditableCellKey) {
   return `${rowId}:${field}`
+}
+
+function isFullySelected(element: HTMLInputElement | HTMLTextAreaElement) {
+  const valueLength = element.value.length
+  return (element.selectionStart ?? 0) === 0 && (element.selectionEnd ?? 0) === valueLength
 }
 
 export function PricingWorksheetGrid({
@@ -121,7 +153,7 @@ export function PricingWorksheetGrid({
               <tr>
                 {[
                   'Source SKU',
-                  'Catalog SKU',
+                  'Catalog',
                   'Description',
                   'Vendor SKU',
                   'Unit',
@@ -131,23 +163,7 @@ export function PricingWorksheetGrid({
                   'Notes',
                   'Cost Code',
                 ].map((label) => (
-                  <th
-                    key={label}
-                    style={{
-                      textAlign: 'left',
-                      fontSize: '11px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '.04em',
-                      color: 'var(--text-muted)',
-                      padding: '12px 14px',
-                      borderBottom: '1px solid var(--border)',
-                      whiteSpace: 'nowrap',
-                      position: shouldVirtualize ? 'sticky' : 'static',
-                      top: 0,
-                      background: 'var(--surface)',
-                      zIndex: 1,
-                    }}
-                  >
+                  <th key={label} style={headerCellStyle}>
                     {label}
                   </th>
                 ))}
@@ -158,11 +174,7 @@ export function PricingWorksheetGrid({
                 <tr aria-hidden="true">
                   <td
                     colSpan={10}
-                    style={{
-                      padding: 0,
-                      height: `${desktopVisibleRange.topSpacerHeight}px`,
-                      borderBottom: 'none',
-                    }}
+                    style={{ padding: 0, height: `${desktopVisibleRange.topSpacerHeight}px`, border: 'none' }}
                   />
                 </tr>
               ) : null}
@@ -170,19 +182,12 @@ export function PricingWorksheetGrid({
               {desktopVisibleRange.rows.map((row) => {
                 const rowStatus = getRowStatusLabel(row.id)
                 return (
-                  <tr key={row.id} style={{ height: '70px' }}>
-                    <td
-                      style={{
-                        padding: '12px 14px',
-                        borderBottom: '1px solid var(--border)',
-                        fontSize: '13px',
-                        whiteSpace: 'nowrap',
-                        verticalAlign: 'middle',
-                      }}
-                    >
-                      <div style={{ fontWeight: 700 }}>{row.source_sku}</div>
+                  <tr key={row.id} style={{ height: '52px' }}>
+                    <td style={tableCellStyle}>
+                      <div style={{ ...staticCellStyle, fontWeight: 700 }}>{row.source_sku}</div>
                       <div
                         style={{
+                          padding: '0 8px 8px',
                           fontSize: '11px',
                           color: rowStatus.tone === 'danger' ? '#fca5a5' : 'var(--text-muted)',
                         }}
@@ -190,18 +195,10 @@ export function PricingWorksheetGrid({
                         {rowStatus.text}
                       </div>
                     </td>
-                    <td
-                      style={{
-                        padding: '12px 14px',
-                        borderBottom: '1px solid var(--border)',
-                        fontSize: '13px',
-                        whiteSpace: 'nowrap',
-                        verticalAlign: 'middle',
-                      }}
-                    >
-                      {row.catalog_sku}
+                    <td style={tableCellStyle}>
+                      <div style={staticCellStyle}>{row.catalog_sku || 'Not Linked'}</div>
                     </td>
-                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
+                    <td style={tableCellStyle}>
                       <input
                         ref={(element) => {
                           cellRefs.current[getCellDomKey(row.id, 'description_snapshot')] = element
@@ -210,11 +207,14 @@ export function PricingWorksheetGrid({
                         onFocus={(e) => onTextCellFocus(row.id, 'description_snapshot', e.currentTarget)}
                         onChange={(e) => onTextCellDraftChange(e.target.value)}
                         onBlur={() => onTextCellBlur(row.id, 'description_snapshot')}
-                        onKeyDown={(e) => onTextCellKeyDown(e, row.id, 'description_snapshot')}
+                        onKeyDown={(e) => {
+                          if (e.key.startsWith('Arrow') && isFullySelected(e.currentTarget)) return
+                          onTextCellKeyDown(e, row.id, 'description_snapshot')
+                        }}
                         style={cellInputStyle}
                       />
                     </td>
-                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
+                    <td style={tableCellStyle}>
                       <input
                         ref={(element) => {
                           cellRefs.current[getCellDomKey(row.id, 'vendor_sku')] = element
@@ -223,11 +223,14 @@ export function PricingWorksheetGrid({
                         onFocus={(e) => onTextCellFocus(row.id, 'vendor_sku', e.currentTarget)}
                         onChange={(e) => onTextCellDraftChange(e.target.value)}
                         onBlur={() => onTextCellBlur(row.id, 'vendor_sku')}
-                        onKeyDown={(e) => onTextCellKeyDown(e, row.id, 'vendor_sku')}
+                        onKeyDown={(e) => {
+                          if (e.key.startsWith('Arrow') && isFullySelected(e.currentTarget)) return
+                          onTextCellKeyDown(e, row.id, 'vendor_sku')
+                        }}
                         style={cellInputStyle}
                       />
                     </td>
-                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
+                    <td style={tableCellStyle}>
                       <input
                         ref={(element) => {
                           cellRefs.current[getCellDomKey(row.id, 'unit')] = element
@@ -236,11 +239,14 @@ export function PricingWorksheetGrid({
                         onFocus={(e) => onTextCellFocus(row.id, 'unit', e.currentTarget)}
                         onChange={(e) => onTextCellDraftChange(e.target.value)}
                         onBlur={() => onTextCellBlur(row.id, 'unit')}
-                        onKeyDown={(e) => onTextCellKeyDown(e, row.id, 'unit')}
+                        onKeyDown={(e) => {
+                          if (e.key.startsWith('Arrow') && isFullySelected(e.currentTarget)) return
+                          onTextCellKeyDown(e, row.id, 'unit')
+                        }}
                         style={cellInputStyle}
                       />
                     </td>
-                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
+                    <td style={tableCellStyle}>
                       <input
                         ref={(element) => {
                           cellRefs.current[getCellDomKey(row.id, 'unit_price')] = element
@@ -255,12 +261,15 @@ export function PricingWorksheetGrid({
                         onFocus={(e) => onTextCellFocus(row.id, 'unit_price', e.currentTarget)}
                         onChange={(e) => onTextCellDraftChange(e.target.value)}
                         onBlur={() => onTextCellBlur(row.id, 'unit_price')}
-                        onKeyDown={(e) => onTextCellKeyDown(e, row.id, 'unit_price')}
+                        onKeyDown={(e) => {
+                          if (e.key.startsWith('Arrow') && isFullySelected(e.currentTarget)) return
+                          onTextCellKeyDown(e, row.id, 'unit_price')
+                        }}
                         inputMode="decimal"
                         style={cellInputStyle}
                       />
                     </td>
-                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
+                    <td style={tableCellStyle}>
                       <input
                         ref={(element) => {
                           cellRefs.current[getCellDomKey(row.id, 'lead_days')] = element
@@ -269,13 +278,16 @@ export function PricingWorksheetGrid({
                         onFocus={(e) => onTextCellFocus(row.id, 'lead_days', e.currentTarget)}
                         onChange={(e) => onTextCellDraftChange(e.target.value)}
                         onBlur={() => onTextCellBlur(row.id, 'lead_days')}
-                        onKeyDown={(e) => onTextCellKeyDown(e, row.id, 'lead_days')}
+                        onKeyDown={(e) => {
+                          if (e.key.startsWith('Arrow') && isFullySelected(e.currentTarget)) return
+                          onTextCellKeyDown(e, row.id, 'lead_days')
+                        }}
                         inputMode="numeric"
                         style={cellInputStyle}
                       />
                     </td>
-                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
-                      <label style={{ display: 'flex', justifyContent: 'center', cursor: 'pointer' }}>
+                    <td style={tableCellStyle}>
+                      <label style={{ display: 'flex', justifyContent: 'center', padding: '8px', cursor: 'pointer' }}>
                         <input
                           ref={(element) => {
                             cellRefs.current[getCellDomKey(row.id, 'is_active')] = element
@@ -290,7 +302,7 @@ export function PricingWorksheetGrid({
                         />
                       </label>
                     </td>
-                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
+                    <td style={tableCellStyle}>
                       <textarea
                         ref={(element) => {
                           cellRefs.current[getCellDomKey(row.id, 'notes')] = element
@@ -299,21 +311,16 @@ export function PricingWorksheetGrid({
                         onFocus={(e) => onTextCellFocus(row.id, 'notes', e.currentTarget)}
                         onChange={(e) => onTextCellDraftChange(e.target.value)}
                         onBlur={() => onTextCellBlur(row.id, 'notes')}
-                        onKeyDown={(e) => onTextCellKeyDown(e, row.id, 'notes')}
+                        onKeyDown={(e) => {
+                          if (e.key.startsWith('Arrow') && isFullySelected(e.currentTarget)) return
+                          onTextCellKeyDown(e, row.id, 'notes')
+                        }}
                         rows={1}
-                        style={{ ...cellInputStyle, resize: 'none', height: '38px', minHeight: '38px' }}
+                        style={{ ...cellInputStyle, resize: 'none', height: '34px', minHeight: '34px' }}
                       />
                     </td>
-                    <td
-                      style={{
-                        padding: '12px 14px',
-                        borderBottom: '1px solid var(--border)',
-                        fontSize: '13px',
-                        whiteSpace: 'nowrap',
-                        verticalAlign: 'middle',
-                      }}
-                    >
-                      {costCodeMap.get(row.cost_code_id) ?? '—'}
+                    <td style={tableCellStyle}>
+                      <div style={staticCellStyle}>{costCodeMap.get(row.cost_code_id) ?? '—'}</div>
                     </td>
                   </tr>
                 )
@@ -323,11 +330,7 @@ export function PricingWorksheetGrid({
                 <tr aria-hidden="true">
                   <td
                     colSpan={10}
-                    style={{
-                      padding: 0,
-                      height: `${desktopVisibleRange.bottomSpacerHeight}px`,
-                      borderBottom: 'none',
-                    }}
+                    style={{ padding: 0, height: `${desktopVisibleRange.bottomSpacerHeight}px`, border: 'none' }}
                   />
                 </tr>
               ) : null}
