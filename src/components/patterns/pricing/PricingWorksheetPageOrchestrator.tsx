@@ -106,7 +106,7 @@ export default function PricingWorksheetPageOrchestrator({
   if (!persistence.header) return <ErrorMessage error={`Missing ${missingLabel}.`} />
 
   return (
-    <PageShell title={persistence.header.title || navFallbackTitle} backHref={backHref}>
+    <PageShell title={persistence.header.title || navFallbackTitle} back={backHref}>
       <PricingWorksheetHeader
         header={persistence.header}
         missingLabel={missingLabel}
