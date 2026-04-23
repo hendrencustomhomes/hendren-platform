@@ -171,6 +171,13 @@ export function PricingWorksheetTableAdapter({
     }
   }, [shouldVirtualizeDesktop])
 
+  useEffect(() => {
+    if (!activeCell) return
+    const element = cellRefs.current[getCellDomKey(activeCell.rowId, activeCell.field)]
+    if (element && document.activeElement === element) return
+    focusCell(activeCell.rowId, activeCell.field)
+  }, [activeCell])
+
   function focusCell(rowId: string, field: PricingWorksheetEditableCellKey) {
     const rowIndex = rows.findIndex((row) => row.id === rowId)
     if (rowIndex < 0) return
