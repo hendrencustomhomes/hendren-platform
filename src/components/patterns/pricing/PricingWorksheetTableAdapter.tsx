@@ -1,7 +1,7 @@
 'use client'
 
-import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, MutableRefObject, SetStateAction } from 'react'
-import { useMemo, useRef } from 'react'
+import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, SetStateAction } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { EditableDataTable } from '@/components/data-display/EditableDataTable'
 import type { PricingRow } from '@/lib/pricing/types'
 import { getPricingWorksheetColumns, type PricingWorksheetEditableCellKey } from './_lib/pricingWorksheetColumns'
@@ -15,6 +15,11 @@ const editableCellOrder: PricingWorksheetEditableCellKey[] = [
   'is_active',
   'notes',
 ]
+
+const virtualRowHeight = 70
+const virtualOverscan = 8
+const virtualMaxBodyHeight = 560
+const virtualThreshold = 20
 
 type ActiveCell = {
   rowId: string
@@ -76,6 +81,12 @@ export function PricingWorksheetTableAdapter({
 }) {
   const cellRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({})
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const pendingFocusRef = useRef<ActiveCell | null>(null)
+
+  const [tableScrollTop, setTableScrollTop] = useState(0)
+  const [tableViewportHeight, setTableViewportHeight] = useState(virtualMaxBodyHeight)
+
+  const shouldVirtualizeDesktop = rows.length > virtualThreshold
 
   function getRowStatusLabel(rowId: string) {
     const state = rowSaveState[rowId] ?? 'idle'
@@ -90,14 +101,115 @@ export function PricingWorksheetTableAdapter({
     [costCodeMap, rowSaveState]
   )
 
-  function focusCell(rowId: string, field: PricingWorksheetEditableCellKey) {
-    const element = cellRefs.current[getCellDomKey(rowId, field)]
+  const visibleRange = useMemo(() => {
+    if (!shouldVirtualizeDesktop) {
+      return {
+        rows,
+        startIndex: 0,
+        endIndex: Math.max(0, rows.length - 1),
+        topSpacerHeight: 0,
+        bottomSpacerHeight: 0,
+      }
+    }
+
+    const viewportHeight = Math.max(tableViewportHeight, virtualRowHeight)
+    const startIndex = Math.max(0, Math.floor(tableScrollTop / virtualRowHeight) - virtualOverscan)
+    const visibleCount = Math.ceil(viewportHeight / virtualRowHeight) + virtualOverscan * 2
+    const endIndex = Math.min(rows.length - 1, startIndex + visibleCount - 1)
+
+    return {
+      rows: rows.slice(startIndex, endIndex + 1),
+      startIndex,
+      endIndex,
+      topSpacerHeight: startIndex * virtualRowHeight,
+      bottomSpacerHeight: Math.max(0, (rows.length - endIndex - 1) * virtualRowHeight),
+    }
+  }, [rows, shouldVirtualizeDesktop, tableScrollTop, tableViewportHeight])
+
+  useEffect(() => {
+    const node = scrollContainerRef.current
+    if (!node) return
+
+    const updateViewportHeight = () => {
+      setTableViewportHeight(node.clientHeight || virtualMaxBodyHeight)
+    }
+
+    updateViewportHeight()
+
+    if (typeof ResizeObserver === 'undefined') return
+
+    const observer = new ResizeObserver(() => {
+      updateViewportHeight()
+    })
+
+    observer.observe(node)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [rows.length, shouldVirtualizeDesktop])
+
+  useEffect(() => {
+    const pendingFocus = pendingFocusRef.current
+    if (!pendingFocus) return
+
+    const element = cellRefs.current[getCellDomKey(pendingFocus.rowId, pendingFocus.field)]
     if (!element) return
+
+    pendingFocusRef.current = null
+
     window.requestAnimationFrame(() => {
       element.focus()
       if (element instanceof HTMLInputElement && element.type !== 'checkbox') element.select()
       if (element instanceof HTMLTextAreaElement) element.select()
     })
+  }, [visibleRange, rows])
+
+  useEffect(() => {
+    if (!shouldVirtualizeDesktop) {
+      setTableScrollTop(0)
+    }
+  }, [shouldVirtualizeDesktop])
+
+  function focusCell(rowId: string, field: PricingWorksheetEditableCellKey) {
+    const rowIndex = rows.findIndex((row) => row.id === rowId)
+    if (rowIndex < 0) return
+
+    pendingFocusRef.current = { rowId, field }
+
+    const existingElement = cellRefs.current[getCellDomKey(rowId, field)]
+    if (existingElement) {
+      pendingFocusRef.current = null
+      window.requestAnimationFrame(() => {
+        existingElement.focus()
+        if (existingElement instanceof HTMLInputElement && existingElement.type !== 'checkbox') {
+          existingElement.select()
+        }
+        if (existingElement instanceof HTMLTextAreaElement) {
+          existingElement.select()
+        }
+      })
+      return
+    }
+
+    if (!shouldVirtualizeDesktop) return
+
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) return
+
+    const rowTop = rowIndex * virtualRowHeight
+    const rowBottom = rowTop + virtualRowHeight
+    const viewportTop = scrollContainer.scrollTop
+    const viewportBottom = viewportTop + tableViewportHeight
+    let nextScrollTop = viewportTop
+
+    if (rowTop < viewportTop) nextScrollTop = rowTop
+    else if (rowBottom > viewportBottom) nextScrollTop = rowBottom - tableViewportHeight
+
+    if (nextScrollTop !== viewportTop) {
+      scrollContainer.scrollTop = nextScrollTop
+      setTableScrollTop(nextScrollTop)
+    }
   }
 
   function getNeighborCell(rowId: string, field: PricingWorksheetEditableCellKey, mode: 'left' | 'right' | 'up' | 'down') {
@@ -129,6 +241,13 @@ export function PricingWorksheetTableAdapter({
   function clearActiveCell() {
     setActiveCell(null)
     setActiveDraft(null)
+  }
+
+  function abandonActiveCellDraft() {
+    if (!activeCell) return
+    const row = rows.find((item) => item.id === activeCell.rowId)
+    if (!row) return
+    setActiveDraft(getEditableCellValue(row, activeCell.field) as string | boolean)
   }
 
   function commitActiveCell(options?: { move?: 'left' | 'right' | 'up' | 'down' }) {
@@ -164,15 +283,19 @@ export function PricingWorksheetTableAdapter({
 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
       event.preventDefault()
+      const row = rows.find((item) => item.id === rowId)
+      const localValue = row ? getEditableCellValue(row, typedField) : ''
+      if (activeDraft !== localValue) {
+        setActiveDraft(localValue as string | boolean)
+        return
+      }
       handleUndo()
       return
     }
 
     if (event.key === 'Escape') {
       event.preventDefault()
-      const row = rows.find((item) => item.id === rowId)
-      if (!row) return
-      setActiveDraft(getEditableCellValue(row, typedField) as string | boolean)
+      abandonActiveCellDraft()
       return
     }
 
@@ -218,19 +341,21 @@ export function PricingWorksheetTableAdapter({
       rows={rows}
       getRowId={(row) => row.id}
       canManage={canManage}
-      shouldVirtualize={false}
-      visibleRange={{ rows, startIndex: 0, endIndex: Math.max(0, rows.length - 1), topSpacerHeight: 0, bottomSpacerHeight: 0 }}
-      scrollContainerRef={scrollContainerRef as MutableRefObject<HTMLDivElement | null>}
+      rowHeight={virtualRowHeight}
+      shouldVirtualize={shouldVirtualizeDesktop}
+      visibleRange={visibleRange}
+      scrollContainerRef={scrollContainerRef}
       cellRefs={cellRefs}
       activeCell={activeCell}
       activeDraft={activeDraft ?? null}
-      onTableScrollTopChange={((_value: SetStateAction<number>) => {}) as Dispatch<SetStateAction<number>>}
+      onTableScrollTopChange={setTableScrollTop}
       onTextCellFocus={(rowId, field, element) => {
         const row = rows.find((item) => item.id === rowId)
         if (!row) return
         const typedField = field as PricingWorksheetEditableCellKey
+        const value = getEditableCellValue(row, typedField)
         setActiveCell({ rowId, field: typedField })
-        setActiveDraft(getEditableCellValue(row, typedField) as string | boolean)
+        setActiveDraft(value as string | boolean)
         element.select()
       }}
       onTextCellBlur={(rowId, field) => {
