@@ -1,7 +1,9 @@
+import type { CatalogItem } from '@/lib/pricing/types'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 
 type Props = {
   canManage: boolean
+  catalogItems?: CatalogItem[]
   newCatalogSku: string
   newDescription: string
   newVendorSku: string
