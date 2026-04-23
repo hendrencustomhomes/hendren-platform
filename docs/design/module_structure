@@ -75,12 +75,14 @@ The reuse hierarchy is:
    - procurement linking pattern
    - issue/task list pattern
    - contact management pattern
+   - worksheet-family pattern
 
 5. **Module assembly**
    - Jobs
    - Schedule
    - Companies
    - Internal Users
+   - Pricing Sources / Bids
    - future modules
 
 That is the inheritance model.
@@ -245,6 +247,7 @@ src/
       ConfirmDialog.tsx
     data-display/
       DataTable.tsx
+      EditableDataTable.tsx
       KeyValueList.tsx
       StatusPill.tsx
       MetricCard.tsx
@@ -287,7 +290,8 @@ Headers, shells, toolbars, section wrappers, navigation.
 Shared empty, loading, error, and confirm experiences.
 
 ### `src/components/data-display`
-Tables, metrics, key-value layouts, badges, pills.
+Tables, worksheet shells, metrics, key-value layouts, badges, pills.
+Shared table and worksheet interaction patterns belong here when they are truly cross-module.
 
 ### `src/components/forms`
 Shared form scaffolding.
@@ -317,6 +321,88 @@ Route-local interaction and orchestration hooks.
 Route-local formatting, mapping, selectors, validation helpers, and constants.
 No core business logic.
 
+## Worksheet-Family Pattern
+
+Certain modules share a spreadsheet-like interaction model where scan speed, repeated entry, keyboard flow, and high-density comparison are central.
+
+Likely worksheet-family modules:
+- Pricing Sources / Bids
+- Takeoff where appropriate
+- Estimate where appropriate
+- Catalog workspaces where appropriate
+- other tabular execution modules only when behavior truly matches
+
+These modules should converge on a layered worksheet model rather than separate copied table engines.
+
+### Worksheet layering
+
+```text
+[ Shared UI Layer ]
+EditableDataTable
+
+[ Module Adapter Layer ]
+<Module>WorksheetTableAdapter
+
+[ Module State Layer ]
+use<Module>WorksheetState
+
+[ Module Persistence Layer ]
+use<Module>WorksheetPersistence
+```
+
+### Shared UI layer responsibilities
+
+Shared worksheet UI may own:
+- grid and table layout
+- keyboard navigation contract
+- focus vs edit behavior
+- selection behavior
+- generic column definitions
+- reusable create-row shell or slot
+- reusable row virtualization behavior when truly generic
+
+Shared worksheet UI must not own:
+- pricing rules
+- schedule rules
+- module-specific validation
+- direct DB writes
+- business object mapping
+
+### Module adapter responsibilities
+
+The module adapter layer owns:
+- module column definitions
+- formatting like money, badges, and display labels
+- mapping domain rows to shared table inputs and outputs
+- wiring shared table events to module state and persistence
+
+### Module state responsibilities
+
+Module worksheet state owns:
+- local vs server row state
+- draft state
+- dirty tracking
+- undo
+- autosave queueing
+- cell edit application
+
+### Module persistence responsibilities
+
+Module worksheet persistence owns:
+- data loading
+- create row
+- update row
+- header save / revision behavior where applicable
+- access control tied to the module
+
+### Rules for worksheet-family modules
+
+- no worksheet behavior should live permanently in route files
+- no module should reimplement keyboard navigation once the shared worksheet layer exists
+- no business logic should be hidden inside shared table UI
+- module-specific save logic stays module-local
+- create-row visuals may be shared, but row shape, defaults, validation, and persistence stay module-local
+
 ## Styling Strategy
 
 The styling system must be inherited, not improvised.
@@ -326,7 +412,8 @@ The order of authority is:
 1. tokens
 2. primitives
 3. shared section shells
-4. module assembly
+4. shared data/worksheet patterns
+5. module assembly
 
 ### Required styling rules
 
@@ -342,7 +429,8 @@ The order of authority is:
 - repeated `sectionCardStyle`, `sectionHeaderStyle`, `solidBtnStyle`, `ghostBtnStyle` across route files,
 - giant inline style blocks per page,
 - unique layout behavior per module unless functionally necessary,
-- module-specific reimplementation of shared controls.
+- module-specific reimplementation of shared controls,
+- separate worksheet styling systems per module.
 
 ## Density Standard
 
@@ -390,6 +478,9 @@ Not three.
 ### Banned pattern 6 — Misc dump folders
 No vague catch-all dumping grounds.
 No structural junk drawers.
+
+### Banned pattern 7 — Worksheet god component
+One worksheet file owning shell, render logic, local engine, persistence, keyboard contract, helper utilities, and styling.
 
 ## Rewrite Strategy
 
@@ -448,6 +539,7 @@ The worst structural offenders should be rewritten first.
 2. Schedule editor module
 3. Internal Users detail module
 4. Companies detail module as a lighter cleanup/template pass
+5. Worksheet-family centralization where pricing becomes the proving ground for shared worksheet behavior
 
 ## Extraction Rule
 
