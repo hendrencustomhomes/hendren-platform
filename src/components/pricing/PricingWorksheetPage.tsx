@@ -1,1 +1,1 @@
-export { default } from '@/components/patterns/pricing/PricingWorksheetPage'
+export { default } from '@/components/patterns/pricing/PricingWorksheetPageOrchestrator'
