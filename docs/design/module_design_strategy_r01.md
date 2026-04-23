@@ -43,6 +43,7 @@ The restructuring pass should produce:
 - clearer distinction between business objects, reference data, and derived views
 - a reusable pattern library for naturally tabular modules
 - a reusable pattern library for settings/reference modules
+- a reusable worksheet interaction layer for worksheet-family modules
 - cleaner downstream dependency flow
 - reduced need for one-off exceptions in future modules
 
@@ -198,6 +199,63 @@ Rules:
 - reference fields should stay governed where required
 - worksheet convenience must not weaken canonical ownership
 
+### 6.1.1 Worksheet standardization
+
+Worksheet-family modules should converge on a shared interaction contract rather than separate per-module spreadsheet engines.
+
+Target layering:
+
+```text
+[ Shared UI Layer ]
+EditableDataTable
+
+[ Module Adapter Layer ]
+<Module>WorksheetTableAdapter
+
+[ Module State Layer ]
+use<Module>WorksheetState
+
+[ Module Persistence Layer ]
+use<Module>WorksheetPersistence
+```
+
+Interpretation:
+- shared layer owns interaction behavior
+- module adapter owns column definitions, formatting, and event wiring
+- module state owns draft/edit/save queue state
+- module persistence owns reads, writes, and access control
+
+A worksheet module should not collapse all four layers back into one page file after centralization work begins.
+
+### 6.1.2 Worksheet interaction contract
+
+The target worksheet behavior should increasingly feel like spreadsheet software used for construction workflows, not like a form-heavy CRUD page.
+
+Required interaction direction:
+- Enter / Shift+Enter = vertical movement
+- Tab / Shift+Tab = horizontal movement
+- Ctrl+Enter = create row when the module supports row creation
+- Esc = abandon draft changes in the active cell
+- arrow keys = text cursor when actively editing, cell navigation when not actively editing
+- local-first editing with background persistence where appropriate
+
+This is a target contract for worksheet-family modules. It should be implemented through the shared worksheet layer, not separately in each module.
+
+### 6.1.3 Worksheet create-row rule
+
+A reusable worksheet shell may own the visual create-row region and keyboard integration.
+
+But:
+- row shape
+- defaults
+- validation
+- business rules
+- persistence
+
+must remain module-local.
+
+Shared table UI should never assume all worksheet modules create rows the same way.
+
 ### 6.2 Settings/reference modules
 
 These should use a compact admin pattern rather than a worksheet-first pattern unless row density clearly demands otherwise.
@@ -269,7 +327,8 @@ The restructuring pass should occur in this general order:
 4. identify managed reference data that needs governance
 5. identify modules currently carrying mixed responsibility
 6. redesign structure before broad new implementation continues
-7. resume module execution using the improved structure
+7. centralize worksheet-family behavior where duplication risk is growing
+8. resume module execution using the improved structure
 
 Do not start with code-level refactors before the module map is clear.
 
@@ -303,6 +362,8 @@ Reject these failure modes:
 - accidental duplicate identifiers
 - settings becoming a dumping ground for operational modules
 - patchwork local exceptions replacing a clear structure
+- worksheet interaction logic copied separately into every module
+- shared table UI that owns module-specific business rules
 
 ---
 
@@ -312,6 +373,7 @@ Use this strategy doc when restructuring:
 - module map
 - settings placement
 - worksheet-family applicability
+- worksheet-layer ownership
 - identifier simplification
 - managed reference-data scope
 - next-pass planning before new implementation resumes
