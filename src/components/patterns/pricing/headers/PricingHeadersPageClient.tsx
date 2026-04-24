@@ -26,12 +26,14 @@ export default function PricingHeadersPageClient({
   detailBasePath,
   permissionRowKey,
   accessDeniedMessage,
+  backHref = '/more',
 }: {
   kind: PricingHeaderKind
   jobId?: string
   detailBasePath: string
   permissionRowKey: 'pricing_sources' | 'bids'
   accessDeniedMessage: string
+  backHref?: string
 }) {
   const router = useRouter()
   const state = usePricingHeadersPage({
@@ -47,7 +49,7 @@ export default function PricingHeadersPageClient({
   if (!state.loading && state.access && !state.access.canView) {
     return (
       <>
-        <Nav title={state.config.moduleLabel} back="/more" />
+        <Nav title={state.config.moduleLabel} back={backHref} />
         <div style={{ padding: '16px' }}>
           <div style={{ ...cardStyle(), padding: '20px 16px', fontSize: '13px', color: 'var(--text-muted)' }}>
             {accessDeniedMessage}
@@ -59,7 +61,7 @@ export default function PricingHeadersPageClient({
 
   return (
     <>
-      <Nav title={state.config.moduleLabel} back="/more" />
+      <Nav title={state.config.moduleLabel} back={backHref} />
 
       <div style={pageStackStyle}>
         <div style={searchRowStyle}>
