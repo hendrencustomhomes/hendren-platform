@@ -23,6 +23,8 @@ export default function PriceSheetsPageClient() {
   const router = useRouter()
   const state = usePriceSheetsPage()
 
+  const filters: Array<'all' | 'active' | 'inactive'> = ['all', 'active', 'inactive']
+
   if (!state.loading && state.access && !state.access.canView) {
     return (
       <>
@@ -61,11 +63,11 @@ export default function PriceSheetsPageClient() {
         </div>
 
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-          {['all', 'active', 'inactive'].map((key) => (
+          {filters.map((key) => (
             <button
               key={key}
               type="button"
-              onClick={() => state.setStatusFilter(key as any)}
+              onClick={() => state.setStatusFilter(key)}
               style={pillStyle(state.statusFilter === key)}
             >
               {key}
