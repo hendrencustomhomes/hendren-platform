@@ -1,7 +1,7 @@
 # Pricing Module Cleanup Plan — R03
 
 Status: active cleanup plan
-Last updated: 2026-04-22 America/Chicago
+Last updated: 2026-04-24 America/Chicago
 Branch target: `dev`
 Supersedes: prior pricing cleanup plan revisions
 Purpose: record the pricing worksheet state after successful live cutover to the orchestrated worksheet stack, and define the next cleanup sequence without reopening solved parity work casually.
@@ -239,6 +239,78 @@ Read first:
 5. `docs/modules/pricing/worksheet_centralization_handoff_r02.md`
 
 Older revisions should only be used if a future audit specifically needs history comparison or regression checking.
+
+---
+
+---
+
+## 11. Post-cutover extraction pass — completed 2026-04-24
+
+### What was done
+
+Generic worksheet interaction behavior was extracted from `PricingWorksheetTableAdapter` into a shared worksheet layer. Three new files were created:
+
+- `src/components/data-display/worksheet/worksheetTypes.ts` — shared types (`WorksheetActiveCell`, `WorksheetCellDraftValue`, `WorksheetVisibleRange`, `WorksheetRowSaveState`)
+- `src/components/data-display/worksheet/useWorksheetVirtualization.ts` — virtualization state and visible-range math (scroll tracking, ResizeObserver, spacer heights)
+- `src/components/data-display/worksheet/useWorksheetInteraction.ts` — active-cell lifecycle, cell ref registry, pending-focus, focus restoration, scroll-to-row, neighbor-cell navigation, full keyboard movement contract
+
+`PricingWorksheetTableAdapter` was rewritten to call both hooks and pass results to `EditableDataTable`. It is now pure adapter/wiring code.
+
+### What moved to shared worksheet layer
+
+- Cell ref registry (`cellRefs`)
+- Pending-focus lifecycle (`pendingFocusRef`)
+- Focus restoration effect (fires after scroll changes visible window)
+- Post-create active-cell focus handoff effect
+- Scroll-to-row behavior (`focusCell`)
+- Viewport/visible-range virtualization math (`useMemo` + ResizeObserver)
+- Neighbor-cell navigation (`getNeighborCell`)
+- Keyboard contract: Tab/Shift+Tab, Enter/Shift+Enter, ArrowUp/Down/Left/Right, Esc, Ctrl+Enter, Ctrl+Z
+
+### What stayed pricing-local (in adapter)
+
+- `editableCellOrder` — pricing column navigation order
+- `getEditableCellValue` — maps `PricingRow` fields to editable values
+- `getRowStatusLabel` — maps `rowSaveState` to display text/tone
+- `columns` useMemo — calls `getPricingWorksheetColumns`
+- Virtual constants (`VIRTUAL_ROW_HEIGHT = 70`, etc.)
+
+### What was not touched
+
+- `usePricingWorksheetState` — remains pricing-local
+- `usePricingWorksheetPersistence` — unchanged
+- `PricingWorksheetPageOrchestrator` — unchanged
+- `PricingWorksheetGrid` — legacy file, left in place deliberately
+- `src/components/pricing/PricingWorksheetPage.tsx` — live wrapper, still points to orchestrator
+- All route files — unchanged
+
+### Validation results
+
+- `npx tsc --noEmit` — clean, no errors
+- Build — same pre-existing Supabase stub-env prerender failure on `/more/cost-codes` (unrelated to this pass)
+- Live wrapper confirmed pointing to `PricingWorksheetPageOrchestrator`
+
+### Parity risks assessed
+
+All generic behavior was moved by extracting functions into the hooks with identical logic — no behavioral changes. The following were explicitly verified as preserved:
+- Virtualization/windowing: same `useMemo` math, same ResizeObserver, same spacer computation
+- Focus lifecycle: same `pendingFocusRef` pattern, same RAF sequence
+- Post-create focus handoff: effect on `activeCell` still fires when orchestrator sets `activeCell` after row creation
+- Row-state/autosave: untouched (`usePricingWorksheetState` not modified)
+- Catalog-linked create-row: untouched (orchestrator + persistence not modified)
+- Ctrl+Enter create-row: preserved in both `handleTextCellKeyDown` and `handleCheckboxKeyDown`
+- Keyboard navigation: identical key routing in shared hooks
+
+### Remaining risks
+
+- `usePricingWorksheetState` still owns its own local type aliases (`EditableCellKey`, `ActiveCell`) duplicated from `pricingWorksheetColumns`. Minor redundancy, low risk.
+- `PricingWorksheetGrid` (legacy) and old `PricingWorksheetPage` monolith remain on disk as rollback reference. Deliberate per current cleanup plan.
+
+### What comes next
+
+The shared worksheet interaction layer now exists. The reference implementation (pricing) uses it. A second adopter can now use `useWorksheetVirtualization` + `useWorksheetInteraction` with its own adapter and persistence layer with no interaction engine rebuild required.
+
+Second adopter choice and timing remains a deliberate decision per section 8 of this document.
 
 ---
 

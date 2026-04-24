@@ -1,12 +1,15 @@
 'use client'
 
-import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, SetStateAction } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
+import { useMemo } from 'react'
 import { EditableDataTable } from '@/components/data-display/EditableDataTable'
+import { useWorksheetVirtualization } from '@/components/data-display/worksheet/useWorksheetVirtualization'
+import { useWorksheetInteraction } from '@/components/data-display/worksheet/useWorksheetInteraction'
 import type { PricingRow } from '@/lib/pricing/types'
 import { getPricingWorksheetColumns, type PricingWorksheetEditableCellKey } from './_lib/pricingWorksheetColumns'
 
-const editableCellOrder: PricingWorksheetEditableCellKey[] = [
+// Pricing-local column order — drives Tab/Enter/Arrow navigation contract.
+const editableCellOrder: readonly PricingWorksheetEditableCellKey[] = [
   'description_snapshot',
   'vendor_sku',
   'unit',
@@ -16,45 +19,26 @@ const editableCellOrder: PricingWorksheetEditableCellKey[] = [
   'notes',
 ]
 
-const virtualRowHeight = 70
-const virtualOverscan = 8
-const virtualMaxBodyHeight = 560
-const virtualThreshold = 20
+const VIRTUAL_ROW_HEIGHT = 70
+const VIRTUAL_OVERSCAN = 8
+const VIRTUAL_MAX_BODY_HEIGHT = 560
+const VIRTUAL_THRESHOLD = 20
 
-type ActiveCell = {
-  rowId: string
-  field: PricingWorksheetEditableCellKey
-}
-
-type CellDraftValue = string | boolean | null
-
-function getCellDomKey(rowId: string, field: string) {
-  return `${rowId}:${field}`
-}
-
-function isFullySelected(element: HTMLInputElement | HTMLTextAreaElement) {
-  const valueLength = element.value.length
-  return (element.selectionStart ?? 0) === 0 && (element.selectionEnd ?? 0) === valueLength
-}
-
+// Pricing-local field accessor — maps PricingRow fields to editable cell values.
 function getEditableCellValue(row: PricingRow, field: PricingWorksheetEditableCellKey): string | boolean {
   switch (field) {
-    case 'description_snapshot':
-      return row.description_snapshot
-    case 'vendor_sku':
-      return row.vendor_sku ?? ''
-    case 'unit':
-      return row.unit ?? ''
-    case 'unit_price':
-      return row.unit_price == null ? '' : String(row.unit_price)
-    case 'lead_days':
-      return row.lead_days == null ? '' : String(row.lead_days)
-    case 'notes':
-      return row.notes ?? ''
-    case 'is_active':
-      return row.is_active
+    case 'description_snapshot': return row.description_snapshot
+    case 'vendor_sku': return row.vendor_sku ?? ''
+    case 'unit': return row.unit ?? ''
+    case 'unit_price': return row.unit_price == null ? '' : String(row.unit_price)
+    case 'lead_days': return row.lead_days == null ? '' : String(row.lead_days)
+    case 'notes': return row.notes ?? ''
+    case 'is_active': return row.is_active
   }
 }
+
+type ActiveCell = { rowId: string; field: PricingWorksheetEditableCellKey }
+type CellDraftValue = string | boolean | null
 
 export function PricingWorksheetTableAdapter({
   rows,
@@ -81,15 +65,6 @@ export function PricingWorksheetTableAdapter({
   canManage: boolean
   costCodeMap: Map<string, string>
 }) {
-  const cellRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({})
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
-  const pendingFocusRef = useRef<ActiveCell | null>(null)
-
-  const [tableScrollTop, setTableScrollTop] = useState(0)
-  const [tableViewportHeight, setTableViewportHeight] = useState(virtualMaxBodyHeight)
-
-  const shouldVirtualizeDesktop = rows.length > virtualThreshold
-
   function getRowStatusLabel(rowId: string) {
     const state = rowSaveState[rowId] ?? 'idle'
     if (state === 'saving') return { text: 'Saving…', tone: 'default' as const }
@@ -98,258 +73,39 @@ export function PricingWorksheetTableAdapter({
     return { text: 'Ready', tone: 'active' as const }
   }
 
+  const virt = useWorksheetVirtualization({
+    rows,
+    rowHeight: VIRTUAL_ROW_HEIGHT,
+    overscan: VIRTUAL_OVERSCAN,
+    threshold: VIRTUAL_THRESHOLD,
+    maxBodyHeight: VIRTUAL_MAX_BODY_HEIGHT,
+  })
+
+  const interaction = useWorksheetInteraction<PricingRow, PricingWorksheetEditableCellKey>({
+    rows,
+    getRowId: (row) => row.id,
+    cellOrder: editableCellOrder,
+    activeCell,
+    onActiveCellChange: (cell) => setActiveCell(cell),
+    activeDraft,
+    onActiveDraftChange: (draft) => setActiveDraft(draft),
+    getCellValue: getEditableCellValue,
+    commitCellValue,
+    handleUndo,
+    onCreateRow,
+    scrollContainerRef: virt.scrollContainerRef,
+    shouldVirtualize: virt.shouldVirtualize,
+    tableViewportHeight: virt.tableViewportHeight,
+    onTableScrollTopChange: virt.setTableScrollTop,
+    rowHeight: VIRTUAL_ROW_HEIGHT,
+    tableScrollTop: virt.tableScrollTop,
+  })
+
   const columns = useMemo(
     () => getPricingWorksheetColumns({ costCodeMap, getRowStatusLabel }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [costCodeMap, rowSaveState]
   )
-
-  const visibleRange = useMemo(() => {
-    if (!shouldVirtualizeDesktop) {
-      return {
-        rows,
-        startIndex: 0,
-        endIndex: Math.max(0, rows.length - 1),
-        topSpacerHeight: 0,
-        bottomSpacerHeight: 0,
-      }
-    }
-
-    const viewportHeight = Math.max(tableViewportHeight, virtualRowHeight)
-    const startIndex = Math.max(0, Math.floor(tableScrollTop / virtualRowHeight) - virtualOverscan)
-    const visibleCount = Math.ceil(viewportHeight / virtualRowHeight) + virtualOverscan * 2
-    const endIndex = Math.min(rows.length - 1, startIndex + visibleCount - 1)
-
-    return {
-      rows: rows.slice(startIndex, endIndex + 1),
-      startIndex,
-      endIndex,
-      topSpacerHeight: startIndex * virtualRowHeight,
-      bottomSpacerHeight: Math.max(0, (rows.length - endIndex - 1) * virtualRowHeight),
-    }
-  }, [rows, shouldVirtualizeDesktop, tableScrollTop, tableViewportHeight])
-
-  useEffect(() => {
-    const node = scrollContainerRef.current
-    if (!node) return
-
-    const updateViewportHeight = () => {
-      setTableViewportHeight(node.clientHeight || virtualMaxBodyHeight)
-    }
-
-    updateViewportHeight()
-
-    if (typeof ResizeObserver === 'undefined') return
-
-    const observer = new ResizeObserver(() => {
-      updateViewportHeight()
-    })
-
-    observer.observe(node)
-
-    return () => {
-      observer.disconnect()
-    }
-  }, [rows.length, shouldVirtualizeDesktop])
-
-  useEffect(() => {
-    const pendingFocus = pendingFocusRef.current
-    if (!pendingFocus) return
-
-    const element = cellRefs.current[getCellDomKey(pendingFocus.rowId, pendingFocus.field)]
-    if (!element) return
-
-    pendingFocusRef.current = null
-
-    window.requestAnimationFrame(() => {
-      element.focus()
-      if (element instanceof HTMLInputElement && element.type !== 'checkbox') element.select()
-      if (element instanceof HTMLTextAreaElement) element.select()
-    })
-  }, [visibleRange, rows])
-
-  useEffect(() => {
-    if (!shouldVirtualizeDesktop) {
-      setTableScrollTop(0)
-    }
-  }, [shouldVirtualizeDesktop])
-
-  useEffect(() => {
-    if (!activeCell) return
-    const element = cellRefs.current[getCellDomKey(activeCell.rowId, activeCell.field)]
-    if (element && document.activeElement === element) return
-    focusCell(activeCell.rowId, activeCell.field)
-  }, [activeCell])
-
-  function focusCell(rowId: string, field: PricingWorksheetEditableCellKey) {
-    const rowIndex = rows.findIndex((row) => row.id === rowId)
-    if (rowIndex < 0) return
-
-    pendingFocusRef.current = { rowId, field }
-
-    const existingElement = cellRefs.current[getCellDomKey(rowId, field)]
-    if (existingElement) {
-      pendingFocusRef.current = null
-      window.requestAnimationFrame(() => {
-        existingElement.focus()
-        if (existingElement instanceof HTMLInputElement && existingElement.type !== 'checkbox') {
-          existingElement.select()
-        }
-        if (existingElement instanceof HTMLTextAreaElement) {
-          existingElement.select()
-        }
-      })
-      return
-    }
-
-    if (!shouldVirtualizeDesktop) return
-
-    const scrollContainer = scrollContainerRef.current
-    if (!scrollContainer) return
-
-    const rowTop = rowIndex * virtualRowHeight
-    const rowBottom = rowTop + virtualRowHeight
-    const viewportTop = scrollContainer.scrollTop
-    const viewportBottom = viewportTop + tableViewportHeight
-    let nextScrollTop = viewportTop
-
-    if (rowTop < viewportTop) nextScrollTop = rowTop
-    else if (rowBottom > viewportBottom) nextScrollTop = rowBottom - tableViewportHeight
-
-    if (nextScrollTop !== viewportTop) {
-      scrollContainer.scrollTop = nextScrollTop
-      setTableScrollTop(nextScrollTop)
-    }
-  }
-
-  function getNeighborCell(rowId: string, field: PricingWorksheetEditableCellKey, mode: 'left' | 'right' | 'up' | 'down') {
-    const rowIndex = rows.findIndex((row) => row.id === rowId)
-    const fieldIndex = editableCellOrder.findIndex((value) => value === field)
-    if (rowIndex < 0 || fieldIndex < 0) return null
-
-    if (mode === 'left') {
-      if (fieldIndex > 0) return { rowId, field: editableCellOrder[fieldIndex - 1] }
-      if (rowIndex > 0) return { rowId: rows[rowIndex - 1].id, field: editableCellOrder[editableCellOrder.length - 1] }
-      return null
-    }
-
-    if (mode === 'right') {
-      if (fieldIndex < editableCellOrder.length - 1) return { rowId, field: editableCellOrder[fieldIndex + 1] }
-      if (rowIndex < rows.length - 1) return { rowId: rows[rowIndex + 1].id, field: editableCellOrder[0] }
-      return null
-    }
-
-    if (mode === 'up') {
-      if (rowIndex > 0) return { rowId: rows[rowIndex - 1].id, field }
-      return null
-    }
-
-    if (rowIndex < rows.length - 1) return { rowId: rows[rowIndex + 1].id, field }
-    return null
-  }
-
-  function clearActiveCell() {
-    setActiveCell(null)
-    setActiveDraft(null)
-  }
-
-  function abandonActiveCellDraft() {
-    if (!activeCell) return
-    const row = rows.find((item) => item.id === activeCell.rowId)
-    if (!row) return
-    setActiveDraft(getEditableCellValue(row, activeCell.field) as string | boolean)
-  }
-
-  function commitActiveCell(options?: { move?: 'left' | 'right' | 'up' | 'down' }) {
-    if (!activeCell) return
-    const row = rows.find((item) => item.id === activeCell.rowId)
-    if (!row) {
-      clearActiveCell()
-      return
-    }
-
-    const nextValue = (activeDraft ?? getEditableCellValue(row, activeCell.field)) as string | boolean
-    commitCellValue(activeCell.rowId, activeCell.field, nextValue)
-    const previousCell = activeCell
-    clearActiveCell()
-
-    if (options?.move) {
-      const neighbor = getNeighborCell(previousCell.rowId, previousCell.field, options.move)
-      if (neighbor) focusCell(neighbor.rowId, neighbor.field)
-    }
-  }
-
-  function getRenderedCellValue(row: PricingRow, field: string) {
-    if (activeCell?.rowId === row.id && activeCell.field === field) return activeDraft ?? ''
-    return getEditableCellValue(row, field as PricingWorksheetEditableCellKey)
-  }
-
-  function handleTextCellKeyDown(
-    event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
-    rowId: string,
-    field: string
-  ) {
-    const typedField = field as PricingWorksheetEditableCellKey
-
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
-      event.preventDefault()
-      const row = rows.find((item) => item.id === rowId)
-      const localValue = row ? getEditableCellValue(row, typedField) : ''
-      if (activeDraft !== localValue) {
-        setActiveDraft(localValue as string | boolean)
-        return
-      }
-      handleUndo()
-      return
-    }
-
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-      event.preventDefault()
-      commitActiveCell()
-      void onCreateRow()
-      return
-    }
-
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      abandonActiveCellDraft()
-      return
-    }
-
-    if (event.key === 'Tab') {
-      event.preventDefault()
-      commitActiveCell({ move: event.shiftKey ? 'left' : 'right' })
-      return
-    }
-
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      commitActiveCell({ move: event.shiftKey ? 'up' : 'down' })
-      return
-    }
-
-    if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      commitActiveCell({ move: 'up' })
-      return
-    }
-
-    if (event.key === 'ArrowDown') {
-      event.preventDefault()
-      commitActiveCell({ move: 'down' })
-      return
-    }
-
-    if (event.key === 'ArrowLeft' && isFullySelected(event.currentTarget)) {
-      event.preventDefault()
-      commitActiveCell({ move: 'left' })
-      return
-    }
-
-    if (event.key === 'ArrowRight' && isFullySelected(event.currentTarget)) {
-      event.preventDefault()
-      commitActiveCell({ move: 'right' })
-    }
-  }
 
   return (
     <EditableDataTable
@@ -357,70 +113,23 @@ export function PricingWorksheetTableAdapter({
       rows={rows}
       getRowId={(row) => row.id}
       canManage={canManage}
-      rowHeight={virtualRowHeight}
-      shouldVirtualize={shouldVirtualizeDesktop}
-      visibleRange={visibleRange}
-      scrollContainerRef={scrollContainerRef}
-      cellRefs={cellRefs}
+      rowHeight={VIRTUAL_ROW_HEIGHT}
+      shouldVirtualize={virt.shouldVirtualize}
+      visibleRange={virt.visibleRange}
+      scrollContainerRef={virt.scrollContainerRef}
+      cellRefs={interaction.cellRefs}
       activeCell={activeCell}
       activeDraft={activeDraft ?? null}
-      onTableScrollTopChange={setTableScrollTop}
-      onTextCellFocus={(rowId, field, element) => {
-        const row = rows.find((item) => item.id === rowId)
-        if (!row) return
-        const typedField = field as PricingWorksheetEditableCellKey
-        const value = getEditableCellValue(row, typedField)
-        setActiveCell({ rowId, field: typedField })
-        setActiveDraft(value as string | boolean)
-        element.select()
-      }}
-      onTextCellBlur={(rowId, field) => {
-        if (!activeCell) return
-        if (activeCell.rowId !== rowId || activeCell.field !== field) return
-        commitActiveCell()
-      }}
-      onTextCellKeyDown={handleTextCellKeyDown}
+      onTableScrollTopChange={virt.setTableScrollTop}
+      onTextCellFocus={interaction.handleTextCellFocus}
+      onTextCellBlur={interaction.handleTextCellBlur}
+      onTextCellKeyDown={interaction.handleTextCellKeyDown}
       onTextCellDraftChange={(value) => setActiveDraft(value)}
-      onCheckboxFocus={(rowId, field) => {
-        const row = rows.find((item) => item.id === rowId)
-        if (!row) return
-        setActiveCell({ rowId, field: field as PricingWorksheetEditableCellKey })
-        setActiveDraft(Boolean(getEditableCellValue(row, field as PricingWorksheetEditableCellKey)))
-      }}
-      onCheckboxBlur={(rowId, field) => {
-        if (!activeCell) return
-        if (activeCell.rowId !== rowId || activeCell.field !== field) return
-        clearActiveCell()
-      }}
-      onCheckboxKeyDown={(event, rowId, field) => {
-        const typedField = field as PricingWorksheetEditableCellKey
-        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
-          event.preventDefault()
-          handleUndo()
-          return
-        }
-        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-          event.preventDefault()
-          void onCreateRow()
-          return
-        }
-        if (event.key === 'Tab') {
-          event.preventDefault()
-          const neighbor = getNeighborCell(rowId, typedField, event.shiftKey ? 'left' : 'right')
-          if (neighbor) focusCell(neighbor.rowId, neighbor.field)
-          return
-        }
-        if (event.key === 'Enter') {
-          event.preventDefault()
-          const neighbor = getNeighborCell(rowId, typedField, event.shiftKey ? 'up' : 'down')
-          if (neighbor) focusCell(neighbor.rowId, neighbor.field)
-        }
-      }}
-      onCheckboxCommit={(rowId, field, nextValue) => {
-        commitCellValue(rowId, field as PricingWorksheetEditableCellKey, nextValue)
-        setActiveDraft(nextValue)
-      }}
-      getRenderedCellValue={getRenderedCellValue}
+      onCheckboxFocus={interaction.handleCheckboxFocus}
+      onCheckboxBlur={interaction.handleCheckboxBlur}
+      onCheckboxKeyDown={interaction.handleCheckboxKeyDown}
+      onCheckboxCommit={interaction.handleCheckboxCommit}
+      getRenderedCellValue={interaction.getRenderedCellValue}
     />
   )
 }
