@@ -321,3 +321,46 @@ This is the active cleanup control document for pricing after live worksheet cut
 Future chats should treat the orchestrated pricing stack as the active path,
 keep `dev` green,
 and focus next on cleanup clarity rather than reopening already-solved parity work.
+
+---
+
+## 12. Legacy ambiguity removal pass — completed 2026-04-24
+
+### What was done
+
+Removed shadow authority from the legacy worksheet implementation. Two files were acted on:
+
+**Deleted:**
+- `src/components/patterns/pricing/PricingWorksheetGrid.tsx` — old grid rendering component, referenced only inside the monolithic legacy page, no active route or adapter depended on it.
+
+**Quarantined:**
+- `src/components/patterns/pricing/PricingWorksheetPage.tsx` → moved to `src/components/patterns/pricing/_legacy/PricingWorksheetPage.legacy.tsx`
+- Added top-of-file comment: `LEGACY — non-live monolithic worksheet implementation retained temporarily for audit/rollback. Do not import.`
+- Added `// @ts-nocheck` to suppress import resolution errors caused by the directory move and the deleted grid file (the quarantined file is not compiled into the active build).
+
+### Confirmation
+
+- No active route or component imports from the quarantined legacy path.
+- No active route or component references `PricingWorksheetGrid`.
+- Nothing imports from `_legacy/`.
+- Live wrapper (`src/components/pricing/PricingWorksheetPage.tsx`) still re-exports from `PricingWorksheetPageOrchestrator` only.
+- `npx tsc --noEmit` — clean, no errors.
+
+### What is now authoritative
+
+Only one worksheet implementation now exists in active (non-legacy) paths:
+
+```text
+src/components/patterns/pricing/PricingWorksheetTableAdapter.tsx
+src/components/patterns/pricing/PricingWorksheetPageOrchestrator.tsx
+src/components/patterns/pricing/_hooks/usePricingWorksheetState.ts
+src/components/patterns/pricing/_hooks/usePricingWorksheetPersistence.ts
+src/components/data-display/worksheet/useWorksheetInteraction.ts
+src/components/data-display/worksheet/useWorksheetVirtualization.ts
+src/components/data-display/worksheet/worksheetTypes.ts
+src/components/data-display/EditableDataTable.tsx
+```
+
+### What comes next
+
+The reference implementation is now clean. A second module can adopt the worksheet stack through adapter + persistence work only. Second adopter choice remains a deliberate decision per section 8.

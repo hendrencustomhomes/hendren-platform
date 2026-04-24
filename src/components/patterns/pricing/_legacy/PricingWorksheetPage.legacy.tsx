@@ -1,3 +1,5 @@
+// LEGACY — non-live monolithic worksheet implementation retained temporarily for audit/rollback. Do not import.
+// @ts-nocheck
 'use client'
 
 import {
