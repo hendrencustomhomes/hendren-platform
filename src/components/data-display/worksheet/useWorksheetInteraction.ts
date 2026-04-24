@@ -68,7 +68,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
       if (element instanceof HTMLInputElement && element.type !== 'checkbox') element.select()
       if (element instanceof HTMLTextAreaElement) element.select()
     })
-  }, [tableScrollTop, rows])
+  }, [tableScrollTop, tableViewportHeight, rows])
 
   // External active-cell change — e.g. post-create focus handoff from the orchestrator.
   useEffect(() => {
