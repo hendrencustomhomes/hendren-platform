@@ -7,10 +7,12 @@ import { fetchPricingCostCodes, fetchPricingTrades } from '@/lib/pricing/lookups
 import { getCurrentPricingAccess } from '@/app/actions/pricing-access-actions'
 import type { CatalogItem, PricingCostCodeOption, PricingTradeOption } from '@/lib/pricing/types'
 
+type CatalogItemWithSourceCount = CatalogItem & { source_count: number }
+
 export function useCatalogPage() {
   const supabase = createClient()
 
-  const [items, setItems] = useState<CatalogItem[]>([])
+  const [items, setItems] = useState<CatalogItemWithSourceCount[]>([])
   const [trades, setTrades] = useState<PricingTradeOption[]>([])
   const [costCodes, setCostCodes] = useState<PricingCostCodeOption[]>([])
   const [search, setSearch] = useState('')
@@ -31,12 +33,23 @@ export function useCatalogPage() {
 
   async function load() {
     setLoading(true)
-    const [rows, tradeRows, costCodeRows] = await Promise.all([
+    const [rows, tradeRows, costCodeRows, sourceRowsResult] = await Promise.all([
       listCatalogItems(supabase),
       fetchPricingTrades(supabase),
       fetchPricingCostCodes(supabase),
+      supabase.from('pricing_rows').select('catalog_sku').not('catalog_sku', 'is', null),
     ])
-    setItems(rows)
+
+    if (sourceRowsResult.error) throw sourceRowsResult.error
+
+    const sourceCounts = new Map<string, number>()
+    for (const sourceRow of sourceRowsResult.data ?? []) {
+      const sku = String(sourceRow.catalog_sku ?? '')
+      if (!sku) continue
+      sourceCounts.set(sku, (sourceCounts.get(sku) ?? 0) + 1)
+    }
+
+    setItems(rows.map((row) => ({ ...row, source_count: sourceCounts.get(row.catalog_sku) ?? 0 })))
     setTrades(tradeRows)
     setCostCodes(costCodeRows)
     if (!tradeId && tradeRows[0]) setTradeId(tradeRows[0].id)
@@ -53,7 +66,12 @@ export function useCatalogPage() {
         setLoading(false)
         return
       }
-      await load()
+      try {
+        await load()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load catalog.')
+        setLoading(false)
+      }
     }
     void init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -102,13 +120,21 @@ export function useCatalogPage() {
     }
   }
 
+  const tradeMap = useMemo(() => new Map(trades.map((row) => [row.id, row.name])), [trades])
+  const costCodeMap = useMemo(
+    () => new Map(costCodes.map((row) => [row.id, `${row.cost_code} · ${row.title}`])),
+    [costCodes]
+  )
+
   const filtered = items.filter((i) => {
     const q = search.trim().toLowerCase()
     if (!q) return true
     return (
       i.catalog_sku.toLowerCase().includes(q) ||
       i.title.toLowerCase().includes(q) ||
-      (i.description ?? '').toLowerCase().includes(q)
+      (i.description ?? '').toLowerCase().includes(q) ||
+      (tradeMap.get(i.trade_id) ?? '').toLowerCase().includes(q) ||
+      (costCodeMap.get(i.cost_code_id) ?? '').toLowerCase().includes(q)
     )
   })
 
@@ -116,6 +142,8 @@ export function useCatalogPage() {
     items: filtered,
     trades,
     costCodes: filteredCostCodes,
+    tradeMap,
+    costCodeMap,
     search,
     setSearch,
     loading,
