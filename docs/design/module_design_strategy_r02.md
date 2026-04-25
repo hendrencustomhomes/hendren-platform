@@ -62,6 +62,33 @@ Persistence owns:
 
 ---
 
+## Pricing → Estimate Direction (Added)
+
+Worksheet-family modules now extend beyond Pricing into Estimate.
+
+```text
+Catalog → Price Sheets / Bids → Estimate
+```
+
+Rules:
+
+- pricing modules define source data
+- estimate consumes pricing data
+- worksheet UI must remain generic
+- pricing and estimate logic must NOT move into shared UI layer
+
+---
+
+## Pricing Source Rules (Added)
+
+- `catalog_sku` = identity
+- `source_sku` = pricing option
+- estimate must preserve both
+- pricing rows require quantity and UOM
+- $0 values are invalid → stored as NULL
+
+---
+
 ## Interaction Contract (Required Direction)
 
 - Enter / Shift+Enter → vertical navigation
@@ -99,4 +126,5 @@ must remain module-local.
 
 All worksheet-family modules must converge to this model.
 
-Pricing is the proving ground for this architecture.
+Pricing is the proving ground.
+Estimate is the next adopter after pricing stability is confirmed.
