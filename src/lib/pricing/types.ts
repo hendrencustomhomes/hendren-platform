@@ -45,7 +45,7 @@ export type PricingRow = {
   vendor_sku: string | null
   description_snapshot: string
   quantity: number | null
-  uom: string | null
+  unit: string | null
   unit_price: number | null
   lead_days: number | null
   notes: string | null
@@ -128,7 +128,7 @@ export type CreatePricingRowInput = {
   vendor_sku?: string | null
   description_snapshot?: string | null
   quantity?: number | null
-  uom?: string | null
+  unit?: string | null
   unit_price?: number | null
   lead_days?: number | null
   notes?: string | null
@@ -139,7 +139,7 @@ export type UpdatePricingRowPatch = Partial<{
   vendor_sku: string | null
   description_snapshot: string
   quantity: number | null
-  uom: string | null
+  unit: string | null
   unit_price: number | null
   lead_days: number | null
   notes: string | null
