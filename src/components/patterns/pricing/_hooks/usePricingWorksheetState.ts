@@ -41,6 +41,48 @@ function cloneRow(row: PricingRow): PricingRow {
   return { ...row }
 }
 
+function isDraftRowId(rowId: string) {
+  return rowId.startsWith('draft-')
+}
+
+function hasMeaningfulData(row: PricingRow) {
+  return Boolean(
+    row.catalog_sku ||
+      row.vendor_sku ||
+      row.description_snapshot.trim() ||
+      row.quantity != null ||
+      row.unit ||
+      row.unit_price != null ||
+      row.lead_days != null ||
+      row.notes ||
+      row.is_active === false
+  )
+}
+
+function createDraftRow(sortOrder: number): PricingRow {
+  const now = new Date().toISOString()
+  const id = `draft-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`
+
+  return {
+    id,
+    pricing_header_id: '',
+    catalog_sku: null,
+    cost_code_id: '',
+    source_sku: '',
+    vendor_sku: null,
+    description_snapshot: '',
+    quantity: null,
+    unit: null,
+    unit_price: null,
+    lead_days: null,
+    notes: null,
+    sort_order: sortOrder,
+    is_active: true,
+    created_at: now,
+    updated_at: now,
+  }
+}
+
 function applyEditableCellValue(
   row: PricingRow,
   field: EditableCellKey,
@@ -92,9 +134,11 @@ function areEqual(a: PricingRow | null | undefined, b: PricingRow | null | undef
 export function usePricingWorksheetState({
   initialRows,
   onPersistRow,
+  onCreateRow,
 }: {
   initialRows: PricingRow[]
   onPersistRow: (rowId: string, patch: UpdatePricingRowPatch) => Promise<PricingRow>
+  onCreateRow: (draft: PricingRow) => Promise<PricingRow>
 }) {
   const [localRows, setLocalRows] = useState<PricingRow[]>([])
   const [serverRows, setServerRows] = useState<PricingRow[]>([])
@@ -169,6 +213,26 @@ export function usePricingWorksheetState({
     setServerRowsSync(nextRows)
   }
 
+  function promoteDraftRow(draftId: string, created: PricingRow) {
+    replaceLocalRow(draftId, created)
+    const nextServerRows = [...serverRowsRef.current, created]
+    setServerRowsSync(nextServerRows)
+    setRowSaveState((prev) => {
+      const { [draftId]: _removed, ...rest } = prev
+      return { ...rest, [created.id]: 'idle' }
+    })
+    setUndoStack((stack) =>
+      stack.map((entry) =>
+        entry.rowId === draftId ? { ...entry, rowId: created.id } : entry
+      )
+    )
+    if (activeCellRef.current?.rowId === draftId) {
+      const nextCell = { ...activeCellRef.current, rowId: created.id }
+      setActiveCell(nextCell)
+      activeCellRef.current = nextCell
+    }
+  }
+
   function getLocalRow(rowId: string) {
     return localRowsRef.current.find((r) => r.id === rowId) ?? null
   }
@@ -184,16 +248,44 @@ export function usePricingWorksheetState({
   function syncRowStateFromRows(rowId: string, row?: PricingRow | null) {
     const localRow = row ?? getLocalRow(rowId)
     const serverRow = getServerRow(rowId)
-    if (!localRow || !serverRow) return
+    if (!localRow) return
+    if (isDraftRowId(rowId)) {
+      setRowState(rowId, hasMeaningfulData(localRow) ? 'dirty' : 'idle')
+      return
+    }
+    if (!serverRow) return
     setRowState(rowId, areEqual(localRow, serverRow) ? 'idle' : 'dirty')
   }
 
   async function flushRow(rowId: string) {
     const local = getLocalRow(rowId)
-    const server = getServerRow(rowId)
 
-    if (!local || !server) return
+    if (!local) return
     if (savingRowsRef.current.has(rowId)) return
+
+    if (isDraftRowId(rowId)) {
+      if (!hasMeaningfulData(local)) {
+        setRowState(rowId, 'idle')
+        return
+      }
+
+      const requestRow = cloneRow(local)
+      savingRowsRef.current.add(rowId)
+      setRowState(rowId, 'saving')
+
+      try {
+        const created = await onCreateRow(requestRow)
+        promoteDraftRow(rowId, created)
+      } catch {
+        setRowState(rowId, 'error')
+      } finally {
+        savingRowsRef.current.delete(rowId)
+      }
+      return
+    }
+
+    const server = getServerRow(rowId)
+    if (!server) return
 
     if (areEqual(local, server)) {
       setRowState(rowId, 'idle')
@@ -285,12 +377,16 @@ export function usePricingWorksheetState({
     })
   }
 
-  function appendRow(row: PricingRow) {
-    const nextLocalRows = [...localRowsRef.current, row]
-    const nextServerRows = [...serverRowsRef.current, row]
+  function appendDraftRow() {
+    const draft = createDraftRow(localRowsRef.current.length)
+    const nextLocalRows = [...localRowsRef.current, draft]
     setLocalRowsSync(nextLocalRows)
-    setServerRowsSync(nextServerRows)
-    setRowState(row.id, 'idle')
+    setRowState(draft.id, 'idle')
+    setActiveCell({ rowId: draft.id, field: 'description_snapshot' })
+    setActiveDraft('')
+    activeCellRef.current = { rowId: draft.id, field: 'description_snapshot' }
+    activeDraftRef.current = ''
+    return draft
   }
 
   const saveCounts = useMemo(() => {
@@ -315,7 +411,7 @@ export function usePricingWorksheetState({
     setActiveDraft,
     commitCellValue,
     handleUndo,
-    appendRow,
+    appendDraftRow,
     saveCounts,
   }
 }
