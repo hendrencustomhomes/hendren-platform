@@ -134,6 +134,7 @@ export function usePricingWorksheetPersistence({
       catalog_sku: draft.catalog_sku,
       description_snapshot: draft.description_snapshot,
       vendor_sku: draft.vendor_sku,
+      pricing_type: draft.pricing_type,
       quantity: draft.quantity,
       unit: draft.unit,
       unit_price: draft.unit_price,
