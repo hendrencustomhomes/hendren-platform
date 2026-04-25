@@ -10,7 +10,7 @@ import type {
 } from './types'
 
 const PRICING_ROW_COLS =
-  'id, pricing_header_id, catalog_sku, cost_code_id, source_sku, vendor_sku, description_snapshot, quantity, unit, unit_price, lead_days, notes, sort_order, is_active, created_at, updated_at'
+  'id, pricing_header_id, catalog_sku, cost_code_id, source_sku, vendor_sku, description_snapshot, pricing_type, quantity, unit, unit_price, lead_days, notes, sort_order, is_active, created_at, updated_at'
 
 function toError(error: unknown, fallback: string) {
   if (error instanceof Error && error.message.trim()) return error
@@ -116,6 +116,7 @@ export async function createPricingRow(
         source_sku: sourceSku,
         vendor_sku: input.vendor_sku?.trim() || null,
         description_snapshot: descriptionSnapshot,
+        pricing_type: input.pricing_type ?? 'unit',
         quantity: input.quantity ?? null,
         unit: input.unit?.trim() || catalogItem?.default_unit || null,
         unit_price: normalizeMoney(input.unit_price),
