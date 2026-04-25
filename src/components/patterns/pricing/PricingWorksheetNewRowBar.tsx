@@ -6,19 +6,9 @@ type Props = {
   catalogItems?: CatalogItem[]
   newCatalogSku: string
   newDescription: string
-  newVendorSku: string
-  newUnit: string
-  newUnitPrice: string
-  newLeadDays: string
-  newNotes: string
   creatingRow: boolean
   onCatalogSkuChange: (value: string) => void
   onDescriptionChange: (value: string) => void
-  onVendorSkuChange: (value: string) => void
-  onUnitChange: (value: string) => void
-  onUnitPriceChange: (value: string) => void
-  onLeadDaysChange: (value: string) => void
-  onNotesChange: (value: string) => void
   onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement | HTMLSelectElement>, onCommit?: () => void) => void
   onCreateRow: () => void | Promise<unknown>
 }
@@ -52,19 +42,9 @@ export function PricingWorksheetNewRowBar({
   catalogItems = [],
   newCatalogSku,
   newDescription,
-  newVendorSku,
-  newUnit,
-  newUnitPrice,
-  newLeadDays,
-  newNotes,
   creatingRow,
   onCatalogSkuChange,
   onDescriptionChange,
-  onVendorSkuChange,
-  onUnitChange,
-  onUnitPriceChange,
-  onLeadDaysChange,
-  onNotesChange,
   onKeyDown,
   onCreateRow,
 }: Props) {
@@ -73,7 +53,7 @@ export function PricingWorksheetNewRowBar({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1.2fr 2.2fr 1.2fr 0.8fr 0.9fr 0.9fr 1.5fr auto',
+          gridTemplateColumns: '1.2fr minmax(220px, 1fr) auto',
           overflowX: 'auto',
           borderBottom: '1px solid var(--border)',
         }}
@@ -93,66 +73,14 @@ export function PricingWorksheetNewRowBar({
             value={newDescription}
             onChange={(e) => onDescriptionChange(e.target.value)}
             onFocus={(e) => e.currentTarget.select()}
-            onKeyDown={(e) => onKeyDown(e)}
+            onKeyDown={(e) => onKeyDown(e, () => {
+              void onCreateRow()
+            })}
             placeholder="Description"
             style={cellInputStyle}
           />
         </div>
-        <div style={cellWrapStyle}>
-          <input
-            value={newVendorSku}
-            onChange={(e) => onVendorSkuChange(e.target.value)}
-            onFocus={(e) => e.currentTarget.select()}
-            onKeyDown={(e) => onKeyDown(e)}
-            placeholder="Vendor SKU"
-            style={cellInputStyle}
-          />
-        </div>
-        <div style={cellWrapStyle}>
-          <input
-            value={newUnit}
-            onChange={(e) => onUnitChange(e.target.value)}
-            onFocus={(e) => e.currentTarget.select()}
-            onKeyDown={(e) => onKeyDown(e)}
-            placeholder="Unit"
-            style={cellInputStyle}
-          />
-        </div>
-        <div style={cellWrapStyle}>
-          <input
-            value={newUnitPrice}
-            onChange={(e) => onUnitPriceChange(e.target.value)}
-            onFocus={(e) => e.currentTarget.select()}
-            onKeyDown={(e) => onKeyDown(e)}
-            inputMode="decimal"
-            placeholder="Unit price"
-            style={cellInputStyle}
-          />
-        </div>
-        <div style={cellWrapStyle}>
-          <input
-            value={newLeadDays}
-            onChange={(e) => onLeadDaysChange(e.target.value)}
-            onFocus={(e) => e.currentTarget.select()}
-            onKeyDown={(e) => onKeyDown(e)}
-            inputMode="numeric"
-            placeholder="Lead days"
-            style={cellInputStyle}
-          />
-        </div>
-        <div style={cellWrapStyle}>
-          <input
-            value={newNotes}
-            onChange={(e) => onNotesChange(e.target.value)}
-            onFocus={(e) => e.currentTarget.select()}
-            onKeyDown={(e) => onKeyDown(e, () => {
-              void onCreateRow()
-            })}
-            placeholder="Notes"
-            style={cellInputStyle}
-          />
-        </div>
-        <div style={{ ...cellWrapStyle, display: 'flex', alignItems: 'stretch', minWidth: '72px' }}>
+        <div style={{ ...cellWrapStyle, display: 'flex', alignItems: 'stretch', minWidth: '96px' }}>
           <button
             type="button"
             onClick={() => void onCreateRow()}
@@ -168,7 +96,7 @@ export function PricingWorksheetNewRowBar({
               opacity: creatingRow ? 0.7 : 1,
             }}
           >
-            {creatingRow ? 'Adding…' : 'Add'}
+            {creatingRow ? 'Creating…' : 'Create Row'}
           </button>
         </div>
       </div>
