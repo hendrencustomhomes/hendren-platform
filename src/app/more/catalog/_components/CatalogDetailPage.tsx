@@ -8,6 +8,20 @@ import { getCatalogItemBySku } from '@/lib/pricing/catalog'
 import { fetchPricingCompanies, fetchPricingCostCodes, fetchPricingTrades } from '@/lib/pricing/lookups'
 import type { CatalogItem, PricingCompanyOption, PricingCostCodeOption, PricingTradeOption } from '@/lib/pricing/types'
 
+type SourceHeader = {
+  id: string
+  kind: 'price_sheet' | 'bid'
+  job_id: string | null
+  company_id: string
+  trade_id: string
+  cost_code_id: string
+  title: string
+  status: string
+  effective_date: string | null
+  received_at: string | null
+  is_active: boolean
+}
+
 type SourceRow = {
   id: string
   pricing_header_id: string
@@ -17,19 +31,22 @@ type SourceRow = {
   unit: string | null
   unit_price: number | null
   lead_days: number | null
-  pricing_headers: {
-    id: string
-    kind: 'price_sheet' | 'bid'
-    job_id: string | null
-    company_id: string
-    trade_id: string
-    cost_code_id: string
-    title: string
-    status: string
-    effective_date: string | null
-    received_at: string | null
-    is_active: boolean
-  } | null
+  pricing_headers: SourceHeader | null
+}
+
+type RawSourceRow = Omit<SourceRow, 'pricing_headers'> & {
+  pricing_headers: SourceHeader | SourceHeader[] | null
+}
+
+function normalizeSourceRow(row: RawSourceRow): SourceRow {
+  const header = Array.isArray(row.pricing_headers)
+    ? row.pricing_headers[0] ?? null
+    : row.pricing_headers
+
+  return {
+    ...row,
+    pricing_headers: header,
+  }
 }
 
 function formatMoney(value: number | null) {
@@ -107,7 +124,7 @@ export default function CatalogDetailPage({ catalogSku }: { catalogSku: string }
         setCompanies(companiesRows)
         setTrades(tradeRows)
         setCostCodes(costCodeRows)
-        setSources((sourceResult.data ?? []) as SourceRow[])
+        setSources(((sourceResult.data ?? []) as unknown as RawSourceRow[]).map(normalizeSourceRow))
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load catalog item.')
       } finally {
