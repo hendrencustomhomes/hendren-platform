@@ -10,7 +10,7 @@ import type {
 } from './types'
 
 const PRICING_ROW_COLS =
-  'id, pricing_header_id, catalog_sku, cost_code_id, source_sku, vendor_sku, description_snapshot, quantity, uom, unit_price, lead_days, notes, sort_order, is_active, created_at, updated_at'
+  'id, pricing_header_id, catalog_sku, cost_code_id, source_sku, vendor_sku, description_snapshot, quantity, unit, unit_price, lead_days, notes, sort_order, is_active, created_at, updated_at'
 
 function toError(error: unknown, fallback: string) {
   if (error instanceof Error && error.message.trim()) return error
@@ -121,7 +121,7 @@ export async function createPricingRow(
         vendor_sku: input.vendor_sku?.trim() || null,
         description_snapshot: descriptionSnapshot,
         quantity: input.quantity ?? null,
-        uom: input.uom?.trim() || catalogItem?.default_unit || null,
+        unit: input.unit?.trim() || catalogItem?.default_unit || null,
         unit_price: normalizeMoney(input.unit_price),
         lead_days: input.lead_days ?? null,
         notes: input.notes?.trim() || null,
@@ -152,7 +152,7 @@ export async function updatePricingRow(
         typeof patch.description_snapshot === 'string'
           ? patch.description_snapshot.trim()
           : patch.description_snapshot,
-      uom: typeof patch.uom === 'string' ? patch.uom.trim() || null : patch.uom,
+      unit: typeof patch.unit === 'string' ? patch.unit.trim() || null : patch.unit,
       unit_price: normalizeMoney(patch.unit_price ?? null),
       notes: typeof patch.notes === 'string' ? patch.notes.trim() || null : patch.notes,
     }
