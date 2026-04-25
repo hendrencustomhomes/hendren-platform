@@ -5,6 +5,7 @@ import type { PricingRow } from '@/lib/pricing/types'
 export type PricingWorksheetEditableCellKey =
   | 'description_snapshot'
   | 'vendor_sku'
+  | 'pricing_type'
   | 'quantity'
   | 'unit'
   | 'unit_price'
@@ -52,6 +53,7 @@ export function getPricingWorksheetColumns({
     },
     { key: 'description_snapshot', label: 'Description', kind: 'text', width: '280px' },
     { key: 'vendor_sku', label: 'Vendor SKU', kind: 'text', width: '160px' },
+    { key: 'pricing_type', label: 'Type', kind: 'text', width: '120px' },
     { key: 'quantity', label: 'Quantity', kind: 'text', width: '100px', inputMode: 'decimal' },
     { key: 'unit', label: 'Unit', kind: 'text', width: '100px' },
     {
