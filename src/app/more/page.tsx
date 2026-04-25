@@ -5,6 +5,7 @@ const MORE_ITEMS = [
   { href: '/more/clients', label: 'Clients', icon: '👤' },
   { href: '/more/companies', label: 'Companies', icon: '🏢' },
   { href: '/more/price-sheets', label: 'Price Sheets', icon: '💵' },
+  { href: '/more/catalog', label: 'Catalog', icon: '📦' },
   { href: '/more/internal-users', label: 'Internal Users', icon: '👥' },
   { href: '/more/trades', label: 'Trades', icon: '🛠️' },
   { href: '/more/cost-codes', label: 'Cost Codes', icon: '🏷️' },
