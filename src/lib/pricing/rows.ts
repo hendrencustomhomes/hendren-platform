@@ -10,7 +10,7 @@ import type {
 } from './types'
 
 const PRICING_ROW_COLS =
-  'id, pricing_header_id, catalog_sku, cost_code_id, source_sku, vendor_sku, description_snapshot, unit, unit_price, lead_days, notes, sort_order, is_active, created_at, updated_at'
+  'id, pricing_header_id, catalog_sku, cost_code_id, source_sku, vendor_sku, description_snapshot, quantity, uom, unit_price, lead_days, notes, sort_order, is_active, created_at, updated_at'
 
 function toError(error: unknown, fallback: string) {
   if (error instanceof Error && error.message.trim()) return error
@@ -25,6 +25,11 @@ function toError(error: unknown, fallback: string) {
     if (serialized && serialized !== '{}') return new Error(serialized)
   } catch {}
   return new Error(fallback)
+}
+
+function normalizeMoney(value: number | null | undefined) {
+  if (value == null) return null
+  return value === 0 ? null : value
 }
 
 async function generateSourceSku(
@@ -115,8 +120,9 @@ export async function createPricingRow(
         source_sku: sourceSku,
         vendor_sku: input.vendor_sku?.trim() || null,
         description_snapshot: descriptionSnapshot,
-        unit: input.unit?.trim() || catalogItem?.default_unit || null,
-        unit_price: input.unit_price ?? null,
+        quantity: input.quantity ?? null,
+        uom: input.uom?.trim() || catalogItem?.default_unit || null,
+        unit_price: normalizeMoney(input.unit_price),
         lead_days: input.lead_days ?? null,
         notes: input.notes?.trim() || null,
         sort_order: nextSortOrder,
@@ -146,7 +152,8 @@ export async function updatePricingRow(
         typeof patch.description_snapshot === 'string'
           ? patch.description_snapshot.trim()
           : patch.description_snapshot,
-      unit: typeof patch.unit === 'string' ? patch.unit.trim() || null : patch.unit,
+      uom: typeof patch.uom === 'string' ? patch.uom.trim() || null : patch.uom,
+      unit_price: normalizeMoney(patch.unit_price ?? null),
       notes: typeof patch.notes === 'string' ? patch.notes.trim() || null : patch.notes,
     }
 
