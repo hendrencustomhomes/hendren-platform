@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { PricingRow, UpdatePricingRowPatch } from '@/lib/pricing/types'
+import type { PricingRow, PricingType, UpdatePricingRowPatch } from '@/lib/pricing/types'
 
 const editableCellOrder = [
   'description_snapshot',
   'vendor_sku',
+  'pricing_type',
   'quantity',
   'unit',
   'unit_price',
@@ -43,6 +44,14 @@ function parseNullableMoney(value: string) {
   return parsed === 0 ? null : parsed
 }
 
+function parsePricingType(value: string): PricingType | null {
+  const normalized = value.toLowerCase().trim().replace(/[\s-]+/g, '_')
+  if (normalized === 'unit') return 'unit'
+  if (normalized === 'lump' || normalized === 'lump_sum' || normalized === 'lumpsum') return 'lump_sum'
+  if (normalized === 'allow' || normalized === 'allowance') return 'allowance'
+  return null
+}
+
 function cloneRow(row: PricingRow): PricingRow {
   return { ...row }
 }
@@ -56,6 +65,7 @@ function hasMeaningfulData(row: PricingRow) {
     row.catalog_sku ||
       row.vendor_sku ||
       row.description_snapshot.trim() ||
+      row.pricing_type !== 'unit' ||
       row.quantity != null ||
       row.unit ||
       row.unit_price != null ||
@@ -76,6 +86,7 @@ function createDraftRow(sortOrder: number): PricingRow {
     source_sku: '',
     vendor_sku: null,
     description_snapshot: '',
+    pricing_type: 'unit',
     quantity: null,
     unit: null,
     unit_price: null,
@@ -92,6 +103,7 @@ function buildRowPatch(row: PricingRow): UpdatePricingRowPatch {
   return {
     description_snapshot: row.description_snapshot,
     vendor_sku: row.vendor_sku,
+    pricing_type: row.pricing_type,
     quantity: row.quantity,
     unit: row.unit,
     unit_price: row.unit_price,
@@ -106,6 +118,7 @@ function applyEditableFields(base: PricingRow, source: PricingRow): PricingRow {
     ...base,
     description_snapshot: source.description_snapshot,
     vendor_sku: source.vendor_sku,
+    pricing_type: source.pricing_type,
     quantity: source.quantity,
     unit: source.unit,
     unit_price: source.unit_price,
@@ -126,6 +139,10 @@ function applyEditableCellValue(
     case 'vendor_sku': {
       const next = String(draftValue).trim()
       return { ...row, vendor_sku: next || null }
+    }
+    case 'pricing_type': {
+      const next = parsePricingType(String(draftValue))
+      return next ? { ...row, pricing_type: next } : row
     }
     case 'quantity':
       return { ...row, quantity: parseNullableNumber(String(draftValue)) }
@@ -154,6 +171,7 @@ function areEqual(a: PricingRow | null | undefined, b: PricingRow | null | undef
   return (
     a.description_snapshot === b.description_snapshot &&
     (a.vendor_sku ?? null) === (b.vendor_sku ?? null) &&
+    a.pricing_type === b.pricing_type &&
     (a.quantity ?? null) === (b.quantity ?? null) &&
     (a.unit ?? null) === (b.unit ?? null) &&
     (a.unit_price ?? null) === (b.unit_price ?? null) &&
