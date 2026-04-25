@@ -47,6 +47,8 @@ export async function createPricingHeaderRevision(
       catalog_sku: row.catalog_sku,
       vendor_sku: row.vendor_sku,
       description_snapshot: row.description_snapshot,
+      pricing_type: row.pricing_type,
+      quantity: row.quantity,
       unit: row.unit,
       unit_price: row.unit_price,
       lead_days: row.lead_days,
