@@ -12,6 +12,7 @@ import { getPricingWorksheetColumns, type PricingWorksheetEditableCellKey } from
 const editableCellOrder: readonly PricingWorksheetEditableCellKey[] = [
   'description_snapshot',
   'vendor_sku',
+  'pricing_type',
   'quantity',
   'unit',
   'unit_price',
@@ -30,6 +31,7 @@ function getEditableCellValue(row: PricingRow, field: PricingWorksheetEditableCe
   switch (field) {
     case 'description_snapshot': return row.description_snapshot
     case 'vendor_sku': return row.vendor_sku ?? ''
+    case 'pricing_type': return row.pricing_type
     case 'quantity': return row.quantity == null ? '' : String(row.quantity)
     case 'unit': return row.unit ?? ''
     case 'unit_price': return row.unit_price == null ? '' : String(row.unit_price)
