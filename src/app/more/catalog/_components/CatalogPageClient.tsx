@@ -59,8 +59,14 @@ export default function CatalogPageClient() {
           s.items.map((i) => (
             <Link key={i.catalog_sku} href={`/more/catalog/${i.catalog_sku}`}>
               <div style={{ padding: 12, borderBottom: '1px solid #ddd' }}>
-                <div>{i.catalog_sku}</div>
+                <div><strong>{i.catalog_sku}</strong></div>
                 <div>{i.title}</div>
+                <div style={{ fontSize: 12, opacity: 0.7 }}>
+                  {s.tradeMap.get(i.trade_id)} · {s.costCodeMap.get(i.cost_code_id)}
+                </div>
+                <div style={{ fontSize: 12 }}>
+                  {i.source_count} sources
+                </div>
               </div>
             </Link>
           ))
