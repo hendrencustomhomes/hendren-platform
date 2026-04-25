@@ -1,25 +1,46 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { listCatalogItems, createCatalogItem } from '@/lib/pricing/catalog'
+import { fetchPricingCostCodes, fetchPricingTrades } from '@/lib/pricing/lookups'
 import { getCurrentPricingAccess } from '@/app/actions/pricing-access-actions'
+import type { CatalogItem, PricingCostCodeOption, PricingTradeOption } from '@/lib/pricing/types'
 
 export function useCatalogPage() {
   const supabase = createClient()
 
-  const [items, setItems] = useState<any[]>([])
+  const [items, setItems] = useState<CatalogItem[]>([])
+  const [trades, setTrades] = useState<PricingTradeOption[]>([])
+  const [costCodes, setCostCodes] = useState<PricingCostCodeOption[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [title, setTitle] = useState('')
-  const [access, setAccess] = useState<any>(null)
+  const [tradeId, setTradeId] = useState('')
+  const [costCodeId, setCostCodeId] = useState('')
+  const [defaultUnit, setDefaultUnit] = useState('')
+  const [access, setAccess] = useState<{
+    canView: boolean
+    canManage: boolean
+    canAssign: boolean
+    error?: string
+  } | null>(null)
 
   async function load() {
     setLoading(true)
-    const rows = await listCatalogItems(supabase)
+    const [rows, tradeRows, costCodeRows] = await Promise.all([
+      listCatalogItems(supabase),
+      fetchPricingTrades(supabase),
+      fetchPricingCostCodes(supabase),
+    ])
     setItems(rows)
+    setTrades(tradeRows)
+    setCostCodes(costCodeRows)
+    if (!tradeId && tradeRows[0]) setTradeId(tradeRows[0].id)
+    if (!costCodeId && costCodeRows[0]) setCostCodeId(costCodeRows[0].id)
     setLoading(false)
   }
 
@@ -28,34 +49,88 @@ export function useCatalogPage() {
       const accessResult = await getCurrentPricingAccess('catalog')
       setAccess(accessResult)
       if (!accessResult.canView) {
-        setError('No access')
+        setError(accessResult.error || 'Catalog access required.')
         setLoading(false)
         return
       }
       await load()
     }
     void init()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const filteredCostCodes = useMemo(
+    () => costCodes.filter((row) => !tradeId || !row.trade_id || row.trade_id === tradeId),
+    [costCodes, tradeId]
+  )
+
+  useEffect(() => {
+    if (!tradeId || filteredCostCodes.length === 0) return
+    if (!filteredCostCodes.some((row) => row.id === costCodeId)) {
+      setCostCodeId(filteredCostCodes[0].id)
+    }
+  }, [tradeId, filteredCostCodes, costCodeId])
+
   async function handleCreate() {
-    await createCatalogItem(supabase, { title })
-    setTitle('')
-    setShowAdd(false)
-    await load()
+    if (!access?.canManage) {
+      setError('Manage access required.')
+      return
+    }
+    if (!title.trim() || !tradeId || !costCodeId) {
+      setError('Title, trade, and cost code are required.')
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+
+    try {
+      await createCatalogItem(supabase, {
+        title,
+        trade_id: tradeId,
+        cost_code_id: costCodeId,
+        default_unit: defaultUnit.trim() || null,
+      })
+      setTitle('')
+      setDefaultUnit('')
+      setShowAdd(false)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to create catalog item.')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const filtered = items.filter((i) => i.title.toLowerCase().includes(search.toLowerCase()))
+  const filtered = items.filter((i) => {
+    const q = search.trim().toLowerCase()
+    if (!q) return true
+    return (
+      i.catalog_sku.toLowerCase().includes(q) ||
+      i.title.toLowerCase().includes(q) ||
+      (i.description ?? '').toLowerCase().includes(q)
+    )
+  })
 
   return {
     items: filtered,
+    trades,
+    costCodes: filteredCostCodes,
     search,
     setSearch,
     loading,
+    saving,
     error,
     showAdd,
     setShowAdd,
     title,
     setTitle,
+    tradeId,
+    setTradeId,
+    costCodeId,
+    setCostCodeId,
+    defaultUnit,
+    setDefaultUnit,
     handleCreate,
     access,
   }
