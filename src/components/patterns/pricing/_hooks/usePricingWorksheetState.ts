@@ -6,6 +6,7 @@ import type { PricingRow, UpdatePricingRowPatch } from '@/lib/pricing/types'
 const editableCellOrder = [
   'description_snapshot',
   'vendor_sku',
+  'quantity',
   'unit',
   'unit_price',
   'lead_days',
@@ -52,6 +53,8 @@ function applyEditableCellValue(
       const next = String(draftValue).trim()
       return { ...row, vendor_sku: next || null }
     }
+    case 'quantity':
+      return { ...row, quantity: parseNullableNumber(String(draftValue)) }
     case 'unit': {
       const next = String(draftValue).trim()
       return { ...row, unit: next || null }
@@ -77,6 +80,7 @@ function areEqual(a: PricingRow | null | undefined, b: PricingRow | null | undef
   return (
     a.description_snapshot === b.description_snapshot &&
     (a.vendor_sku ?? null) === (b.vendor_sku ?? null) &&
+    (a.quantity ?? null) === (b.quantity ?? null) &&
     (a.unit ?? null) === (b.unit ?? null) &&
     (a.unit_price ?? null) === (b.unit_price ?? null) &&
     (a.lead_days ?? null) === (b.lead_days ?? null) &&
@@ -204,6 +208,7 @@ export function usePricingWorksheetState({
       const updated = await onPersistRow(rowId, {
         description_snapshot: requestRow.description_snapshot,
         vendor_sku: requestRow.vendor_sku,
+        quantity: requestRow.quantity,
         unit: requestRow.unit,
         unit_price: requestRow.unit_price,
         lead_days: requestRow.lead_days,
