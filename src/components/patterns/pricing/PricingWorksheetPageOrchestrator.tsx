@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PageShell } from '@/components/layout/PageShell'
 import { ErrorMessage } from '@/components/feedback/ErrorMessage'
 import { LoadingState } from '@/components/feedback/LoadingState'
@@ -81,21 +81,6 @@ export default function PricingWorksheetPageOrchestrator({
     return { text: 'Ready', tone: 'active' as const }
   }
 
-  function handleNewRowKeyDown(
-    event: ReactKeyboardEvent<HTMLInputElement | HTMLSelectElement>,
-    onCommit?: () => void
-  ) {
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-      event.preventDefault()
-      onCommit?.()
-      return
-    }
-    if (event.key === 'Enter' && onCommit) {
-      event.preventDefault()
-      onCommit()
-    }
-  }
-
   async function handleCreateRow() {
     const created = await persistence.createRowRecord()
     if (created) {
@@ -145,23 +130,6 @@ export default function PricingWorksheetPageOrchestrator({
 
       <PricingWorksheetNewRowBar
         canManage={!!persistence.access?.canManage}
-        catalogItems={persistence.catalogItems}
-        newCatalogSku={persistence.newCatalogSku}
-        newDescription={persistence.newDescription}
-        newVendorSku={persistence.newVendorSku}
-        newUnit={persistence.newUnit}
-        newUnitPrice={persistence.newUnitPrice}
-        newLeadDays={persistence.newLeadDays}
-        newNotes={persistence.newNotes}
-        creatingRow={persistence.creatingRow}
-        onCatalogSkuChange={persistence.applyCatalogDefaults}
-        onDescriptionChange={persistence.setNewDescription}
-        onVendorSkuChange={persistence.setNewVendorSku}
-        onUnitChange={persistence.setNewUnit}
-        onUnitPriceChange={persistence.setNewUnitPrice}
-        onLeadDaysChange={persistence.setNewLeadDays}
-        onNotesChange={persistence.setNewNotes}
-        onKeyDown={handleNewRowKeyDown}
         onCreateRow={handleCreateRow}
       />
 
