@@ -403,6 +403,190 @@ Module worksheet persistence owns:
 - module-specific save logic stays module-local
 - create-row visuals may be shared, but row shape, defaults, validation, and persistence stay module-local
 
+## Pricing, Estimate, Proposal, Signoff, Invoice Flow
+
+The locked planning direction from the pricing and estimate architecture pass is:
+
+```text
+Catalog (item identity)
+→ Price Sheets / Bids (source pricing options)
+→ Estimate (scope, selected source, pricing, packages, budget)
+→ Proposal (client-facing document output)
+→ Signoff (e-signature execution)
+→ Invoice (QuickBooks Online)
+```
+
+### Pricing Sources / Bids boundary
+
+Price Sheets and Bids are separate business modules, but they share the same pricing-family infrastructure.
+
+```text
+Price Sheets
+  global pricing reference
+  always accepted
+
+Bids
+  job-specific pricing
+  may be awarded or rejected
+  authoritative when awarded
+```
+
+The module names remain **Price Sheets** and **Bids**. Do not rename them to Worksheet or collapse the business names.
+
+### Pricing source row identity
+
+Pricing source rows separate catalog identity from source pricing identity:
+
+```text
+catalog_sku = what the item is
+source_sku = vendor/source-side pricing option
+```
+
+Estimate must preserve this distinction by storing both the catalog identity and the selected source/pricing-row reference where applicable.
+
+### Pricing worksheet row columns
+
+Price Sheets and Bids should use the same worksheet row shape unless a future concrete business need proves otherwise.
+
+Shared pricing-source worksheet columns:
+
+```text
+source_sku
+catalog_sku
+description_snapshot
+vendor_sku
+quantity
+uom
+unit_price
+lead_days
+is_active
+notes
+cost_code_id
+```
+
+Quantity and UOM should be visible/editable for both Price Sheets and Bids. Do not hide quantity for Price Sheets.
+
+### Pricing value rule
+
+For monetary fields, `$0` is never valid pricing data.
+
+```text
+0 input → store NULL
+NULL = unknown / not entered
+```
+
+This rule applies to pricing and budget money fields, including unit cost, unit price, item unit cost, package total, allowance amount, and labor rate.
+
+### Estimate direction
+
+Estimate should become the unified estimator workspace for takeoff quantities and pricing. There should not be a separate estimator-facing Takeoff module that requires conversion into Estimate.
+
+The field/PM lightweight takeoff confirmation workflow is separate and may be added later, but it is not the estimator office workflow.
+
+Estimate should support multiple estimates per job:
+
+```text
+A job may have many estimates.
+Only approved estimates are authoritative.
+```
+
+Approved base estimates establish original contract scope. Change-order estimates are child/additive estimates that modify approved scope without silently changing the base estimate.
+
+```text
+Approved base estimate
++ approved change-order estimates
+= current approved job value
+```
+
+### Estimate source resolution
+
+Estimate lines should start from catalog identity and then resolve pricing/source options:
+
+```text
+1. Awarded job bid
+2. Active job bid
+3. Active/latest price sheet
+4. Manual source
+5. Unpriced
+```
+
+Ambiguous matches should be flagged, not guessed.
+
+Estimate lines should snapshot chosen pricing/source data so future catalog, bid, or price-sheet updates do not silently rewrite historical estimates.
+
+### Template import direction
+
+V1 estimate creation should favor a fast template import workflow over a complex scope intake questionnaire:
+
+```text
+Select template
+→ preview grouped checklist
+→ import selected rows
+→ edit in Estimate Builder
+```
+
+Do not solve template filtering by adding ongoing metadata-entry burden to catalog items. Catalog stays lean and durable. Template membership/curation belongs in a separate template layer that references catalog SKUs.
+
+### Package, assembly, and lump-sum pricing
+
+Estimate must support both itemized pricing and package/lump-sum pricing.
+
+```text
+Unit priced line = quantity × unit cost
+Package/lump-sum line = one total covers many items
+Allowance line = budget placeholder / selection bucket
+```
+
+Packages may cover multiple required items without requiring item-level prices.
+
+Example:
+
+```text
+Plumbing Fixtures Package
+Package budget: 18500
+Covers:
+  3 toilets
+  5 faucets
+  2 shower heads
+```
+
+Covered items track scope and selections. They do not force fake item pricing.
+
+### Budget tracking modes
+
+Budget may be tracked at item level or package level.
+
+```text
+item_level = variance is calculated per item
+package_level = variance is calculated against package/assembly total
+```
+
+When a package budget is authoritative, item-level pricing is optional business intelligence only.
+
+### Optional business intelligence rule
+
+The platform should capture useful detail when naturally available, but it must not require fake precision.
+
+```text
+Capture detail opportunistically.
+Never require fake item-level pricing.
+Never block workflow for optional intelligence.
+```
+
+If item-level pricing is entered for a covered item, log it with clear source/confidence. If it is not known, store null and treat it as unknown, not zero.
+
+### Proposal boundary
+
+Proposal should not be implemented as just another worksheet.
+
+Proposal is a document/output builder fed by approved or draft estimate data. It should support line visibility, group rollups, client-facing descriptions, alternates/options, PDF preview/export, and e-signature handoff.
+
+### Signoff and invoice boundary
+
+Use a real e-signature provider for proposal/change-order signoff rather than building the legal signature ceremony internally. QuickBooks Online remains the invoice/accounting system, not the contract-signing authority.
+
+Invoice creation should only be allowed from approved/signed base estimates or approved/signed change-order estimates.
+
 ## Styling Strategy
 
 The styling system must be inherited, not improvised.
@@ -454,7 +638,7 @@ A file is too dense when:
 - it contains several major sections,
 - it handles many independent flows,
 - it mixes orchestration, formatting, mutation, and layout,
-- a future change would touch many unrelated parts of the file.
+- a future change would touch many unrelated logic in the same file.
 
 ## Anti-Patterns We Are Banning
 
