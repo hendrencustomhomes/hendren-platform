@@ -26,9 +26,30 @@ export default function CatalogPageClient() {
         )}
 
         {s.showAdd && (
-          <div>
-            <input value={s.title} onChange={(e) => s.setTitle(e.target.value)} />
-            <button onClick={s.handleCreate}>Create</button>
+          <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+            <input placeholder="Title" value={s.title} onChange={(e) => s.setTitle(e.target.value)} />
+
+            <select value={s.tradeId} onChange={(e) => s.setTradeId(e.target.value)}>
+              {s.trades.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+
+            <select value={s.costCodeId} onChange={(e) => s.setCostCodeId(e.target.value)}>
+              {s.costCodes.map((c) => (
+                <option key={c.id} value={c.id}>{c.cost_code} · {c.title}</option>
+              ))}
+            </select>
+
+            <input
+              placeholder="Default unit"
+              value={s.defaultUnit}
+              onChange={(e) => s.setDefaultUnit(e.target.value)}
+            />
+
+            <button onClick={s.handleCreate} disabled={s.saving}>
+              {s.saving ? 'Creating…' : 'Create'}
+            </button>
           </div>
         )}
 
