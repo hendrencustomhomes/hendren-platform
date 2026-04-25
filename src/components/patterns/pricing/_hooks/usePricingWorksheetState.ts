@@ -37,6 +37,12 @@ function parseNullableNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function parseNullableMoney(value: string) {
+  const parsed = parseNullableNumber(value)
+  if (parsed == null) return null
+  return parsed === 0 ? null : parsed
+}
+
 function cloneRow(row: PricingRow): PricingRow {
   return { ...row }
 }
@@ -54,8 +60,7 @@ function hasMeaningfulData(row: PricingRow) {
       row.unit ||
       row.unit_price != null ||
       row.lead_days != null ||
-      row.notes ||
-      row.is_active === false
+      row.notes
   )
 }
 
@@ -96,6 +101,20 @@ function buildRowPatch(row: PricingRow): UpdatePricingRowPatch {
   }
 }
 
+function applyEditableFields(base: PricingRow, source: PricingRow): PricingRow {
+  return {
+    ...base,
+    description_snapshot: source.description_snapshot,
+    vendor_sku: source.vendor_sku,
+    quantity: source.quantity,
+    unit: source.unit,
+    unit_price: source.unit_price,
+    lead_days: source.lead_days,
+    notes: source.notes,
+    is_active: source.is_active,
+  }
+}
+
 function applyEditableCellValue(
   row: PricingRow,
   field: EditableCellKey,
@@ -115,7 +134,7 @@ function applyEditableCellValue(
       return { ...row, unit: next || null }
     }
     case 'unit_price':
-      return { ...row, unit_price: parseNullableNumber(String(draftValue)) }
+      return { ...row, unit_price: parseNullableMoney(String(draftValue)) }
     case 'lead_days':
       return { ...row, lead_days: parseNullableNumber(String(draftValue)) }
     case 'notes': {
@@ -230,8 +249,8 @@ export function usePricingWorksheetState({
 
   function promoteDraftRow(draftId: string, requestRow: PricingRow, created: PricingRow) {
     const latestLocalRow = getLocalRow(draftId)
-    const promotedBase: PricingRow = latestLocalRow && !areEqual(latestLocalRow, requestRow)
-      ? { ...created, ...buildRowPatch(latestLocalRow) }
+    const promotedBase = latestLocalRow && !areEqual(latestLocalRow, requestRow)
+      ? applyEditableFields(created, latestLocalRow)
       : created
 
     replaceLocalRow(draftId, promotedBase)
