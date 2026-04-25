@@ -1,5 +1,6 @@
 import CatalogDetailPage from '../_components/CatalogDetailPage'
 
-export default function Page({ params }: { params: { id: string } }) {
-  return <CatalogDetailPage catalogSku={params.id} />
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  return <CatalogDetailPage catalogSku={id} />
 }

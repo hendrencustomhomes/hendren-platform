@@ -53,6 +53,10 @@ export default function CatalogPageClient() {
           </div>
         )}
 
+        {s.error && (
+          <div style={{ padding: '12px 0', color: 'var(--danger)', fontSize: 14 }}>{s.error}</div>
+        )}
+
         {s.loading ? (
           <div>Loading…</div>
         ) : (

@@ -33,28 +33,31 @@ export function useCatalogPage() {
 
   async function load() {
     setLoading(true)
-    const [rows, tradeRows, costCodeRows, sourceRowsResult] = await Promise.all([
-      listCatalogItems(supabase),
-      fetchPricingTrades(supabase),
-      fetchPricingCostCodes(supabase),
-      supabase.from('pricing_rows').select('catalog_sku').not('catalog_sku', 'is', null),
-    ])
+    try {
+      const [rows, tradeRows, costCodeRows, sourceRowsResult] = await Promise.all([
+        listCatalogItems(supabase),
+        fetchPricingTrades(supabase),
+        fetchPricingCostCodes(supabase),
+        supabase.from('pricing_rows').select('catalog_sku').not('catalog_sku', 'is', null),
+      ])
 
-    if (sourceRowsResult.error) throw sourceRowsResult.error
+      if (sourceRowsResult.error) throw sourceRowsResult.error
 
-    const sourceCounts = new Map<string, number>()
-    for (const sourceRow of sourceRowsResult.data ?? []) {
-      const sku = String(sourceRow.catalog_sku ?? '')
-      if (!sku) continue
-      sourceCounts.set(sku, (sourceCounts.get(sku) ?? 0) + 1)
+      const sourceCounts = new Map<string, number>()
+      for (const sourceRow of sourceRowsResult.data ?? []) {
+        const sku = String(sourceRow.catalog_sku ?? '')
+        if (!sku) continue
+        sourceCounts.set(sku, (sourceCounts.get(sku) ?? 0) + 1)
+      }
+
+      setItems(rows.map((row) => ({ ...row, source_count: sourceCounts.get(row.catalog_sku) ?? 0 })))
+      setTrades(tradeRows)
+      setCostCodes(costCodeRows)
+      if (!tradeId && tradeRows[0]) setTradeId(tradeRows[0].id)
+      if (!costCodeId && costCodeRows[0]) setCostCodeId(costCodeRows[0].id)
+    } finally {
+      setLoading(false)
     }
-
-    setItems(rows.map((row) => ({ ...row, source_count: sourceCounts.get(row.catalog_sku) ?? 0 })))
-    setTrades(tradeRows)
-    setCostCodes(costCodeRows)
-    if (!tradeId && tradeRows[0]) setTradeId(tradeRows[0].id)
-    if (!costCodeId && costCodeRows[0]) setCostCodeId(costCodeRows[0].id)
-    setLoading(false)
   }
 
   useEffect(() => {

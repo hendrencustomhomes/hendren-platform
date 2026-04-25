@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { getCatalogItemBySku } from '@/lib/pricing/catalog'
 import { fetchPricingCompanies, fetchPricingCostCodes, fetchPricingTrades } from '@/lib/pricing/lookups'
+import { getCurrentPricingAccess } from '@/app/actions/pricing-access-actions'
 import type { CatalogItem, PricingCompanyOption, PricingCostCodeOption, PricingTradeOption } from '@/lib/pricing/types'
 
 type SourceHeader = {
@@ -85,6 +86,12 @@ export default function CatalogDetailPage({ catalogSku }: { catalogSku: string }
       setError(null)
 
       try {
+        const access = await getCurrentPricingAccess('catalog')
+        if (!access.canView) {
+          setError(access.error || 'Catalog access required.')
+          return
+        }
+
         const [catalogItem, companiesRows, tradeRows, costCodeRows, sourceResult] = await Promise.all([
           getCatalogItemBySku(supabase, catalogSku),
           fetchPricingCompanies(supabase),
@@ -155,6 +162,7 @@ export default function CatalogDetailPage({ catalogSku }: { catalogSku: string }
         <section style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
           <h3 style={{ marginTop: 0 }}>Catalog Identity</h3>
           <div><strong>SKU:</strong> {item.catalog_sku}</div>
+          <div><strong>Title:</strong> {item.title}</div>
           <div><strong>Description:</strong> {item.description || '—'}</div>
           <div><strong>Trade:</strong> {tradeMap.get(item.trade_id) ?? item.trade_id}</div>
           <div><strong>Cost Code:</strong> {costCodeMap.get(item.cost_code_id) ?? item.cost_code_id}</div>
