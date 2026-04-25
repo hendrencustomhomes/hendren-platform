@@ -59,6 +59,10 @@ function hasMeaningfulData(row: PricingRow) {
   )
 }
 
+function isBlankDraftRow(row: PricingRow) {
+  return isDraftRowId(row.id) && !hasMeaningfulData(row)
+}
+
 function createDraftRow(sortOrder: number): PricingRow {
   const now = new Date().toISOString()
   const id = `draft-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`
@@ -80,6 +84,19 @@ function createDraftRow(sortOrder: number): PricingRow {
     is_active: true,
     created_at: now,
     updated_at: now,
+  }
+}
+
+function buildRowPatch(row: PricingRow): UpdatePricingRowPatch {
+  return {
+    description_snapshot: row.description_snapshot,
+    vendor_sku: row.vendor_sku,
+    quantity: row.quantity,
+    unit: row.unit,
+    unit_price: row.unit_price,
+    lead_days: row.lead_days,
+    notes: row.notes,
+    is_active: row.is_active,
   }
 }
 
@@ -154,6 +171,7 @@ export function usePricingWorksheetState({
   const activeDraftRef = useRef<CellDraftValue | null>(null)
   const saveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const savingRowsRef = useRef<Set<string>>(new Set())
+  const promotingRowsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     localRowsRef.current = localRows
@@ -181,6 +199,7 @@ export function usePricingWorksheetState({
     Object.values(saveTimersRef.current).forEach((timer) => clearTimeout(timer))
     saveTimersRef.current = {}
     savingRowsRef.current = new Set()
+    promotingRowsRef.current = new Set()
     setLocalRows(initialRows)
     setServerRows(initialRows)
     localRowsRef.current = initialRows
@@ -213,13 +232,40 @@ export function usePricingWorksheetState({
     setServerRowsSync(nextRows)
   }
 
-  function promoteDraftRow(draftId: string, created: PricingRow) {
-    replaceLocalRow(draftId, created)
+  function removeBlankDraftRows() {
+    const nextRows = localRowsRef.current.filter((row) => !isBlankDraftRow(row))
+    if (nextRows.length === localRowsRef.current.length) return
+
+    const removedIds = new Set(
+      localRowsRef.current.filter((row) => isBlankDraftRow(row)).map((row) => row.id)
+    )
+    setLocalRowsSync(nextRows)
+    setRowSaveState((prev) => {
+      const next = { ...prev }
+      removedIds.forEach((id) => delete next[id])
+      return next
+    })
+    setUndoStack((stack) => stack.filter((entry) => !removedIds.has(entry.rowId)))
+    if (activeCellRef.current && removedIds.has(activeCellRef.current.rowId)) {
+      setActiveCell(null)
+      setActiveDraft(null)
+      activeCellRef.current = null
+      activeDraftRef.current = null
+    }
+  }
+
+  function promoteDraftRow(draftId: string, requestRow: PricingRow, created: PricingRow) {
+    const latestLocalRow = getLocalRow(draftId)
+    const promotedBase: PricingRow = latestLocalRow && !areEqual(latestLocalRow, requestRow)
+      ? { ...created, ...buildRowPatch(latestLocalRow) }
+      : created
+
+    replaceLocalRow(draftId, promotedBase)
     const nextServerRows = [...serverRowsRef.current, created]
     setServerRowsSync(nextServerRows)
     setRowSaveState((prev) => {
       const { [draftId]: _removed, ...rest } = prev
-      return { ...rest, [created.id]: 'idle' }
+      return { ...rest, [created.id]: areEqual(promotedBase, created) ? 'idle' : 'dirty' }
     })
     setUndoStack((stack) =>
       stack.map((entry) =>
@@ -230,6 +276,9 @@ export function usePricingWorksheetState({
       const nextCell = { ...activeCellRef.current, rowId: created.id }
       setActiveCell(nextCell)
       activeCellRef.current = nextCell
+    }
+    if (!areEqual(promotedBase, created)) {
+      scheduleFlush(created.id, 120)
     }
   }
 
@@ -271,15 +320,17 @@ export function usePricingWorksheetState({
 
       const requestRow = cloneRow(local)
       savingRowsRef.current.add(rowId)
+      promotingRowsRef.current.add(rowId)
       setRowState(rowId, 'saving')
 
       try {
         const created = await onCreateRow(requestRow)
-        promoteDraftRow(rowId, created)
+        promoteDraftRow(rowId, requestRow, created)
       } catch {
         setRowState(rowId, 'error')
       } finally {
         savingRowsRef.current.delete(rowId)
+        promotingRowsRef.current.delete(rowId)
       }
       return
     }
@@ -297,16 +348,7 @@ export function usePricingWorksheetState({
     setRowState(rowId, 'saving')
 
     try {
-      const updated = await onPersistRow(rowId, {
-        description_snapshot: requestRow.description_snapshot,
-        vendor_sku: requestRow.vendor_sku,
-        quantity: requestRow.quantity,
-        unit: requestRow.unit,
-        unit_price: requestRow.unit_price,
-        lead_days: requestRow.lead_days,
-        notes: requestRow.notes,
-        is_active: requestRow.is_active,
-      })
+      const updated = await onPersistRow(rowId, buildRowPatch(requestRow))
 
       replaceServerRow(rowId, updated)
 
@@ -353,7 +395,7 @@ export function usePricingWorksheetState({
     }
 
     syncRowStateFromRows(rowId, next)
-    scheduleFlush(rowId)
+    if (!promotingRowsRef.current.has(rowId)) scheduleFlush(rowId)
     return next
   }
 
@@ -361,6 +403,7 @@ export function usePricingWorksheetState({
     setUndoStack((stack) => {
       const last = stack[stack.length - 1]
       if (!last) return stack
+      if (promotingRowsRef.current.has(last.rowId)) return stack
 
       replaceLocalRow(last.rowId, cloneRow(last.previousRow))
       syncRowStateFromRows(last.rowId, last.previousRow)
@@ -378,6 +421,7 @@ export function usePricingWorksheetState({
   }
 
   function appendDraftRow() {
+    removeBlankDraftRows()
     const draft = createDraftRow(localRowsRef.current.length)
     const nextLocalRows = [...localRowsRef.current, draft]
     setLocalRowsSync(nextLocalRows)
