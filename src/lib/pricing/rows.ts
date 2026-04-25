@@ -97,18 +97,14 @@ export async function createPricingRow(
       if (!catalogItem) throw new Error('Catalog item not found')
     }
 
-    const descriptionSnapshot = input.description_snapshot?.trim() || catalogItem?.title
-
-    if (!descriptionSnapshot) {
-      throw new Error('Description is required')
-    }
-
+    const descriptionSnapshot = input.description_snapshot?.trim() || catalogItem?.title || ''
+    const sourceSkuBasis = descriptionSnapshot || 'ROW'
     const costCodeId = catalogItem?.cost_code_id || header.cost_code_id
     const sourceSku = await generateSourceSku(
       supabase,
       header.company_id,
       costCodeId,
-      descriptionSnapshot
+      sourceSkuBasis
     )
 
     const { data, error } = await supabase
