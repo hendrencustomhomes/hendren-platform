@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getCurrentPricingAccess } from '@/app/actions/pricing-access-actions'
 import { createClient } from '@/utils/supabase/client'
@@ -18,13 +18,6 @@ import type {
   PricingTradeOption,
   UpdatePricingRowPatch,
 } from '@/lib/pricing/types'
-
-function parseNullableNumber(value: string) {
-  const trimmed = value.trim().replace(/[$,]/g, '')
-  if (!trimmed) return null
-  const parsed = Number(trimmed)
-  return Number.isFinite(parsed) ? parsed : null
-}
 
 type Props = {
   headerId: string
@@ -59,7 +52,6 @@ export function usePricingWorksheetPersistence({
   const [costCodes, setCostCodes] = useState<PricingCostCodeOption[]>([])
 
   const [savingHeader, setSavingHeader] = useState(false)
-  const [creatingRow, setCreatingRow] = useState(false)
   const [creatingRevision, setCreatingRevision] = useState(false)
 
   const [headerTitle, setHeaderTitle] = useState('')
@@ -67,16 +59,6 @@ export function usePricingWorksheetPersistence({
   const [headerEffectiveDate, setHeaderEffectiveDate] = useState('')
   const [headerNotes, setHeaderNotes] = useState('')
   const [headerIsActive, setHeaderIsActive] = useState(true)
-
-  const [newCatalogSku, setNewCatalogSku] = useState('')
-  const [newDescription, setNewDescription] = useState('')
-  const [newVendorSku, setNewVendorSku] = useState('')
-  const [newUnit, setNewUnit] = useState('')
-  const [newUnitPrice, setNewUnitPrice] = useState('')
-  const [newLeadDays, setNewLeadDays] = useState('')
-  const [newNotes, setNewNotes] = useState('')
-
-  const catalogMap = useMemo(() => new Map(catalogItems.map((item) => [item.catalog_sku, item])), [catalogItems])
 
   async function loadPage() {
     if (!headerId) return
@@ -137,16 +119,28 @@ export function usePricingWorksheetPersistence({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headerId, permissionRowKey])
 
-  function applyCatalogDefaults(catalogSku: string) {
-    setNewCatalogSku(catalogSku)
-    const item = catalogMap.get(catalogSku)
-    if (!item) return
-    setNewDescription(item.title)
-    setNewUnit(item.default_unit ?? '')
-  }
-
   async function persistRow(rowId: string, patch: UpdatePricingRowPatch) {
     return updatePricingRow(supabase, rowId, patch)
+  }
+
+  async function createRowFromDraft(draft: PricingRow) {
+    if (!access?.canManage) {
+      throw new Error('Manage access required.')
+    }
+    if (!header) throw new Error(`${missingLabel} is required.`)
+
+    return createPricingRow(supabase, {
+      pricing_header_id: header.id,
+      catalog_sku: draft.catalog_sku,
+      description_snapshot: draft.description_snapshot,
+      vendor_sku: draft.vendor_sku,
+      quantity: draft.quantity,
+      unit: draft.unit,
+      unit_price: draft.unit_price,
+      lead_days: draft.lead_days,
+      notes: draft.notes,
+      is_active: draft.is_active,
+    })
   }
 
   async function saveHeader() {
@@ -201,49 +195,6 @@ export function usePricingWorksheetPersistence({
     }
   }
 
-  async function createRowRecord() {
-    if (!access?.canManage) {
-      setError('Manage access required.')
-      return null
-    }
-    if (!header) return null
-    if (!newDescription.trim()) {
-      setError('Description is required.')
-      return null
-    }
-
-    setCreatingRow(true)
-    setError(null)
-
-    try {
-      const created = await createPricingRow(supabase, {
-        pricing_header_id: header.id,
-        catalog_sku: newCatalogSku || null,
-        description_snapshot: newDescription,
-        vendor_sku: newVendorSku || null,
-        unit: newUnit || null,
-        unit_price: parseNullableNumber(newUnitPrice),
-        lead_days: parseNullableNumber(newLeadDays),
-        notes: newNotes || null,
-      })
-
-      setNewCatalogSku('')
-      setNewDescription('')
-      setNewVendorSku('')
-      setNewUnit('')
-      setNewUnitPrice('')
-      setNewLeadDays('')
-      setNewNotes('')
-
-      return created
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Failed to add row.')
-      return null
-    } finally {
-      setCreatingRow(false)
-    }
-  }
-
   return {
     access,
     loading,
@@ -256,7 +207,6 @@ export function usePricingWorksheetPersistence({
     trades,
     costCodes,
     savingHeader,
-    creatingRow,
     creatingRevision,
     headerTitle,
     headerStatus,
@@ -268,24 +218,9 @@ export function usePricingWorksheetPersistence({
     setHeaderEffectiveDate,
     setHeaderNotes,
     setHeaderIsActive,
-    newCatalogSku,
-    newDescription,
-    newVendorSku,
-    newUnit,
-    newUnitPrice,
-    newLeadDays,
-    newNotes,
-    setNewCatalogSku,
-    applyCatalogDefaults,
-    setNewDescription,
-    setNewVendorSku,
-    setNewUnit,
-    setNewUnitPrice,
-    setNewLeadDays,
-    setNewNotes,
     saveHeader,
     createRevision,
-    createRowRecord,
+    createRowFromDraft,
     persistRow,
     reload: loadPage,
   }
