@@ -59,10 +59,6 @@ function hasMeaningfulData(row: PricingRow) {
   )
 }
 
-function isBlankDraftRow(row: PricingRow) {
-  return isDraftRowId(row.id) && !hasMeaningfulData(row)
-}
-
 function createDraftRow(sortOrder: number): PricingRow {
   const now = new Date().toISOString()
   const id = `draft-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`
@@ -232,28 +228,6 @@ export function usePricingWorksheetState({
     setServerRowsSync(nextRows)
   }
 
-  function removeBlankDraftRows() {
-    const nextRows = localRowsRef.current.filter((row) => !isBlankDraftRow(row))
-    if (nextRows.length === localRowsRef.current.length) return
-
-    const removedIds = new Set(
-      localRowsRef.current.filter((row) => isBlankDraftRow(row)).map((row) => row.id)
-    )
-    setLocalRowsSync(nextRows)
-    setRowSaveState((prev) => {
-      const next = { ...prev }
-      removedIds.forEach((id) => delete next[id])
-      return next
-    })
-    setUndoStack((stack) => stack.filter((entry) => !removedIds.has(entry.rowId)))
-    if (activeCellRef.current && removedIds.has(activeCellRef.current.rowId)) {
-      setActiveCell(null)
-      setActiveDraft(null)
-      activeCellRef.current = null
-      activeDraftRef.current = null
-    }
-  }
-
   function promoteDraftRow(draftId: string, requestRow: PricingRow, created: PricingRow) {
     const latestLocalRow = getLocalRow(draftId)
     const promotedBase: PricingRow = latestLocalRow && !areEqual(latestLocalRow, requestRow)
@@ -421,7 +395,6 @@ export function usePricingWorksheetState({
   }
 
   function appendDraftRow() {
-    removeBlankDraftRows()
     const draft = createDraftRow(localRowsRef.current.length)
     const nextLocalRows = [...localRowsRef.current, draft]
     setLocalRowsSync(nextLocalRows)
