@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export type DbClient = SupabaseClient
 
 export type PricingHeaderKind = 'price_sheet' | 'bid'
+export type PricingType = 'unit' | 'lump_sum' | 'allowance'
 
 export type CatalogItem = {
   id: string
@@ -44,6 +45,7 @@ export type PricingRow = {
   source_sku: string
   vendor_sku: string | null
   description_snapshot: string
+  pricing_type: PricingType
   quantity: number | null
   unit: string | null
   unit_price: number | null
@@ -127,6 +129,7 @@ export type CreatePricingRowInput = {
   catalog_sku?: string | null
   vendor_sku?: string | null
   description_snapshot?: string | null
+  pricing_type?: PricingType
   quantity?: number | null
   unit?: string | null
   unit_price?: number | null
@@ -138,6 +141,7 @@ export type CreatePricingRowInput = {
 export type UpdatePricingRowPatch = Partial<{
   vendor_sku: string | null
   description_snapshot: string
+  pricing_type: PricingType
   quantity: number | null
   unit: string | null
   unit_price: number | null
