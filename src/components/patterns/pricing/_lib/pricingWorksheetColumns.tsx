@@ -13,6 +13,18 @@ export type PricingWorksheetEditableCellKey =
   | 'is_active'
   | 'notes'
 
+function formatPricingType(value: PricingRow['pricing_type']) {
+  if (value === 'lump_sum') return 'Lump Sum'
+  if (value === 'allowance') return 'Allowance'
+  return 'Unit'
+}
+
+function formatSourceAmountLabel(row: PricingRow) {
+  if (row.pricing_type === 'allowance') return 'Allowance Rate'
+  if (row.pricing_type === 'lump_sum') return 'Lump Sum'
+  return 'Unit Price'
+}
+
 export function getPricingWorksheetColumns({
   costCodeMap,
   getRowStatusLabel,
@@ -53,20 +65,31 @@ export function getPricingWorksheetColumns({
     },
     { key: 'description_snapshot', label: 'Description', kind: 'text', width: '280px' },
     { key: 'vendor_sku', label: 'Vendor SKU', kind: 'text', width: '160px' },
-    { key: 'pricing_type', label: 'Type', kind: 'text', width: '120px' },
+    {
+      key: 'pricing_type',
+      label: 'Type',
+      kind: 'text',
+      width: '120px',
+      formatEditableValue: (value, _row, isEditing) => {
+        if (isEditing) return String(value ?? '')
+        if (value === 'lump_sum' || value === 'allowance' || value === 'unit') return formatPricingType(value)
+        return String(value ?? '')
+      },
+    },
     { key: 'quantity', label: 'Quantity', kind: 'text', width: '100px', inputMode: 'decimal' },
     { key: 'unit', label: 'Unit', kind: 'text', width: '100px' },
     {
       key: 'unit_price',
-      label: 'Unit Price',
+      label: 'Source Amount',
       kind: 'text',
-      width: '120px',
+      width: '135px',
       inputMode: 'decimal',
-      formatEditableValue: (value, _row, isEditing) => {
+      formatEditableValue: (value, row, isEditing) => {
         if (isEditing) return String(value ?? '')
         if (value == null || value === '') return ''
         const parsed = typeof value === 'number' ? value : Number(value)
-        return Number.isFinite(parsed) ? formatMoney(parsed) : String(value)
+        const amount = Number.isFinite(parsed) ? formatMoney(parsed) : String(value)
+        return `${amount} · ${formatSourceAmountLabel(row)}`
       },
     },
     { key: 'lead_days', label: 'Lead Days', kind: 'text', width: '110px', inputMode: 'numeric' },
