@@ -38,6 +38,7 @@ export default function PricingWorksheetPageOrchestrator({
   const worksheet = usePricingWorksheetState({
     initialRows: persistence.loadedRows,
     onPersistRow: persistence.persistRow,
+    onCreateRow: persistence.createRowFromDraft,
   })
 
   const [isMobile, setIsMobile] = useState(false)
@@ -81,15 +82,8 @@ export default function PricingWorksheetPageOrchestrator({
     return { text: 'Ready', tone: 'active' as const }
   }
 
-  async function handleCreateRow() {
-    const created = await persistence.createRowRecord()
-    if (created) {
-      worksheet.appendRow(created)
-      if (!isMobile) {
-        worksheet.setActiveCell({ rowId: created.id, field: 'description_snapshot' })
-        worksheet.setActiveDraft(created.description_snapshot)
-      }
-    }
+  function handleCreateRow() {
+    worksheet.appendDraftRow()
   }
 
   if (persistence.loading) return <LoadingState />
