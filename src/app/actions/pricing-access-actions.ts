@@ -4,7 +4,7 @@ import { normalizePermissionState, type PermissionRowKey } from '@/lib/access-co
 import { createAdminClient } from '@/utils/supabase/admin'
 import { createClient } from '@/utils/supabase/server'
 
-type SupportedPricingPermissionRowKey = Extract<PermissionRowKey, 'pricing_sources' | 'bids'>
+type SupportedPricingPermissionRowKey = Extract<PermissionRowKey, 'pricing_sources' | 'bids' | 'catalog'>
 
 type PricingAccessResult = {
   canView: boolean
