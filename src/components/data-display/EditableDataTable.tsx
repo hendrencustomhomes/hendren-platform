@@ -32,6 +32,7 @@ export type EditableDataTableColumn<Row> = {
   kind: 'static' | 'text' | 'textarea' | 'checkbox'
   width?: string
   editable?: boolean
+  isEditable?: (row: Row) => boolean
   inputMode?: InputHTMLAttributes<HTMLInputElement>['inputMode']
   inputType?: HTMLInputTypeAttribute
   textAreaRows?: number
@@ -127,6 +128,12 @@ const staticCellStyle = {
   whiteSpace: 'nowrap' as const,
 } as const
 
+const lockedStaticCellStyle = {
+  ...staticCellStyle,
+  color: 'var(--text-muted)',
+  background: 'var(--surface-subtle, var(--surface))',
+} as const
+
 function getCellDomKey(rowId: string, field: EditableDataTableCellKey) {
   return `${rowId}:${field}`
 }
@@ -134,6 +141,22 @@ function getCellDomKey(rowId: string, field: EditableDataTableCellKey) {
 function isFullySelected(element: HTMLInputElement | HTMLTextAreaElement) {
   const valueLength = element.value.length
   return (element.selectionStart ?? 0) === 0 && (element.selectionEnd ?? 0) === valueLength
+}
+
+function isColumnEditable<Row>(column: EditableDataTableColumn<Row>, row: Row) {
+  if (column.kind === 'static') return false
+  if (column.editable === false) return false
+  if (column.isEditable) return column.isEditable(row)
+  return true
+}
+
+function renderStaticValue<Row>(column: EditableDataTableColumn<Row>, row: Row, locked = false) {
+  if (column.renderStaticCell) return column.renderStaticCell(row)
+  const rawValue = column.getValue?.(row) ?? ''
+  const formattedValue = column.formatEditableValue
+    ? column.formatEditableValue(rawValue, row, false)
+    : String(rawValue ?? '')
+  return <div style={locked ? lockedStaticCellStyle : staticCellStyle}>{formattedValue}</div>
 }
 
 export function EditableDataTable<Row>({
@@ -201,11 +224,16 @@ export function EditableDataTable<Row>({
                       if (column.kind === 'static') {
                         return (
                           <td key={column.key} style={tableCellStyle}>
-                            {column.renderStaticCell ? (
-                              column.renderStaticCell(row)
-                            ) : (
-                              <div style={staticCellStyle}>{String(column.getValue?.(row) ?? '')}</div>
-                            )}
+                            {renderStaticValue(column, row)}
+                          </td>
+                        )
+                      }
+
+                      const editable = isColumnEditable(column, row)
+                      if (!editable) {
+                        return (
+                          <td key={column.key} style={tableCellStyle}>
+                            {renderStaticValue(column, row, true)}
                           </td>
                         )
                       }
