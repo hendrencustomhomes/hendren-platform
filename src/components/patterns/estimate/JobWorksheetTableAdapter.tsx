@@ -49,6 +49,11 @@ type JobWorksheetCellKey =
   | 'status'
   | 'notes'
 
+export type JobWorksheetCreateRowOptions = {
+  sourceRowId?: string
+  asChild?: boolean
+}
+
 const editableCellOrder: readonly JobWorksheetEditableCellKey[] = [
   'description',
   'location',
@@ -169,10 +174,11 @@ type Props = {
   setActiveCell: (cell: WorksheetActiveCell<JobWorksheetEditableCellKey> | null) => void
   setActiveDraft: (draft: WorksheetCellDraftValue) => void
   commitCellValue: (rowId: string, field: JobWorksheetEditableCellKey, value: string | boolean) => void
+  createDraftRowAfter: (options?: JobWorksheetCreateRowOptions) => void
   handleUndo: () => void
 }
 
-export function JobWorksheetTableAdapter({ rows, activeCell, activeDraft, setActiveCell, setActiveDraft, commitCellValue, handleUndo }: Props) {
+export function JobWorksheetTableAdapter({ rows, activeCell, activeDraft, setActiveCell, setActiveDraft, commitCellValue, createDraftRowAfter, handleUndo }: Props) {
   const rowsById = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
   const columns = useMemo(() => getColumns(rowsById), [rowsById])
 
@@ -195,7 +201,7 @@ export function JobWorksheetTableAdapter({ rows, activeCell, activeDraft, setAct
     getCellValue,
     commitCellValue,
     handleUndo,
-    onCreateRow: () => {},
+    onCreateRow: createDraftRowAfter,
     scrollContainerRef: virt.scrollContainerRef,
     shouldVirtualize: virt.shouldVirtualize,
     tableViewportHeight: virt.tableViewportHeight,
