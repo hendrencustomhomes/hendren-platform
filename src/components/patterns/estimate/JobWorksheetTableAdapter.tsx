@@ -1,11 +1,12 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
 import { EditableDataTable } from '@/components/data-display/EditableDataTable'
 import type { EditableDataTableColumn } from '@/components/data-display/EditableDataTable'
 import { useWorksheetInteraction } from '@/components/data-display/worksheet/useWorksheetInteraction'
 import { useWorksheetVirtualization } from '@/components/data-display/worksheet/useWorksheetVirtualization'
+import type { WorksheetActiveCell, WorksheetCellDraftValue } from '@/components/data-display/worksheet/worksheetTypes'
+import { formatMoney } from '@/lib/shared/numbers'
 
 export type JobWorksheetRowKind = 'line_item' | 'assembly' | 'note' | 'allowance'
 export type JobWorksheetPricingType = 'unit' | 'lump_sum' | 'allowance' | 'manual' | 'unpriced'
@@ -45,9 +46,6 @@ type JobWorksheetCellKey =
   | 'source_identity'
   | 'status'
   | 'notes'
-
-type ActiveCell = { rowId: string; field: JobWorksheetCellKey }
-type CellDraftValue = string | boolean | null
 
 const editableCellOrder: readonly JobWorksheetCellKey[] = [
   'row_kind',
@@ -90,18 +88,6 @@ function formatNumber(value: number | string | null) {
   return numericValue.toLocaleString(undefined, { maximumFractionDigits: 4 })
 }
 
-function formatMoney(value: number | string | null) {
-  if (value === null || value === '') return ''
-  const numericValue = Number(value)
-  if (!Number.isFinite(numericValue)) return String(value)
-  return numericValue.toLocaleString(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
-
 function getDepth(row: JobWorksheetRow, rowsById: Map<string, JobWorksheetRow>) {
   let depth = 0
   let currentParentId = row.parent_id
@@ -134,8 +120,8 @@ function getCellValue(row: JobWorksheetRow, field: JobWorksheetCellKey): string 
     case 'quantity': return row.row_kind === 'note' ? '' : formatNumber(row.quantity)
     case 'unit': return row.row_kind === 'note' ? '' : row.unit ?? ''
     case 'pricing_type': return pricingTypeLabels[row.pricing_type]
-    case 'unit_price': return row.row_kind === 'note' ? '' : formatMoney(row.unit_price)
-    case 'total_price': return row.row_kind === 'note' ? '' : formatMoney(row.total_price)
+    case 'unit_price': return row.row_kind === 'note' ? '' : formatMoney(Number(row.unit_price) || null)
+    case 'total_price': return row.row_kind === 'note' ? '' : formatMoney(Number(row.total_price) || null)
     case 'source_identity': return [row.catalog_sku, row.source_sku].filter(Boolean).join(' / ')
     case 'status': return getRowStatusLabel(row)
     case 'notes': return row.notes ?? ''
@@ -161,20 +147,17 @@ function getColumns(rowsById: Map<string, JobWorksheetRow>): EditableDataTableCo
     { key: 'quantity', label: 'Qty', kind: 'text', width: '100px', inputMode: 'decimal', getValue: (row) => row.quantity == null ? '' : String(row.quantity), formatEditableValue: (value, row) => row.row_kind === 'note' ? '' : formatNumber(value as string) },
     { key: 'unit', label: 'Unit', kind: 'text', width: '90px', getValue: (row) => row.unit ?? '', formatEditableValue: (value, row) => row.row_kind === 'note' ? '' : String(value ?? '') },
     { key: 'pricing_type', label: 'Pricing', kind: 'text', width: '120px', getValue: (row) => pricingTypeLabels[row.pricing_type] },
-    { key: 'unit_price', label: 'Unit Price', kind: 'text', width: '120px', inputMode: 'decimal', getValue: (row) => row.unit_price == null ? '' : String(row.unit_price), formatEditableValue: (value, row) => row.row_kind === 'note' ? '' : formatMoney(value as string) },
-    { key: 'total_price', label: 'Total', kind: 'text', width: '120px', inputMode: 'decimal', getValue: (row) => row.total_price == null ? '' : String(row.total_price), formatEditableValue: (value, row) => row.row_kind === 'note' ? '' : formatMoney(value as string) },
+    { key: 'unit_price', label: 'Unit Price', kind: 'text', width: '120px', inputMode: 'decimal', getValue: (row) => row.unit_price == null ? '' : String(row.unit_price), formatEditableValue: (value, row) => row.row_kind === 'note' ? '' : formatMoney(Number(value) || null) },
+    { key: 'total_price', label: 'Total', kind: 'text', width: '120px', inputMode: 'decimal', getValue: (row) => row.total_price == null ? '' : String(row.total_price), formatEditableValue: (value, row) => row.row_kind === 'note' ? '' : formatMoney(Number(value) || null) },
     { key: 'source_identity', label: 'Source', kind: 'text', width: '170px', getValue: (row) => [row.catalog_sku, row.source_sku].filter(Boolean).join(' / ') },
     { key: 'status', label: 'Status', kind: 'text', width: '180px', getValue: getRowStatusLabel },
     { key: 'notes', label: 'Notes', kind: 'text', width: '220px', getValue: (row) => row.notes ?? '' },
   ]
 }
 
-function noopSetActiveCell(_value: SetStateAction<ActiveCell | null>) {}
-function noopSetDraft(_value: SetStateAction<CellDraftValue>) {}
-
 export function JobWorksheetTableAdapter({ rows }: { rows: JobWorksheetRow[] }) {
-  const [activeCell, setActiveCell] = useState<ActiveCell | null>(null)
-  const [activeDraft, setActiveDraft] = useState<CellDraftValue>(null)
+  const [activeCell, setActiveCell] = useState<WorksheetActiveCell<JobWorksheetCellKey> | null>(null)
+  const [activeDraft, setActiveDraft] = useState<WorksheetCellDraftValue>(null)
 
   const rowsById = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
   const columns = useMemo(() => getColumns(rowsById), [rowsById])
