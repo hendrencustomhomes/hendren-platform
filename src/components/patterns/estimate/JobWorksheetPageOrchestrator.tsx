@@ -3,6 +3,7 @@
 import { PageShell } from '@/components/layout/PageShell'
 import { JobWorksheetTableAdapter, type JobWorksheetRow } from './JobWorksheetTableAdapter'
 import { useJobWorksheetState } from './_hooks/useJobWorksheetState'
+import { useJobWorksheetPersistence } from './_hooks/useJobWorksheetPersistence'
 
 type Props = {
   jobId: string
@@ -11,6 +12,8 @@ type Props = {
 }
 
 export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: Props) {
+  const { persistRow } = useJobWorksheetPersistence()
+
   const {
     localRows,
     activeCell,
@@ -19,7 +22,7 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: P
     setActiveDraft,
     commitCellValue,
     handleUndo,
-  } = useJobWorksheetState(rows)
+  } = useJobWorksheetState(rows, persistRow)
 
   return (
     <PageShell title={`${jobName || 'Job'} · Worksheet`} back={`/jobs/${jobId}`}>
