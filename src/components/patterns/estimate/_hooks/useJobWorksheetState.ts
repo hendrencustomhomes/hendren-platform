@@ -17,8 +17,22 @@ type WorksheetBackup = {
   rows: JobWorksheetRow[]
 }
 
+type CreateDraftRowOptions = {
+  sourceRowId?: string
+  asChild?: boolean
+}
+
 function getBackupKey(jobId: string) {
   return `hendren:job-worksheet:${jobId}:draft`
+}
+
+function getDraftId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return `draft_${crypto.randomUUID()}`
+  return `draft_${Date.now()}_${Math.random().toString(36).slice(2)}`
+}
+
+function isDraftRowId(rowId: string) {
+  return rowId.startsWith('draft_')
 }
 
 function cloneRow(row: JobWorksheetRow): JobWorksheetRow {
@@ -38,7 +52,7 @@ function applyEditableCellValue(
   switch (field) {
     case 'description': {
       const next = String(draftValue ?? '').trim()
-      return next ? { ...row, description: next } : row
+      return isDraftRowId(row.id) ? { ...row, description: next } : next ? { ...row, description: next } : row
     }
     case 'location':
       return { ...row, location: normalizeText(draftValue) }
@@ -76,6 +90,7 @@ function buildRowStateMap(localRows: JobWorksheetRow[], serverRows: JobWorksheet
   const serverById = new Map(serverRows.map((row) => [row.id, row]))
   return Object.fromEntries(
     localRows.map((row) => {
+      if (isDraftRowId(row.id)) return [row.id, 'dirty'] as const
       const server = serverById.get(row.id)
       return [row.id, areEditableFieldsEqual(row, server) ? 'idle' : 'dirty'] as const
     })
@@ -84,9 +99,13 @@ function buildRowStateMap(localRows: JobWorksheetRow[], serverRows: JobWorksheet
 
 function mergeBackupRows(initialRows: JobWorksheetRow[], backupRows: JobWorksheetRow[]) {
   const initialById = new Map(initialRows.map((row) => [row.id, row]))
-  return backupRows
-    .filter((row) => initialById.has(row.id))
-    .map((row) => ({ ...initialById.get(row.id)!, ...row }))
+  const mergedRows = backupRows
+    .filter((row) => isDraftRowId(row.id) || initialById.has(row.id))
+    .map((row) => (isDraftRowId(row.id) ? row : { ...initialById.get(row.id)!, ...row }))
+
+  const seen = new Set(mergedRows.map((row) => row.id))
+  const missingServerRows = initialRows.filter((row) => !seen.has(row.id))
+  return [...mergedRows, ...missingServerRows].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
 }
 
 function readBackup(jobId: string): WorksheetBackup | null {
@@ -125,7 +144,67 @@ function clearBackup(jobId: string) {
 
 function hasUnsavedRows(localRows: JobWorksheetRow[], serverRows: JobWorksheetRow[]) {
   const serverById = new Map(serverRows.map((row) => [row.id, row]))
-  return localRows.some((row) => !areEditableFieldsEqual(row, serverById.get(row.id)))
+  return localRows.some((row) => isDraftRowId(row.id) || !areEditableFieldsEqual(row, serverById.get(row.id)))
+}
+
+function normalizeSortOrders(rows: JobWorksheetRow[]) {
+  return rows.map((row, index) => ({ ...row, sort_order: index + 1 }))
+}
+
+function findLastDescendantIndex(rows: JobWorksheetRow[], sourceIndex: number) {
+  const source = rows[sourceIndex]
+  if (!source) return sourceIndex
+  const sourceDepth = getDepthFromRows(source, rows)
+  let lastIndex = sourceIndex
+
+  for (let index = sourceIndex + 1; index < rows.length; index += 1) {
+    const row = rows[index]
+    if (getDepthFromRows(row, rows) <= sourceDepth) break
+    lastIndex = index
+  }
+
+  return lastIndex
+}
+
+function getDepthFromRows(row: JobWorksheetRow, rows: JobWorksheetRow[]) {
+  const rowsById = new Map(rows.map((item) => [item.id, item]))
+  let depth = 0
+  let currentParentId = row.parent_id
+  const seen = new Set<string>()
+
+  while (currentParentId && !seen.has(currentParentId) && depth < 8) {
+    seen.add(currentParentId)
+    const parent = rowsById.get(currentParentId)
+    if (!parent) break
+    depth += 1
+    currentParentId = parent.parent_id
+  }
+
+  return depth
+}
+
+function createDraftRow(jobId: string, sourceRow: JobWorksheetRow | null, asChild: boolean): JobWorksheetRow {
+  return {
+    id: getDraftId(),
+    parent_id: asChild ? sourceRow?.id ?? null : sourceRow?.parent_id ?? null,
+    sort_order: 0,
+    row_kind: 'line_item',
+    description: '',
+    location: sourceRow?.location ?? null,
+    notes: null,
+    scope_status: 'included',
+    is_upgrade: false,
+    replaces_item_id: null,
+    quantity: null,
+    unit: null,
+    pricing_source_row_id: null,
+    pricing_header_id: null,
+    catalog_sku: null,
+    source_sku: null,
+    unit_price: null,
+    total_price: null,
+    pricing_type: 'unpriced',
+  }
 }
 
 export function useJobWorksheetState(
@@ -170,8 +249,7 @@ export function useJobWorksheetState(
     savingRowsRef.current = new Set()
 
     const backup = readBackup(jobId)
-    const restoredRows = backup ? mergeBackupRows(initialRows, backup.rows) : initialRows
-    const nextRows = restoredRows.length === initialRows.length ? restoredRows : initialRows
+    const nextRows = backup ? mergeBackupRows(initialRows, backup.rows) : initialRows
 
     setLocalRows(nextRows)
     setServerRows(initialRows)
@@ -186,7 +264,7 @@ export function useJobWorksheetState(
     if (hasUnsavedRows(nextRows, initialRows)) {
       writeBackup(jobId, nextRows)
       nextRows.forEach((row) => {
-        if (!areEditableFieldsEqual(row, initialRows.find((serverRow) => serverRow.id === row.id))) {
+        if (!isDraftRowId(row.id) && !areEditableFieldsEqual(row, initialRows.find((serverRow) => serverRow.id === row.id))) {
           scheduleFlush(row.id, 900)
         }
       })
@@ -241,11 +319,17 @@ export function useJobWorksheetState(
   function syncRowState(rowId: string, row?: JobWorksheetRow | null) {
     const localRow = row ?? getLocalRow(rowId)
     const serverRow = getServerRow(rowId)
-    if (!localRow || !serverRow) return
+    if (!localRow) return
+    if (isDraftRowId(rowId)) {
+      setRowState(rowId, 'dirty')
+      return
+    }
+    if (!serverRow) return
     setRowState(rowId, areEditableFieldsEqual(localRow, serverRow) ? 'idle' : 'dirty')
   }
 
   async function flushRow(rowId: string) {
+    if (isDraftRowId(rowId)) return
     const local = getLocalRow(rowId)
     const server = getServerRow(rowId)
     if (!local || !server) return
@@ -283,6 +367,7 @@ export function useJobWorksheetState(
   }
 
   function scheduleFlush(rowId: string, delay = 650) {
+    if (isDraftRowId(rowId)) return
     if (saveTimersRef.current[rowId]) clearTimeout(saveTimersRef.current[rowId])
     saveTimersRef.current[rowId] = setTimeout(() => {
       void flushRow(rowId)
@@ -305,6 +390,26 @@ export function useJobWorksheetState(
     syncRowState(rowId, next)
     writeBackup(jobId, localRowsRef.current.map((currentRow) => (currentRow.id === rowId ? next : currentRow)))
     scheduleFlush(rowId)
+  }
+
+  function createDraftRowAfter(options?: CreateDraftRowOptions) {
+    const rows = localRowsRef.current
+    const sourceIndex = options?.sourceRowId ? rows.findIndex((row) => row.id === options.sourceRowId) : rows.length - 1
+    const safeSourceIndex = sourceIndex >= 0 ? sourceIndex : rows.length - 1
+    const sourceRow = safeSourceIndex >= 0 ? rows[safeSourceIndex] : null
+    const insertIndex = options?.asChild ? safeSourceIndex + 1 : safeSourceIndex >= 0 ? findLastDescendantIndex(rows, safeSourceIndex) + 1 : rows.length
+    const draftRow = createDraftRow(jobId, sourceRow, Boolean(options?.asChild))
+    const nextRows = normalizeSortOrders([
+      ...rows.slice(0, insertIndex),
+      draftRow,
+      ...rows.slice(insertIndex),
+    ])
+
+    setLocalRowsSync(nextRows)
+    setRowSaveState(buildRowStateMap(nextRows, serverRowsRef.current))
+    writeBackup(jobId, nextRows)
+    setActiveCell({ rowId: draftRow.id, field: 'description' })
+    setActiveDraft('')
   }
 
   function handleUndo() {
@@ -347,6 +452,7 @@ export function useJobWorksheetState(
     setActiveCell,
     setActiveDraft,
     commitCellValue,
+    createDraftRowAfter,
     handleUndo,
     saveCounts,
   }
