@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { WorksheetActiveCell, WorksheetCellDraftValue, WorksheetRowSaveState } from '@/components/data-display/worksheet/worksheetTypes'
 import { parseNumber } from '@/lib/shared/numbers'
 import type { JobWorksheetEditableCellKey, JobWorksheetRow } from '../JobWorksheetTableAdapter'
-import type { UpdateJobWorksheetRowPatch } from './useJobWorksheetPersistence'
+import type { CreateJobWorksheetRowInput, UpdateJobWorksheetRowPatch } from './useJobWorksheetPersistence'
 
 type UndoEntry = {
   rowId: string
@@ -72,6 +72,23 @@ function buildPatch(row: JobWorksheetRow): UpdateJobWorksheetRowPatch {
     quantity: row.row_kind === 'note' ? null : row.quantity,
     unit: row.row_kind === 'note' ? null : row.unit,
     notes: row.notes,
+  }
+}
+
+function buildCreateInput(jobId: string, row: JobWorksheetRow): CreateJobWorksheetRowInput {
+  return {
+    job_id: jobId,
+    parent_id: row.parent_id,
+    sort_order: row.sort_order,
+    row_kind: 'line_item',
+    description: row.description,
+    location: row.location,
+    quantity: row.quantity,
+    unit: row.unit,
+    notes: row.notes,
+    scope_status: 'included',
+    is_upgrade: false,
+    pricing_type: 'unpriced',
   }
 }
 
@@ -210,7 +227,8 @@ function createDraftRow(jobId: string, sourceRow: JobWorksheetRow | null, asChil
 export function useJobWorksheetState(
   jobId: string,
   initialRows: JobWorksheetRow[],
-  persistRow: (rowId: string, patch: UpdateJobWorksheetRowPatch) => Promise<JobWorksheetRow>
+  persistRow: (rowId: string, patch: UpdateJobWorksheetRowPatch) => Promise<JobWorksheetRow>,
+  createRow: (input: CreateJobWorksheetRowInput) => Promise<JobWorksheetRow>
 ) {
   const [localRows, setLocalRows] = useState<JobWorksheetRow[]>([])
   const [serverRows, setServerRows] = useState<JobWorksheetRow[]>([])
@@ -328,6 +346,32 @@ export function useJobWorksheetState(
     setRowState(rowId, areEditableFieldsEqual(localRow, serverRow) ? 'idle' : 'dirty')
   }
 
+  async function promoteDraftRow(row: JobWorksheetRow) {
+    if (!isDraftRowId(row.id) || !row.description.trim()) return
+    if (savingRowsRef.current.has(row.id)) return
+
+    savingRowsRef.current.add(row.id)
+    setRowState(row.id, 'saving')
+    writeBackup(jobId, localRowsRef.current)
+
+    try {
+      const created = await createRow(buildCreateInput(jobId, row))
+      const nextRows = localRowsRef.current.map((currentRow) => (currentRow.id === row.id ? created : currentRow))
+
+      setLocalRowsSync(nextRows)
+      setServerRowsSync([...serverRowsRef.current, created])
+      setRowSaveState(buildRowStateMap(nextRows, [...serverRowsRef.current, created]))
+      setActiveCell({ rowId: created.id, field: 'description' })
+      setActiveDraft(created.description)
+      writeBackup(jobId, nextRows)
+    } catch {
+      setRowState(row.id, 'error')
+      writeBackup(jobId, localRowsRef.current)
+    } finally {
+      savingRowsRef.current.delete(row.id)
+    }
+  }
+
   async function flushRow(rowId: string) {
     if (isDraftRowId(rowId)) return
     const local = getLocalRow(rowId)
@@ -389,6 +433,12 @@ export function useJobWorksheetState(
     setUndoStack((stack) => [...stack.slice(-39), { rowId, previousRow: cloneRow(row), nextRow: cloneRow(next) }])
     syncRowState(rowId, next)
     writeBackup(jobId, localRowsRef.current.map((currentRow) => (currentRow.id === rowId ? next : currentRow)))
+
+    if (isDraftRowId(rowId)) {
+      if (field === 'description' && next.description.trim()) void promoteDraftRow(next)
+      return
+    }
+
     scheduleFlush(rowId)
   }
 
