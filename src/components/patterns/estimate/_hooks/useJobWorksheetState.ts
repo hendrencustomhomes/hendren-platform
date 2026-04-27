@@ -35,6 +35,10 @@ function isDraftRowId(rowId: string) {
   return rowId.startsWith('draft_')
 }
 
+function canHaveChildRows(row: JobWorksheetRow | null) {
+  return row?.row_kind === 'assembly'
+}
+
 function cloneRow(row: JobWorksheetRow): JobWorksheetRow {
   return { ...row }
 }
@@ -214,9 +218,11 @@ function getDepthFromRows(row: JobWorksheetRow, rows: JobWorksheetRow[]) {
 }
 
 function createDraftRow(jobId: string, sourceRow: JobWorksheetRow | null, asChild: boolean): JobWorksheetRow {
+  const childOfSource = asChild && canHaveChildRows(sourceRow)
+
   return {
     id: getDraftId(),
-    parent_id: asChild ? sourceRow?.id ?? null : sourceRow?.parent_id ?? null,
+    parent_id: childOfSource ? sourceRow?.id ?? null : sourceRow?.parent_id ?? null,
     sort_order: 0,
     row_kind: 'line_item',
     description: '',
@@ -471,8 +477,9 @@ export function useJobWorksheetState(
     const sourceIndex = options?.sourceRowId ? rows.findIndex((row) => row.id === options.sourceRowId) : rows.length - 1
     const safeSourceIndex = sourceIndex >= 0 ? sourceIndex : rows.length - 1
     const sourceRow = safeSourceIndex >= 0 ? rows[safeSourceIndex] : null
-    const insertIndex = options?.asChild ? safeSourceIndex + 1 : safeSourceIndex >= 0 ? findLastDescendantIndex(rows, safeSourceIndex) + 1 : rows.length
-    const draftRow = createDraftRow(jobId, sourceRow, Boolean(options?.asChild))
+    const childOfSource = Boolean(options?.asChild && canHaveChildRows(sourceRow))
+    const insertIndex = childOfSource ? safeSourceIndex + 1 : safeSourceIndex >= 0 ? findLastDescendantIndex(rows, safeSourceIndex) + 1 : rows.length
+    const draftRow = createDraftRow(jobId, sourceRow, childOfSource)
     const nextRows = normalizeSortOrders([
       ...rows.slice(0, insertIndex),
       draftRow,
