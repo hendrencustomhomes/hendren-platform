@@ -4,9 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import type { WorksheetActiveCell, WorksheetCellDraftValue, WorksheetRowSaveState } from '@/components/data-display/worksheet/worksheetTypes'
 import { parseNumber } from '@/lib/shared/numbers'
-import type { JobWorksheetRow } from '../JobWorksheetTableAdapter'
-
-export type JobWorksheetEditableCellKey = 'description' | 'location' | 'quantity' | 'unit' | 'notes'
+import type { JobWorksheetEditableCellKey, JobWorksheetRow } from '../JobWorksheetTableAdapter'
 
 type UndoEntry = {
   rowId: string
