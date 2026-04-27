@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { WorksheetActiveCell, WorksheetCellDraftValue, WorksheetRowSaveState } from '@/components/data-display/worksheet/worksheetTypes'
 import { parseNumber } from '@/lib/shared/numbers'
 import type { JobWorksheetEditableCellKey, JobWorksheetRow } from '../JobWorksheetTableAdapter'
-import type { CreateJobWorksheetRowInput, UpdateJobWorksheetRowPatch } from './useJobWorksheetPersistence'
+import type { CreateJobWorksheetRowInput, UpdateJobWorksheetRowPatch, WorksheetSortOrderUpdate } from './useJobWorksheetPersistence'
 
 type UndoEntry = {
   rowId: string
@@ -168,6 +168,19 @@ function normalizeSortOrders(rows: JobWorksheetRow[]) {
   return rows.map((row, index) => ({ ...row, sort_order: index + 1 }))
 }
 
+function buildSortOrderUpdates(localRows: JobWorksheetRow[], serverRows: JobWorksheetRow[]) {
+  const serverById = new Map(serverRows.map((row) => [row.id, row]))
+  return localRows
+    .filter((row) => !isDraftRowId(row.id))
+    .filter((row) => serverById.get(row.id)?.sort_order !== row.sort_order)
+    .map((row) => ({ id: row.id, sort_order: row.sort_order }))
+}
+
+function applySortOrdersToServerRows(serverRows: JobWorksheetRow[], updates: WorksheetSortOrderUpdate[]) {
+  const updateById = new Map(updates.map((update) => [update.id, update.sort_order]))
+  return serverRows.map((row) => updateById.has(row.id) ? { ...row, sort_order: updateById.get(row.id)! } : row)
+}
+
 function findLastDescendantIndex(rows: JobWorksheetRow[], sourceIndex: number) {
   const source = rows[sourceIndex]
   if (!source) return sourceIndex
@@ -228,7 +241,8 @@ export function useJobWorksheetState(
   jobId: string,
   initialRows: JobWorksheetRow[],
   persistRow: (rowId: string, patch: UpdateJobWorksheetRowPatch) => Promise<JobWorksheetRow>,
-  createRow: (input: CreateJobWorksheetRowInput) => Promise<JobWorksheetRow>
+  createRow: (input: CreateJobWorksheetRowInput) => Promise<JobWorksheetRow>,
+  persistSortOrders: (updates: WorksheetSortOrderUpdate[]) => Promise<void>
 ) {
   const [localRows, setLocalRows] = useState<JobWorksheetRow[]>([])
   const [serverRows, setServerRows] = useState<JobWorksheetRow[]>([])
@@ -346,6 +360,14 @@ export function useJobWorksheetState(
     setRowState(rowId, areEditableFieldsEqual(localRow, serverRow) ? 'idle' : 'dirty')
   }
 
+  async function persistCurrentSortOrders(nextRows: JobWorksheetRow[], nextServerRows: JobWorksheetRow[]) {
+    const updates = buildSortOrderUpdates(nextRows, nextServerRows)
+    if (updates.length === 0) return nextServerRows
+
+    await persistSortOrders(updates)
+    return applySortOrdersToServerRows(nextServerRows, updates)
+  }
+
   async function promoteDraftRow(row: JobWorksheetRow) {
     if (!isDraftRowId(row.id) || !row.description.trim()) return
     if (savingRowsRef.current.has(row.id)) return
@@ -357,10 +379,12 @@ export function useJobWorksheetState(
     try {
       const created = await createRow(buildCreateInput(jobId, row))
       const nextRows = localRowsRef.current.map((currentRow) => (currentRow.id === row.id ? created : currentRow))
+      const createdServerRows = [...serverRowsRef.current, created]
+      const nextServerRows = await persistCurrentSortOrders(nextRows, createdServerRows)
 
       setLocalRowsSync(nextRows)
-      setServerRowsSync([...serverRowsRef.current, created])
-      setRowSaveState(buildRowStateMap(nextRows, [...serverRowsRef.current, created]))
+      setServerRowsSync(nextServerRows)
+      setRowSaveState(buildRowStateMap(nextRows, nextServerRows))
       setActiveCell({ rowId: created.id, field: 'description' })
       setActiveDraft(created.description)
       writeBackup(jobId, nextRows)
