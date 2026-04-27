@@ -1,6 +1,5 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect, notFound } from 'next/navigation'
-import Nav from '@/components/Nav'
 import JobWorksheetPageOrchestrator from '@/components/patterns/estimate/JobWorksheetPageOrchestrator'
 
 export default async function JobWorksheetPage({ params }: { params: Promise<{ id: string }> }) {
@@ -30,9 +29,7 @@ export default async function JobWorksheetPage({ params }: { params: Promise<{ i
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh', color: 'var(--text)', fontFamily: 'system-ui,-apple-system,sans-serif' }}>
-      <Nav title={`${job.job_name || 'Job'} · Worksheet`} back={`/jobs/${id}`} jobId={id} />
-
-      <div style={{ padding: '14px', maxWidth: '1080px', margin: '0 auto' }}>
+      <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
         <JobWorksheetPageOrchestrator
           jobId={id}
           jobName={job.job_name}
