@@ -30,7 +30,7 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: P
     commitCellValue,
     handleUndo,
     saveCounts,
-  } = useJobWorksheetState(rows, persistRow)
+  } = useJobWorksheetState(jobId, rows, persistRow)
 
   const statusLabel = getSheetStatusLabel(saveCounts)
 
