@@ -19,7 +19,7 @@ function getSheetStatusLabel(saveCounts: { saving: number; dirty: number; error:
 }
 
 export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: Props) {
-  const { persistRow } = useJobWorksheetPersistence()
+  const { persistRow, createRow } = useJobWorksheetPersistence()
 
   const {
     localRows,
@@ -28,9 +28,10 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: P
     setActiveCell,
     setActiveDraft,
     commitCellValue,
+    createDraftRowAfter,
     handleUndo,
     saveCounts,
-  } = useJobWorksheetState(jobId, rows, persistRow)
+  } = useJobWorksheetState(jobId, rows, persistRow, createRow)
 
   const statusLabel = getSheetStatusLabel(saveCounts)
 
@@ -50,7 +51,7 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: P
             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{statusLabel}</div>
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Editable slice (existing rows only). Changes auto-save.
+            Editable slice. Changes auto-save.
           </div>
         </div>
 
@@ -61,6 +62,7 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: P
           setActiveCell={setActiveCell}
           setActiveDraft={setActiveDraft}
           commitCellValue={commitCellValue}
+          createDraftRowAfter={createDraftRowAfter}
           handleUndo={handleUndo}
         />
       </div>
