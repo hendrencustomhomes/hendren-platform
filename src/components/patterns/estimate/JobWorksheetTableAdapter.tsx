@@ -124,17 +124,25 @@ function getRowStatusLabel(row: JobWorksheetRow) {
   return 'Ready'
 }
 
+function isQuantityEditable(row: JobWorksheetRow) {
+  return row.row_kind === 'line_item'
+}
+
+function isUnitEditable(row: JobWorksheetRow) {
+  return row.row_kind === 'line_item'
+}
+
 function getCellValue(row: JobWorksheetRow, field: JobWorksheetCellKey): string | boolean {
   switch (field) {
     case 'row_kind': return rowKindLabels[row.row_kind]
     case 'description': return row.description
     case 'location': return row.location ?? ''
-    case 'quantity': return row.row_kind === 'note' ? '' : formatNumber(row.quantity)
-    case 'unit': return row.row_kind === 'note' ? '' : row.unit ?? ''
+    case 'quantity': return row.row_kind !== 'line_item' ? '' : formatNumber(row.quantity)
+    case 'unit': return row.row_kind !== 'line_item' ? '' : row.unit ?? ''
     case 'pricing_type': return pricingTypeLabels[row.pricing_type]
-    case 'unit_price': return row.row_kind === 'note' ? '' : formatWorksheetMoney(row.unit_price)
-    case 'total_price': return row.row_kind === 'note' ? '' : formatWorksheetMoney(row.total_price)
-    case 'source_identity': return [row.catalog_sku, row.source_sku].filter(Boolean).join(' / ')
+    case 'unit_price': return row.row_kind !== 'line_item' ? '' : formatWorksheetMoney(row.unit_price)
+    case 'total_price': return row.row_kind !== 'line_item' ? '' : formatWorksheetMoney(row.total_price)
+    case 'source_identity': return row.row_kind !== 'line_item' ? '' : [row.catalog_sku, row.source_sku].filter(Boolean).join(' / ')
     case 'status': return getRowStatusLabel(row)
     case 'notes': return row.notes ?? ''
   }
@@ -156,12 +164,12 @@ function getColumns(rowsById: Map<string, JobWorksheetRow>): EditableDataTableCo
       },
     },
     { key: 'location', label: 'Location', kind: 'text', width: '150px', getValue: (row) => row.location ?? '' },
-    { key: 'quantity', label: 'Qty', kind: 'text', width: '100px', inputMode: 'decimal', getValue: (row) => row.quantity == null ? '' : String(row.quantity), formatEditableValue: (value, row) => row.row_kind === 'note' ? '' : formatNumber(value as string) },
-    { key: 'unit', label: 'Unit', kind: 'text', width: '90px', getValue: (row) => row.unit ?? '', formatEditableValue: (value, row) => row.row_kind === 'note' ? '' : String(value ?? '') },
+    { key: 'quantity', label: 'Qty', kind: 'text', width: '100px', inputMode: 'decimal', isEditable: isQuantityEditable, getValue: (row) => row.quantity == null ? '' : String(row.quantity), formatEditableValue: (value, row) => row.row_kind !== 'line_item' ? '' : formatNumber(value as string) },
+    { key: 'unit', label: 'Unit', kind: 'text', width: '90px', isEditable: isUnitEditable, getValue: (row) => row.unit ?? '', formatEditableValue: (value, row) => row.row_kind !== 'line_item' ? '' : String(value ?? '') },
     { key: 'pricing_type', label: 'Pricing', kind: 'static', width: '120px', getValue: (row) => pricingTypeLabels[row.pricing_type] },
-    { key: 'unit_price', label: 'Unit Price', kind: 'static', width: '120px', getValue: (row) => formatWorksheetMoney(row.unit_price) },
-    { key: 'total_price', label: 'Total', kind: 'static', width: '120px', getValue: (row) => formatWorksheetMoney(row.total_price) },
-    { key: 'source_identity', label: 'Source', kind: 'static', width: '170px', getValue: (row) => [row.catalog_sku, row.source_sku].filter(Boolean).join(' / ') },
+    { key: 'unit_price', label: 'Unit Price', kind: 'static', width: '120px', getValue: (row) => row.row_kind !== 'line_item' ? '' : formatWorksheetMoney(row.unit_price) },
+    { key: 'total_price', label: 'Total', kind: 'static', width: '120px', getValue: (row) => row.row_kind !== 'line_item' ? '' : formatWorksheetMoney(row.total_price) },
+    { key: 'source_identity', label: 'Source', kind: 'static', width: '170px', getValue: (row) => row.row_kind !== 'line_item' ? '' : [row.catalog_sku, row.source_sku].filter(Boolean).join(' / ') },
     { key: 'status', label: 'Status', kind: 'static', width: '180px', getValue: getRowStatusLabel },
     { key: 'notes', label: 'Notes', kind: 'text', width: '220px', getValue: (row) => row.notes ?? '' },
   ]
