@@ -2,6 +2,7 @@
 
 import { PageShell } from '@/components/layout/PageShell'
 import { JobWorksheetTableAdapter, type JobWorksheetRow } from './JobWorksheetTableAdapter'
+import { useJobWorksheetState } from './_hooks/useJobWorksheetState'
 
 type Props = {
   jobId: string
@@ -10,6 +11,16 @@ type Props = {
 }
 
 export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: Props) {
+  const {
+    localRows,
+    activeCell,
+    activeDraft,
+    setActiveCell,
+    setActiveDraft,
+    commitCellValue,
+    handleUndo,
+  } = useJobWorksheetState(rows)
+
   return (
     <PageShell title={`${jobName || 'Job'} · Worksheet`} back={`/jobs/${jobId}`}>
       <div style={{ display: 'grid', gap: '12px' }}>
@@ -23,11 +34,19 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: P
         >
           <div style={{ fontSize: '18px', fontWeight: 700 }}>Internal Job Worksheet</div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Read-only slice using shared worksheet UI. Editing, creation, and persistence come next.
+            Editable slice (existing rows only). Changes auto-save.
           </div>
         </div>
 
-        <JobWorksheetTableAdapter rows={rows} />
+        <JobWorksheetTableAdapter
+          rows={localRows}
+          activeCell={activeCell}
+          activeDraft={activeDraft}
+          setActiveCell={setActiveCell}
+          setActiveDraft={setActiveDraft}
+          commitCellValue={commitCellValue}
+          handleUndo={handleUndo}
+        />
       </div>
     </PageShell>
   )
