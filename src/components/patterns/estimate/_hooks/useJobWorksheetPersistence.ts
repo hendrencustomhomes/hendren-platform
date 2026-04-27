@@ -17,6 +17,12 @@ export type CreateJobWorksheetRowInput = {
   sort_order: number
   row_kind: 'line_item'
   description: string
+  location: string | null
+  quantity: number | string | null
+  unit: string | null
+  notes: string | null
+  scope_status: 'included'
+  is_upgrade: false
   pricing_type: 'unpriced'
 }
 
