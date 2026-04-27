@@ -12,6 +12,11 @@ function isFullySelected(element: HTMLInputElement | HTMLTextAreaElement) {
   return (element.selectionStart ?? 0) === 0 && (element.selectionEnd ?? 0) === valueLength
 }
 
+type CreateRowOptions = {
+  sourceRowId?: string
+  asChild?: boolean
+}
+
 type Options<Row, CellKey extends string> = {
   rows: Row[]
   getRowId: (row: Row) => string
@@ -23,7 +28,7 @@ type Options<Row, CellKey extends string> = {
   getCellValue: (row: Row, field: CellKey) => string | boolean
   commitCellValue: (rowId: string, field: CellKey, value: string | boolean) => void
   handleUndo: () => void
-  onCreateRow: () => void | Promise<unknown>
+  onCreateRow: (options?: CreateRowOptions) => void | Promise<unknown>
   scrollContainerRef: MutableRefObject<HTMLDivElement | null>
   shouldVirtualize: boolean
   tableViewportHeight: number
@@ -206,6 +211,16 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     commitActiveCell()
   }
 
+  function createSibling(rowId: string) {
+    commitActiveCell()
+    void onCreateRow({ sourceRowId: rowId, asChild: false })
+  }
+
+  function createChild(rowId: string) {
+    commitActiveCell()
+    void onCreateRow({ sourceRowId: rowId, asChild: true })
+  }
+
   function handleTextCellKeyDown(
     event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
     rowId: string,
@@ -225,10 +240,21 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
       return
     }
 
+    if (event.key === 'Enter' && event.ctrlKey && (event.shiftKey || event.metaKey)) {
+      event.preventDefault()
+      createChild(rowId)
+      return
+    }
+
+    if (event.key === 'Enter' && !event.ctrlKey && (event.shiftKey || event.metaKey)) {
+      event.preventDefault()
+      createSibling(rowId)
+      return
+    }
+
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
       event.preventDefault()
-      commitActiveCell()
-      void onCreateRow()
+      createSibling(rowId)
       return
     }
 
@@ -246,7 +272,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
 
     if (event.key === 'Enter') {
       event.preventDefault()
-      commitActiveCell({ move: event.shiftKey ? 'up' : 'down' })
+      commitActiveCell({ move: 'down' })
       return
     }
 
@@ -301,9 +327,21 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
       return
     }
 
+    if (event.key === 'Enter' && event.ctrlKey && (event.shiftKey || event.metaKey)) {
+      event.preventDefault()
+      void onCreateRow({ sourceRowId: rowId, asChild: true })
+      return
+    }
+
+    if (event.key === 'Enter' && !event.ctrlKey && (event.shiftKey || event.metaKey)) {
+      event.preventDefault()
+      void onCreateRow({ sourceRowId: rowId, asChild: false })
+      return
+    }
+
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
       event.preventDefault()
-      void onCreateRow()
+      void onCreateRow({ sourceRowId: rowId, asChild: false })
       return
     }
 
@@ -316,7 +354,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
 
     if (event.key === 'Enter') {
       event.preventDefault()
-      const neighbor = getNeighborCell(rowId, typedField, event.shiftKey ? 'up' : 'down')
+      const neighbor = getNeighborCell(rowId, typedField, 'down')
       if (neighbor) focusCell(neighbor.rowId, neighbor.field)
     }
   }
