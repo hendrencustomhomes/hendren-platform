@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createClient } from '@/utils/supabase/client'
 import type { WorksheetActiveCell, WorksheetCellDraftValue, WorksheetRowSaveState } from '@/components/data-display/worksheet/worksheetTypes'
 import { parseNumber } from '@/lib/shared/numbers'
 import type { JobWorksheetEditableCellKey, JobWorksheetRow } from '../JobWorksheetTableAdapter'
+import type { UpdateJobWorksheetRowPatch } from './useJobWorksheetPersistence'
 
 type UndoEntry = {
   rowId: string
@@ -42,7 +42,7 @@ function applyEditableCellValue(
   }
 }
 
-function buildPatch(row: JobWorksheetRow) {
+function buildPatch(row: JobWorksheetRow): UpdateJobWorksheetRowPatch {
   return {
     description: row.description,
     location: row.location,
@@ -63,9 +63,10 @@ function areEditableFieldsEqual(a: JobWorksheetRow | null | undefined, b: JobWor
   )
 }
 
-export function useJobWorksheetState(initialRows: JobWorksheetRow[]) {
-  const supabase = createClient()
-
+export function useJobWorksheetState(
+  initialRows: JobWorksheetRow[],
+  persistRow: (rowId: string, patch: UpdateJobWorksheetRowPatch) => Promise<JobWorksheetRow>
+) {
   const [localRows, setLocalRows] = useState<JobWorksheetRow[]>([])
   const [serverRows, setServerRows] = useState<JobWorksheetRow[]>([])
   const [rowSaveState, setRowSaveState] = useState<Record<string, WorksheetRowSaveState>>({})
@@ -164,32 +165,25 @@ export function useJobWorksheetState(initialRows: JobWorksheetRow[]) {
     savingRowsRef.current.add(rowId)
     setRowState(rowId, 'saving')
 
-    const { data, error } = await supabase
-      .from('job_worksheet_items')
-      .update(buildPatch(requestRow))
-      .eq('id', rowId)
-      .select('*')
-      .single()
+    try {
+      const updated = await persistRow(rowId, buildPatch(requestRow))
 
-    savingRowsRef.current.delete(rowId)
+      replaceServerRow(rowId, updated)
 
-    if (error || !data) {
+      const latestLocal = getLocalRow(rowId)
+      if (latestLocal && areEditableFieldsEqual(latestLocal, requestRow)) {
+        replaceLocalRow(rowId, updated)
+        setRowState(rowId, 'idle')
+        return
+      }
+
+      setRowState(rowId, 'dirty')
+      scheduleFlush(rowId, 220)
+    } catch {
       setRowState(rowId, 'error')
-      return
+    } finally {
+      savingRowsRef.current.delete(rowId)
     }
-
-    const updated = data as JobWorksheetRow
-    replaceServerRow(rowId, updated)
-
-    const latestLocal = getLocalRow(rowId)
-    if (latestLocal && areEditableFieldsEqual(latestLocal, requestRow)) {
-      replaceLocalRow(rowId, updated)
-      setRowState(rowId, 'idle')
-      return
-    }
-
-    setRowState(rowId, 'dirty')
-    scheduleFlush(rowId, 220)
   }
 
   function scheduleFlush(rowId: string, delay = 650) {
