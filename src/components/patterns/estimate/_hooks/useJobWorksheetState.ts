@@ -12,6 +12,15 @@ type UndoEntry = {
   nextRow: JobWorksheetRow
 }
 
+type WorksheetBackup = {
+  savedAt: string
+  rows: JobWorksheetRow[]
+}
+
+function getBackupKey(jobId: string) {
+  return `hendren:job-worksheet:${jobId}:draft`
+}
+
 function cloneRow(row: JobWorksheetRow): JobWorksheetRow {
   return { ...row }
 }
@@ -63,7 +72,64 @@ function areEditableFieldsEqual(a: JobWorksheetRow | null | undefined, b: JobWor
   )
 }
 
+function buildRowStateMap(localRows: JobWorksheetRow[], serverRows: JobWorksheetRow[]) {
+  const serverById = new Map(serverRows.map((row) => [row.id, row]))
+  return Object.fromEntries(
+    localRows.map((row) => {
+      const server = serverById.get(row.id)
+      return [row.id, areEditableFieldsEqual(row, server) ? 'idle' : 'dirty'] as const
+    })
+  ) as Record<string, WorksheetRowSaveState>
+}
+
+function mergeBackupRows(initialRows: JobWorksheetRow[], backupRows: JobWorksheetRow[]) {
+  const initialById = new Map(initialRows.map((row) => [row.id, row]))
+  return backupRows
+    .filter((row) => initialById.has(row.id))
+    .map((row) => ({ ...initialById.get(row.id)!, ...row }))
+}
+
+function readBackup(jobId: string): WorksheetBackup | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(getBackupKey(jobId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as WorksheetBackup
+    if (!Array.isArray(parsed.rows)) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeBackup(jobId: string, rows: JobWorksheetRow[]) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(
+      getBackupKey(jobId),
+      JSON.stringify({ savedAt: new Date().toISOString(), rows } satisfies WorksheetBackup)
+    )
+  } catch {
+    // local backup is a failsafe only; failed localStorage must not block editing.
+  }
+}
+
+function clearBackup(jobId: string) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(getBackupKey(jobId))
+  } catch {
+    // no-op
+  }
+}
+
+function hasUnsavedRows(localRows: JobWorksheetRow[], serverRows: JobWorksheetRow[]) {
+  const serverById = new Map(serverRows.map((row) => [row.id, row]))
+  return localRows.some((row) => !areEditableFieldsEqual(row, serverById.get(row.id)))
+}
+
 export function useJobWorksheetState(
+  jobId: string,
   initialRows: JobWorksheetRow[],
   persistRow: (rowId: string, patch: UpdateJobWorksheetRowPatch) => Promise<JobWorksheetRow>
 ) {
@@ -102,16 +168,45 @@ export function useJobWorksheetState(
     Object.values(saveTimersRef.current).forEach((timer) => clearTimeout(timer))
     saveTimersRef.current = {}
     savingRowsRef.current = new Set()
-    setLocalRows(initialRows)
+
+    const backup = readBackup(jobId)
+    const restoredRows = backup ? mergeBackupRows(initialRows, backup.rows) : initialRows
+    const nextRows = restoredRows.length === initialRows.length ? restoredRows : initialRows
+
+    setLocalRows(nextRows)
     setServerRows(initialRows)
-    localRowsRef.current = initialRows
+    localRowsRef.current = nextRows
     serverRowsRef.current = initialRows
-    setRowSaveState(Object.fromEntries(initialRows.map((row) => [row.id, 'idle' as WorksheetRowSaveState])))
+    setRowSaveState(buildRowStateMap(nextRows, initialRows))
     setUndoStack([])
     setActiveCell(null)
     setActiveDraft(null)
     activeCellRef.current = null
-  }, [initialRows])
+
+    if (hasUnsavedRows(nextRows, initialRows)) {
+      writeBackup(jobId, nextRows)
+      nextRows.forEach((row) => {
+        if (!areEditableFieldsEqual(row, initialRows.find((serverRow) => serverRow.id === row.id))) {
+          scheduleFlush(row.id, 900)
+        }
+      })
+    } else {
+      clearBackup(jobId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId, initialRows])
+
+  useEffect(() => {
+    if (!localRows.length) {
+      clearBackup(jobId)
+      return
+    }
+    if (hasUnsavedRows(localRows, serverRows)) {
+      writeBackup(jobId, localRows)
+      return
+    }
+    clearBackup(jobId)
+  }, [jobId, localRows, serverRows])
 
   function getLocalRow(rowId: string) {
     return localRowsRef.current.find((row) => row.id === rowId) ?? null
@@ -181,6 +276,7 @@ export function useJobWorksheetState(
       scheduleFlush(rowId, 220)
     } catch {
       setRowState(rowId, 'error')
+      writeBackup(jobId, localRowsRef.current)
     } finally {
       savingRowsRef.current.delete(rowId)
     }
@@ -207,6 +303,7 @@ export function useJobWorksheetState(
     replaceLocalRow(rowId, next)
     setUndoStack((stack) => [...stack.slice(-39), { rowId, previousRow: cloneRow(row), nextRow: cloneRow(next) }])
     syncRowState(rowId, next)
+    writeBackup(jobId, localRowsRef.current.map((currentRow) => (currentRow.id === rowId ? next : currentRow)))
     scheduleFlush(rowId)
   }
 
