@@ -11,6 +11,13 @@ type Props = {
   rows: JobWorksheetRow[]
 }
 
+function getSheetStatusLabel(saveCounts: { saving: number; dirty: number; error: number }) {
+  if (saveCounts.error > 0) return 'Save failed — local changes retained'
+  if (saveCounts.saving > 0) return 'Saving…'
+  if (saveCounts.dirty > 0) return 'Unsaved changes'
+  return 'Saved'
+}
+
 export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: Props) {
   const { persistRow } = useJobWorksheetPersistence()
 
@@ -22,7 +29,10 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: P
     setActiveDraft,
     commitCellValue,
     handleUndo,
+    saveCounts,
   } = useJobWorksheetState(rows, persistRow)
+
+  const statusLabel = getSheetStatusLabel(saveCounts)
 
   return (
     <PageShell title={`${jobName || 'Job'} · Worksheet`} back={`/jobs/${jobId}`}>
@@ -35,7 +45,10 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: P
             padding: '14px',
           }}
         >
-          <div style={{ fontSize: '18px', fontWeight: 700 }}>Internal Job Worksheet</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: '18px', fontWeight: 700 }}>Internal Job Worksheet</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{statusLabel}</div>
+          </div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
             Editable slice (existing rows only). Changes auto-save.
           </div>
