@@ -11,6 +11,15 @@ export type UpdateJobWorksheetRowPatch = {
   notes: string | null
 }
 
+export type CreateJobWorksheetRowInput = {
+  job_id: string
+  parent_id: string | null
+  sort_order: number
+  row_kind: 'line_item'
+  description: string
+  pricing_type: 'unpriced'
+}
+
 export function useJobWorksheetPersistence() {
   const supabase = createClient()
 
@@ -29,5 +38,19 @@ export function useJobWorksheetPersistence() {
     return data as JobWorksheetRow
   }
 
-  return { persistRow }
+  async function createRow(input: CreateJobWorksheetRowInput) {
+    const { data, error } = await supabase
+      .from('job_worksheet_items')
+      .insert(input)
+      .select('*')
+      .single()
+
+    if (error || !data) {
+      throw error ?? new Error('Failed to create worksheet row.')
+    }
+
+    return data as JobWorksheetRow
+  }
+
+  return { persistRow, createRow }
 }
