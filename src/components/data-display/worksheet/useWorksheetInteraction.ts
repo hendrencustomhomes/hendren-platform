@@ -59,7 +59,6 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
   const cellRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({})
   const pendingFocusRef = useRef<{ rowId: string; field: CellKey } | null>(null)
 
-  // After scroll updates the visible window, retry focusing any pending cell that is now rendered.
   useEffect(() => {
     const pending = pendingFocusRef.current
     if (!pending) return
@@ -75,13 +74,11 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     })
   }, [tableScrollTop, tableViewportHeight, rows])
 
-  // External active-cell change — e.g. post-create focus handoff from the orchestrator.
   useEffect(() => {
     if (!activeCell) return
     const element = cellRefs.current[getCellDomKey(activeCell.rowId, activeCell.field)]
     if (element && document.activeElement === element) return
     focusCell(activeCell.rowId, activeCell.field)
-    // focusCell is stable within a render; activeCell is the only meaningful dep here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCell])
 
@@ -211,14 +208,13 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     commitActiveCell()
   }
 
-  function createSibling(rowId: string) {
+  function createRow(rowId: string, asChild: boolean) {
     commitActiveCell()
-    void onCreateRow({ sourceRowId: rowId, asChild: false })
+    void onCreateRow({ sourceRowId: rowId, asChild })
   }
 
-  function createChild(rowId: string) {
-    commitActiveCell()
-    void onCreateRow({ sourceRowId: rowId, asChild: true })
+  function wantsCreateRow(event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLInputElement>) {
+    return event.key === 'Enter' && (event.ctrlKey || event.metaKey)
   }
 
   function handleTextCellKeyDown(
@@ -240,21 +236,9 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
       return
     }
 
-    if (event.key === 'Enter' && event.ctrlKey && (event.shiftKey || event.metaKey)) {
+    if (wantsCreateRow(event)) {
       event.preventDefault()
-      createChild(rowId)
-      return
-    }
-
-    if (event.key === 'Enter' && !event.ctrlKey && (event.shiftKey || event.metaKey)) {
-      event.preventDefault()
-      createSibling(rowId)
-      return
-    }
-
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-      event.preventDefault()
-      createSibling(rowId)
+      createRow(rowId, event.shiftKey)
       return
     }
 
@@ -327,21 +311,9 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
       return
     }
 
-    if (event.key === 'Enter' && event.ctrlKey && (event.shiftKey || event.metaKey)) {
+    if (wantsCreateRow(event)) {
       event.preventDefault()
-      void onCreateRow({ sourceRowId: rowId, asChild: true })
-      return
-    }
-
-    if (event.key === 'Enter' && !event.ctrlKey && (event.shiftKey || event.metaKey)) {
-      event.preventDefault()
-      void onCreateRow({ sourceRowId: rowId, asChild: false })
-      return
-    }
-
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-      event.preventDefault()
-      void onCreateRow({ sourceRowId: rowId, asChild: false })
+      void onCreateRow({ sourceRowId: rowId, asChild: event.shiftKey })
       return
     }
 
