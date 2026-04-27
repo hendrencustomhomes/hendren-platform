@@ -19,7 +19,7 @@ function getSheetStatusLabel(saveCounts: { saving: number; dirty: number; error:
 }
 
 export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: Props) {
-  const { persistRow, createRow } = useJobWorksheetPersistence()
+  const { persistRow, createRow, persistSortOrders } = useJobWorksheetPersistence()
 
   const {
     localRows,
@@ -31,7 +31,7 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: P
     createDraftRowAfter,
     handleUndo,
     saveCounts,
-  } = useJobWorksheetState(jobId, rows, persistRow, createRow)
+  } = useJobWorksheetState(jobId, rows, persistRow, createRow, persistSortOrders)
 
   const statusLabel = getSheetStatusLabel(saveCounts)
 
