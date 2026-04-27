@@ -26,6 +26,11 @@ export type CreateJobWorksheetRowInput = {
   pricing_type: 'unpriced'
 }
 
+export type WorksheetSortOrderUpdate = {
+  id: string
+  sort_order: number
+}
+
 export function useJobWorksheetPersistence() {
   const supabase = createClient()
 
@@ -58,5 +63,23 @@ export function useJobWorksheetPersistence() {
     return data as JobWorksheetRow
   }
 
-  return { persistRow, createRow }
+  async function persistSortOrders(updates: WorksheetSortOrderUpdate[]) {
+    if (updates.length === 0) return
+
+    const results = await Promise.all(
+      updates.map((update) =>
+        supabase
+          .from('job_worksheet_items')
+          .update({ sort_order: update.sort_order })
+          .eq('id', update.id)
+          .select('id, sort_order')
+          .single()
+      )
+    )
+
+    const failed = results.find((result) => result.error)
+    if (failed?.error) throw failed.error
+  }
+
+  return { persistRow, createRow, persistSortOrders }
 }
