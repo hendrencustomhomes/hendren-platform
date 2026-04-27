@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { EditableDataTable } from '@/components/data-display/EditableDataTable'
 import type { EditableDataTableColumn } from '@/components/data-display/EditableDataTable'
 import { useWorksheetInteraction } from '@/components/data-display/worksheet/useWorksheetInteraction'
@@ -34,6 +34,8 @@ export type JobWorksheetRow = {
   pricing_type: JobWorksheetPricingType
 }
 
+export type JobWorksheetEditableCellKey = 'description' | 'location' | 'quantity' | 'unit' | 'notes'
+
 type JobWorksheetCellKey =
   | 'row_kind'
   | 'description'
@@ -47,17 +49,11 @@ type JobWorksheetCellKey =
   | 'status'
   | 'notes'
 
-const editableCellOrder: readonly JobWorksheetCellKey[] = [
-  'row_kind',
+const editableCellOrder: readonly JobWorksheetEditableCellKey[] = [
   'description',
   'location',
   'quantity',
   'unit',
-  'pricing_type',
-  'unit_price',
-  'total_price',
-  'source_identity',
-  'status',
   'notes',
 ]
 
@@ -141,7 +137,7 @@ function getCellValue(row: JobWorksheetRow, field: JobWorksheetCellKey): string 
 
 function getColumns(rowsById: Map<string, JobWorksheetRow>): EditableDataTableColumn<JobWorksheetRow>[] {
   return [
-    { key: 'row_kind', label: 'Type', kind: 'text', width: '120px', getValue: (row) => rowKindLabels[row.row_kind] },
+    { key: 'row_kind', label: 'Type', kind: 'static', width: '120px', getValue: (row) => rowKindLabels[row.row_kind] },
     {
       key: 'description',
       label: 'Description',
@@ -157,19 +153,26 @@ function getColumns(rowsById: Map<string, JobWorksheetRow>): EditableDataTableCo
     { key: 'location', label: 'Location', kind: 'text', width: '150px', getValue: (row) => row.location ?? '' },
     { key: 'quantity', label: 'Qty', kind: 'text', width: '100px', inputMode: 'decimal', getValue: (row) => row.quantity == null ? '' : String(row.quantity), formatEditableValue: (value, row) => row.row_kind === 'note' ? '' : formatNumber(value as string) },
     { key: 'unit', label: 'Unit', kind: 'text', width: '90px', getValue: (row) => row.unit ?? '', formatEditableValue: (value, row) => row.row_kind === 'note' ? '' : String(value ?? '') },
-    { key: 'pricing_type', label: 'Pricing', kind: 'text', width: '120px', getValue: (row) => pricingTypeLabels[row.pricing_type] },
-    { key: 'unit_price', label: 'Unit Price', kind: 'text', width: '120px', inputMode: 'decimal', getValue: (row) => row.unit_price == null ? '' : String(row.unit_price), formatEditableValue: (value, row) => row.row_kind === 'note' ? '' : formatWorksheetMoney(value as string) },
-    { key: 'total_price', label: 'Total', kind: 'text', width: '120px', inputMode: 'decimal', getValue: (row) => row.total_price == null ? '' : String(row.total_price), formatEditableValue: (value, row) => row.row_kind === 'note' ? '' : formatWorksheetMoney(value as string) },
-    { key: 'source_identity', label: 'Source', kind: 'text', width: '170px', getValue: (row) => [row.catalog_sku, row.source_sku].filter(Boolean).join(' / ') },
-    { key: 'status', label: 'Status', kind: 'text', width: '180px', getValue: getRowStatusLabel },
+    { key: 'pricing_type', label: 'Pricing', kind: 'static', width: '120px', getValue: (row) => pricingTypeLabels[row.pricing_type] },
+    { key: 'unit_price', label: 'Unit Price', kind: 'static', width: '120px', getValue: (row) => formatWorksheetMoney(row.unit_price) },
+    { key: 'total_price', label: 'Total', kind: 'static', width: '120px', getValue: (row) => formatWorksheetMoney(row.total_price) },
+    { key: 'source_identity', label: 'Source', kind: 'static', width: '170px', getValue: (row) => [row.catalog_sku, row.source_sku].filter(Boolean).join(' / ') },
+    { key: 'status', label: 'Status', kind: 'static', width: '180px', getValue: getRowStatusLabel },
     { key: 'notes', label: 'Notes', kind: 'text', width: '220px', getValue: (row) => row.notes ?? '' },
   ]
 }
 
-export function JobWorksheetTableAdapter({ rows }: { rows: JobWorksheetRow[] }) {
-  const [activeCell, setActiveCell] = useState<WorksheetActiveCell<JobWorksheetCellKey> | null>(null)
-  const [activeDraft, setActiveDraft] = useState<WorksheetCellDraftValue>(null)
+type Props = {
+  rows: JobWorksheetRow[]
+  activeCell: WorksheetActiveCell<JobWorksheetEditableCellKey> | null
+  activeDraft: WorksheetCellDraftValue
+  setActiveCell: (cell: WorksheetActiveCell<JobWorksheetEditableCellKey> | null) => void
+  setActiveDraft: (draft: WorksheetCellDraftValue) => void
+  commitCellValue: (rowId: string, field: JobWorksheetEditableCellKey, value: string | boolean) => void
+  handleUndo: () => void
+}
 
+export function JobWorksheetTableAdapter({ rows, activeCell, activeDraft, setActiveCell, setActiveDraft, commitCellValue, handleUndo }: Props) {
   const rowsById = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
   const columns = useMemo(() => getColumns(rowsById), [rowsById])
 
@@ -181,17 +184,17 @@ export function JobWorksheetTableAdapter({ rows }: { rows: JobWorksheetRow[] }) 
     maxBodyHeight: VIRTUAL_MAX_BODY_HEIGHT,
   })
 
-  const interaction = useWorksheetInteraction<JobWorksheetRow, JobWorksheetCellKey>({
+  const interaction = useWorksheetInteraction<JobWorksheetRow, JobWorksheetEditableCellKey>({
     rows,
     getRowId: (row) => row.id,
     cellOrder: editableCellOrder,
     activeCell,
-    onActiveCellChange: (cell) => setActiveCell(cell),
+    onActiveCellChange: setActiveCell,
     activeDraft,
-    onActiveDraftChange: (draft) => setActiveDraft(draft),
+    onActiveDraftChange: setActiveDraft,
     getCellValue,
-    commitCellValue: () => {},
-    handleUndo: () => {},
+    commitCellValue,
+    handleUndo,
     onCreateRow: () => {},
     scrollContainerRef: virt.scrollContainerRef,
     shouldVirtualize: virt.shouldVirtualize,
@@ -206,7 +209,7 @@ export function JobWorksheetTableAdapter({ rows }: { rows: JobWorksheetRow[] }) 
       columns={columns}
       rows={rows}
       getRowId={(row) => row.id}
-      canManage={false}
+      canManage
       minWidth="1550px"
       rowHeight={VIRTUAL_ROW_HEIGHT}
       shouldVirtualize={virt.shouldVirtualize}
@@ -219,7 +222,7 @@ export function JobWorksheetTableAdapter({ rows }: { rows: JobWorksheetRow[] }) 
       onTextCellFocus={interaction.handleTextCellFocus}
       onTextCellBlur={interaction.handleTextCellBlur}
       onTextCellKeyDown={interaction.handleTextCellKeyDown}
-      onTextCellDraftChange={(value) => setActiveDraft(value)}
+      onTextCellDraftChange={setActiveDraft}
       onCheckboxFocus={interaction.handleCheckboxFocus}
       onCheckboxBlur={interaction.handleCheckboxBlur}
       onCheckboxKeyDown={interaction.handleCheckboxKeyDown}
