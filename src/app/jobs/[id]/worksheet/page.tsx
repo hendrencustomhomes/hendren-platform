@@ -29,7 +29,7 @@ export default async function JobWorksheetPage({ params }: { params: Promise<{ i
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh', color: 'var(--text)', fontFamily: 'system-ui,-apple-system,sans-serif' }}>
-      <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
+      <div style={{ width: '100%', maxWidth: '100%', margin: '0 auto', padding: '0 24px', boxSizing: 'border-box' }}>
         <JobWorksheetPageOrchestrator
           jobId={id}
           jobName={job.job_name}
