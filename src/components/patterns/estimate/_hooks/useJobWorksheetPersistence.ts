@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from '@/utils/supabase/client'
-import type { JobWorksheetRow } from '../JobWorksheetTableAdapter'
+import type { JobWorksheetRow, JobWorksheetRowKind } from '../JobWorksheetTableAdapter'
 
 export type UpdateJobWorksheetRowPatch = {
   description: string
@@ -15,7 +15,7 @@ export type CreateJobWorksheetRowInput = {
   job_id: string
   parent_id: string | null
   sort_order: number
-  row_kind: 'line_item'
+  row_kind: JobWorksheetRowKind
   description: string
   location: string | null
   quantity: number | string | null
