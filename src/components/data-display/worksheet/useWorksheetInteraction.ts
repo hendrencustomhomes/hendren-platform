@@ -29,6 +29,7 @@ type Options<Row, CellKey extends string> = {
   commitCellValue: (rowId: string, field: CellKey, value: string | boolean) => void
   handleUndo: () => void
   onCreateRow: (options?: CreateRowOptions) => void | Promise<unknown>
+  onDeleteRow?: (rowId: string) => void | Promise<unknown>
   scrollContainerRef: MutableRefObject<HTMLDivElement | null>
   shouldVirtualize: boolean
   tableViewportHeight: number
@@ -49,6 +50,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
   commitCellValue,
   handleUndo,
   onCreateRow,
+  onDeleteRow,
   scrollContainerRef,
   shouldVirtualize,
   tableViewportHeight,
@@ -181,6 +183,11 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     }
   }
 
+  function deleteRow(rowId: string) {
+    clearActiveCell()
+    void onDeleteRow?.(rowId)
+  }
+
   function getRenderedCellValue(row: Row, field: string): string | boolean {
     const typedField = field as CellKey
     if (activeCell?.rowId === getRowId(row) && activeCell.field === typedField) {
@@ -223,6 +230,12 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     field: string
   ) {
     const typedField = field as CellKey
+
+    if (event.key === 'Delete') {
+      event.preventDefault()
+      deleteRow(rowId)
+      return
+    }
 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
       event.preventDefault()
@@ -304,6 +317,12 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     field: string
   ) {
     const typedField = field as CellKey
+
+    if (event.key === 'Delete') {
+      event.preventDefault()
+      deleteRow(rowId)
+      return
+    }
 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
       event.preventDefault()
