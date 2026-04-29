@@ -12,6 +12,10 @@ function isFullySelected(element: HTMLInputElement | HTMLTextAreaElement) {
   return (element.selectionStart ?? 0) === 0 && (element.selectionEnd ?? 0) === valueLength
 }
 
+function hasCollapsedCaret(element: HTMLInputElement | HTMLTextAreaElement) {
+  return element.selectionStart === element.selectionEnd
+}
+
 function selectElement(element: HTMLInputElement | HTMLTextAreaElement) {
   if (element instanceof HTMLInputElement && element.type !== 'checkbox') element.select()
   if (element instanceof HTMLTextAreaElement) element.select()
@@ -65,6 +69,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
 }: Options<Row, CellKey>) {
   const cellRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({})
   const pendingFocusRef = useRef<{ rowId: string; field: CellKey; select: boolean } | null>(null)
+  const editingCellRef = useRef<string | null>(null)
 
   useEffect(() => {
     const pending = pendingFocusRef.current
@@ -96,6 +101,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     const row = getRowById(cell.rowId)
     onActiveCellChange(cell)
     onActiveDraftChange(row ? getCellValue(row, cell.field) : null)
+    editingCellRef.current = options?.select === false ? getCellDomKey(cell.rowId, cell.field) : null
     focusCell(cell.rowId, cell.field, options?.select ?? true)
   }
 
@@ -188,6 +194,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
   }
 
   function deleteRow(rowId: string) {
+    editingCellRef.current = null
     void onDeleteRow?.(rowId)
   }
 
@@ -209,8 +216,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     if (!row) return
     onActiveCellChange({ rowId, field: typedField })
     onActiveDraftChange(getCellValue(row, typedField))
-    if (!isFullySelected(element)) return
-    // Preserve existing user selection on mouse clicks; full select is already present from keyboard navigation.
+    editingCellRef.current = isFullySelected(element) ? null : getCellDomKey(rowId, field)
   }
 
   function handleTextCellBlur(rowId: string, field: string) {
@@ -221,11 +227,24 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
 
   function createRow(rowId: string, asChild: boolean, draftValue?: string | boolean) {
     commitActiveCell({ draftValue })
+    editingCellRef.current = null
     void onCreateRow({ sourceRowId: rowId, asChild })
   }
 
   function wantsCreateRow(event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLInputElement>) {
     return event.key === 'Enter' && (event.ctrlKey || event.metaKey)
+  }
+
+  function shouldArrowEditText(event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>, rowId: string, field: string) {
+    const key = event.key
+    const cellKey = getCellDomKey(rowId, field)
+    if (isFullySelected(event.currentTarget)) return false
+    if (editingCellRef.current === cellKey) return true
+    if (!hasCollapsedCaret(event.currentTarget)) return false
+    if (key === 'ArrowLeft' && (event.currentTarget.selectionStart ?? 0) > 0) return true
+    if (key === 'ArrowRight' && (event.currentTarget.selectionEnd ?? 0) < event.currentTarget.value.length) return true
+    if ((key === 'ArrowUp' || key === 'ArrowDown') && event.currentTarget instanceof HTMLTextAreaElement) return true
+    return false
   }
 
   function handleTextCellKeyDown(
@@ -263,24 +282,28 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     if (event.key === 'Escape') {
       event.preventDefault()
       abandonActiveCellDraft()
+      editingCellRef.current = null
       return
     }
 
     if (event.key === 'Tab') {
       event.preventDefault()
+      editingCellRef.current = null
       commitActiveCell({ move: event.shiftKey ? 'left' : 'right', draftValue: currentValue })
       return
     }
 
     if (event.key === 'Enter') {
       event.preventDefault()
+      editingCellRef.current = null
       commitActiveCell({ move: 'down', draftValue: currentValue })
       return
     }
 
     if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-      if (!isFullySelected(event.currentTarget)) return
+      if (shouldArrowEditText(event, rowId, field)) return
       event.preventDefault()
+      editingCellRef.current = null
       if (event.key === 'ArrowUp') commitActiveCell({ move: 'up', draftValue: currentValue })
       if (event.key === 'ArrowDown') commitActiveCell({ move: 'down', draftValue: currentValue })
       if (event.key === 'ArrowLeft') commitActiveCell({ move: 'left', draftValue: currentValue })
@@ -294,6 +317,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     if (!row) return
     onActiveCellChange({ rowId, field: typedField })
     onActiveDraftChange(Boolean(getCellValue(row, typedField)))
+    editingCellRef.current = null
   }
 
   function handleCheckboxBlur(rowId: string, field: string) {
