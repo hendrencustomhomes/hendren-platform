@@ -18,6 +18,17 @@ function getSheetStatusLabel(saveCounts: { saving: number; dirty: number; error:
   return 'Saved'
 }
 
+const secondaryButtonStyle = {
+  border: '1px solid var(--border)',
+  background: 'var(--surface)',
+  color: 'var(--text)',
+  borderRadius: '10px',
+  padding: '8px 10px',
+  fontSize: '13px',
+  fontWeight: 700,
+  cursor: 'pointer',
+} as const
+
 export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: Props) {
   const { persistRow, createRow, persistSortOrders } = useJobWorksheetPersistence()
 
@@ -46,12 +57,19 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: P
             padding: '14px',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ fontSize: '18px', fontWeight: 700 }}>Internal Job Worksheet</div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{statusLabel}</div>
-          </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Editable slice. Changes auto-save.
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+            <div>
+              <div style={{ fontSize: '18px', fontWeight: 700 }}>Internal Job Worksheet</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                Editable slice. Changes auto-save.
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{statusLabel}</div>
+              <button type="button" onClick={() => createDraftRowAfter()} style={secondaryButtonStyle}>
+                Add row
+              </button>
+            </div>
           </div>
         </div>
 
