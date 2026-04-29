@@ -8,6 +8,7 @@ export type UpdateJobWorksheetRowPatch = {
   location: string | null
   quantity: number | string | null
   unit: string | null
+  unit_price: number | string | null
   notes: string | null
 }
 
@@ -20,6 +21,7 @@ export type CreateJobWorksheetRowInput = {
   location: string | null
   quantity: number | string | null
   unit: string | null
+  unit_price: number | string | null
   notes: string | null
   scope_status: 'included'
   is_upgrade: false
