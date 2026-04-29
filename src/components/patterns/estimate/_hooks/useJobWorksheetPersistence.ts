@@ -63,6 +63,21 @@ export function useJobWorksheetPersistence() {
     return data as JobWorksheetRow
   }
 
+  async function restoreRows(rows: JobWorksheetRow[]) {
+    if (rows.length === 0) return []
+
+    const { data, error } = await supabase
+      .from('job_worksheet_items')
+      .insert(rows as any[])
+      .select('*')
+
+    if (error || !data) {
+      throw error ?? new Error('Failed to restore worksheet rows.')
+    }
+
+    return data as JobWorksheetRow[]
+  }
+
   async function deleteRow(rowId: string) {
     const { error } = await supabase
       .from('job_worksheet_items')
@@ -92,5 +107,5 @@ export function useJobWorksheetPersistence() {
     if (failed?.error) throw failed.error
   }
 
-  return { persistRow, createRow, deleteRow, persistSortOrders }
+  return { persistRow, createRow, restoreRows, deleteRow, persistSortOrders }
 }
