@@ -67,6 +67,21 @@ const VIRTUAL_OVERSCAN = 8
 const VIRTUAL_MAX_BODY_HEIGHT = 560
 const VIRTUAL_THRESHOLD = 20
 
+const rowKindLabels: Record<JobWorksheetRowKind, string> = {
+  line_item: 'Line item',
+  assembly: 'Assembly',
+  allowance: 'Allowance',
+  note: 'Note',
+}
+
+const pricingTypeLabels: Record<JobWorksheetPricingType, string> = {
+  unit: 'Unit',
+  lump_sum: 'Lump sum',
+  allowance: 'Allowance',
+  manual: 'Manual',
+  unpriced: 'Unpriced',
+}
+
 function formatNumber(value: number | string | null) {
   if (value === null || value === '') return ''
   const numericValue = Number(value)
@@ -101,24 +116,33 @@ function getDepth(row: JobWorksheetRow, rowsById: Map<string, JobWorksheetRow>) 
   return depth
 }
 
+function getRowStatusLabel(row: JobWorksheetRow) {
+  if (row.row_kind === 'assembly') return 'Assembly / group'
+  if (row.row_kind === 'allowance') return 'Allowance · no selection yet'
+  if (row.row_kind === 'note') return 'Note · non-priced'
+  if (row.pricing_type === 'unpriced') return 'Unpriced'
+  return 'Ready'
+}
+
 function getCellValue(row: JobWorksheetRow, field: JobWorksheetCellKey): string | boolean {
   switch (field) {
-    case 'row_kind': return row.row_kind
+    case 'row_kind': return rowKindLabels[row.row_kind]
     case 'description': return row.description
     case 'location': return row.location ?? ''
     case 'quantity': return formatNumber(row.quantity)
     case 'unit': return row.unit ?? ''
-    case 'pricing_type': return row.pricing_type
+    case 'pricing_type': return pricingTypeLabels[row.pricing_type]
     case 'unit_price': return formatWorksheetMoney(row.unit_price)
     case 'total_price': return formatWorksheetMoney(row.total_price)
-    case 'source_identity': return ''
-    case 'status': return ''
+    case 'source_identity': return [row.catalog_sku, row.source_sku].filter(Boolean).join(' / ')
+    case 'status': return getRowStatusLabel(row)
     case 'notes': return row.notes ?? ''
   }
 }
 
 function getColumns(rowsById: Map<string, JobWorksheetRow>, onDeleteRow: (id: string) => void): EditableDataTableColumn<JobWorksheetRow>[] {
   return [
+    { key: 'row_kind', label: 'Type', kind: 'static', width: '120px', getValue: (row) => rowKindLabels[row.row_kind] },
     {
       key: 'description',
       label: 'Description',
@@ -131,6 +155,15 @@ function getColumns(rowsById: Map<string, JobWorksheetRow>, onDeleteRow: (id: st
         return `${prefix}${String(value ?? '')}`
       },
     },
+    { key: 'location', label: 'Location', kind: 'text', width: '150px', getValue: (row) => row.location ?? '' },
+    { key: 'quantity', label: 'Qty', kind: 'text', width: '100px', inputMode: 'decimal', getValue: (row) => row.quantity == null ? '' : String(row.quantity), formatEditableValue: (value) => formatNumber(value as string) },
+    { key: 'unit', label: 'Unit', kind: 'text', width: '90px', getValue: (row) => row.unit ?? '', formatEditableValue: (value) => String(value ?? '') },
+    { key: 'pricing_type', label: 'Pricing', kind: 'static', width: '120px', getValue: (row) => pricingTypeLabels[row.pricing_type] },
+    { key: 'unit_price', label: 'Unit Price', kind: 'static', width: '120px', getValue: (row) => formatWorksheetMoney(row.unit_price) },
+    { key: 'total_price', label: 'Total', kind: 'static', width: '120px', getValue: (row) => formatWorksheetMoney(row.total_price) },
+    { key: 'source_identity', label: 'Source', kind: 'static', width: '170px', getValue: (row) => [row.catalog_sku, row.source_sku].filter(Boolean).join(' / ') },
+    { key: 'status', label: 'Status', kind: 'static', width: '180px', getValue: getRowStatusLabel },
+    { key: 'notes', label: 'Notes', kind: 'text', width: '220px', getValue: (row) => row.notes ?? '' },
     {
       key: 'actions',
       label: '',
@@ -190,29 +223,39 @@ export function JobWorksheetTableAdapter({ rows, activeCell, activeDraft, setAct
   })
 
   return (
-    <EditableDataTable
-      columns={columns}
-      rows={rows}
-      getRowId={(row) => row.id}
-      canManage
-      minWidth="1550px"
-      rowHeight={VIRTUAL_ROW_HEIGHT}
-      shouldVirtualize={virt.shouldVirtualize}
-      visibleRange={virt.visibleRange}
-      scrollContainerRef={virt.scrollContainerRef}
-      cellRefs={interaction.cellRefs}
-      activeCell={activeCell}
-      activeDraft={activeDraft}
-      onTableScrollTopChange={virt.setTableScrollTop}
-      onTextCellFocus={interaction.handleTextCellFocus}
-      onTextCellBlur={interaction.handleTextCellBlur}
-      onTextCellKeyDown={interaction.handleTextCellKeyDown}
-      onTextCellDraftChange={setActiveDraft}
-      onCheckboxFocus={interaction.handleCheckboxFocus}
-      onCheckboxBlur={interaction.handleCheckboxBlur}
-      onCheckboxKeyDown={interaction.handleCheckboxKeyDown}
-      onCheckboxCommit={interaction.handleCheckboxCommit}
-      getRenderedCellValue={interaction.getRenderedCellValue}
-    />
+    <div
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        if (event.key !== 'Delete') return
+        if (!activeCell) return
+        event.preventDefault()
+        deleteRow(activeCell.rowId)
+      }}
+    >
+      <EditableDataTable
+        columns={columns}
+        rows={rows}
+        getRowId={(row) => row.id}
+        canManage
+        minWidth="1610px"
+        rowHeight={VIRTUAL_ROW_HEIGHT}
+        shouldVirtualize={virt.shouldVirtualize}
+        visibleRange={virt.visibleRange}
+        scrollContainerRef={virt.scrollContainerRef}
+        cellRefs={interaction.cellRefs}
+        activeCell={activeCell}
+        activeDraft={activeDraft}
+        onTableScrollTopChange={virt.setTableScrollTop}
+        onTextCellFocus={interaction.handleTextCellFocus}
+        onTextCellBlur={interaction.handleTextCellBlur}
+        onTextCellKeyDown={interaction.handleTextCellKeyDown}
+        onTextCellDraftChange={setActiveDraft}
+        onCheckboxFocus={interaction.handleCheckboxFocus}
+        onCheckboxBlur={interaction.handleCheckboxBlur}
+        onCheckboxKeyDown={interaction.handleCheckboxKeyDown}
+        onCheckboxCommit={interaction.handleCheckboxCommit}
+        getRenderedCellValue={interaction.getRenderedCellValue}
+      />
+    </div>
   )
 }
