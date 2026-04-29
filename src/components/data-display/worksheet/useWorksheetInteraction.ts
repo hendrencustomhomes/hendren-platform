@@ -170,12 +170,12 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     onActiveDraftChange(getCellValue(row, activeCell.field))
   }
 
-  function commitActiveCell(options?: { move?: 'left' | 'right' | 'up' | 'down' }) {
+  function commitActiveCell(options?: { move?: 'left' | 'right' | 'up' | 'down'; draftValue?: string | boolean }) {
     if (!activeCell) return
     const row = rows.find((r) => getRowId(r) === activeCell.rowId)
     if (!row) return
 
-    const nextValue = (activeDraft ?? getCellValue(row, activeCell.field)) as string | boolean
+    const nextValue = (options?.draftValue ?? activeDraft ?? getCellValue(row, activeCell.field)) as string | boolean
     const previousCell = activeCell
     commitCellValue(activeCell.rowId, activeCell.field, nextValue)
 
@@ -219,8 +219,8 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     commitActiveCell()
   }
 
-  function createRow(rowId: string, asChild: boolean) {
-    commitActiveCell()
+  function createRow(rowId: string, asChild: boolean, draftValue?: string | boolean) {
+    commitActiveCell({ draftValue })
     void onCreateRow({ sourceRowId: rowId, asChild })
   }
 
@@ -234,6 +234,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     field: string
   ) {
     const typedField = field as CellKey
+    const currentValue = event.currentTarget.value
 
     if (event.key === 'Delete') {
       event.preventDefault()
@@ -255,7 +256,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
 
     if (wantsCreateRow(event)) {
       event.preventDefault()
-      createRow(rowId, event.shiftKey)
+      createRow(rowId, event.shiftKey, currentValue)
       return
     }
 
@@ -267,37 +268,23 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
 
     if (event.key === 'Tab') {
       event.preventDefault()
-      commitActiveCell({ move: event.shiftKey ? 'left' : 'right' })
+      commitActiveCell({ move: event.shiftKey ? 'left' : 'right', draftValue: currentValue })
       return
     }
 
     if (event.key === 'Enter') {
       event.preventDefault()
-      commitActiveCell({ move: 'down' })
+      commitActiveCell({ move: 'down', draftValue: currentValue })
       return
     }
 
-    if (event.key === 'ArrowUp') {
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      if (!isFullySelected(event.currentTarget)) return
       event.preventDefault()
-      commitActiveCell({ move: 'up' })
-      return
-    }
-
-    if (event.key === 'ArrowDown') {
-      event.preventDefault()
-      commitActiveCell({ move: 'down' })
-      return
-    }
-
-    if (event.key === 'ArrowLeft' && isFullySelected(event.currentTarget)) {
-      event.preventDefault()
-      commitActiveCell({ move: 'left' })
-      return
-    }
-
-    if (event.key === 'ArrowRight' && isFullySelected(event.currentTarget)) {
-      event.preventDefault()
-      commitActiveCell({ move: 'right' })
+      if (event.key === 'ArrowUp') commitActiveCell({ move: 'up', draftValue: currentValue })
+      if (event.key === 'ArrowDown') commitActiveCell({ move: 'down', draftValue: currentValue })
+      if (event.key === 'ArrowLeft') commitActiveCell({ move: 'left', draftValue: currentValue })
+      if (event.key === 'ArrowRight') commitActiveCell({ move: 'right', draftValue: currentValue })
     }
   }
 
@@ -351,6 +338,15 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
       event.preventDefault()
       const neighbor = getNeighborCell(rowId, typedField, 'down')
       if (neighbor) setActiveCellWithDraft(neighbor)
+      return
+    }
+
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault()
+      if (event.key === 'ArrowUp') setActiveCellWithDraft(getNeighborCell(rowId, typedField, 'up') ?? { rowId, field: typedField })
+      if (event.key === 'ArrowDown') setActiveCellWithDraft(getNeighborCell(rowId, typedField, 'down') ?? { rowId, field: typedField })
+      if (event.key === 'ArrowLeft') setActiveCellWithDraft(getNeighborCell(rowId, typedField, 'left') ?? { rowId, field: typedField })
+      if (event.key === 'ArrowRight') setActiveCellWithDraft(getNeighborCell(rowId, typedField, 'right') ?? { rowId, field: typedField })
     }
   }
 
