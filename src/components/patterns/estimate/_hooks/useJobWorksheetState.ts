@@ -6,11 +6,17 @@ import { parseNumber } from '@/lib/shared/numbers'
 import type { JobWorksheetEditableCellKey, JobWorksheetRow } from '../JobWorksheetTableAdapter'
 import type { CreateJobWorksheetRowInput, UpdateJobWorksheetRowPatch, WorksheetSortOrderUpdate } from './useJobWorksheetPersistence'
 
-type UndoEntry = {
-  rowId: string
-  previousRow: JobWorksheetRow
-  nextRow: JobWorksheetRow
-}
+type UndoEntry =
+  | {
+      kind: 'edit'
+      rowId: string
+      previousRow: JobWorksheetRow
+      nextRow: JobWorksheetRow
+    }
+  | {
+      kind: 'delete'
+      rows: JobWorksheetRow[]
+    }
 
 type WorksheetBackup = {
   savedAt: string
@@ -35,8 +41,8 @@ function isDraftRowId(rowId: string) {
   return rowId.startsWith('draft_')
 }
 
-function canHaveChildRows(row: JobWorksheetRow | null) {
-  return row?.row_kind === 'assembly'
+function canHaveChildRows(_row: JobWorksheetRow | null) {
+  return true
 }
 
 function cloneRow(row: JobWorksheetRow): JobWorksheetRow {
@@ -84,7 +90,7 @@ function buildCreateInput(jobId: string, row: JobWorksheetRow): CreateJobWorkshe
     job_id: jobId,
     parent_id: row.parent_id,
     sort_order: row.sort_order,
-    row_kind: 'line_item',
+    row_kind: row.row_kind,
     description: row.description,
     location: row.location,
     quantity: row.quantity,
@@ -185,21 +191,6 @@ function applySortOrdersToServerRows(serverRows: JobWorksheetRow[], updates: Wor
   return serverRows.map((row) => updateById.has(row.id) ? { ...row, sort_order: updateById.get(row.id)! } : row)
 }
 
-function findLastDescendantIndex(rows: JobWorksheetRow[], sourceIndex: number) {
-  const source = rows[sourceIndex]
-  if (!source) return sourceIndex
-  const sourceDepth = getDepthFromRows(source, rows)
-  let lastIndex = sourceIndex
-
-  for (let index = sourceIndex + 1; index < rows.length; index += 1) {
-    const row = rows[index]
-    if (getDepthFromRows(row, rows) <= sourceDepth) break
-    lastIndex = index
-  }
-
-  return lastIndex
-}
-
 function getDepthFromRows(row: JobWorksheetRow, rows: JobWorksheetRow[]) {
   const rowsById = new Map(rows.map((item) => [item.id, item]))
   let depth = 0
@@ -215,6 +206,38 @@ function getDepthFromRows(row: JobWorksheetRow, rows: JobWorksheetRow[]) {
   }
 
   return depth
+}
+
+function findLastDescendantIndex(rows: JobWorksheetRow[], sourceIndex: number) {
+  const source = rows[sourceIndex]
+  if (!source) return sourceIndex
+  const sourceDepth = getDepthFromRows(source, rows)
+  let lastIndex = sourceIndex
+
+  for (let index = sourceIndex + 1; index < rows.length; index += 1) {
+    const row = rows[index]
+    if (getDepthFromRows(row, rows) <= sourceDepth) break
+    lastIndex = index
+  }
+
+  return lastIndex
+}
+
+function collectRowSubtree(rows: JobWorksheetRow[], rowId: string) {
+  const ids = new Set([rowId])
+  let changed = true
+
+  while (changed) {
+    changed = false
+    rows.forEach((row) => {
+      if (row.parent_id && ids.has(row.parent_id) && !ids.has(row.id)) {
+        ids.add(row.id)
+        changed = true
+      }
+    })
+  }
+
+  return rows.filter((row) => ids.has(row.id))
 }
 
 function createDraftRow(jobId: string, sourceRow: JobWorksheetRow | null, asChild: boolean): JobWorksheetRow {
@@ -248,6 +271,8 @@ export function useJobWorksheetState(
   initialRows: JobWorksheetRow[],
   persistRow: (rowId: string, patch: UpdateJobWorksheetRowPatch) => Promise<JobWorksheetRow>,
   createRow: (input: CreateJobWorksheetRowInput) => Promise<JobWorksheetRow>,
+  restoreRows: (rows: JobWorksheetRow[]) => Promise<JobWorksheetRow[]>,
+  deleteRow: (rowId: string) => Promise<void>,
   persistSortOrders: (updates: WorksheetSortOrderUpdate[]) => Promise<void>
 ) {
   const [localRows, setLocalRows] = useState<JobWorksheetRow[]>([])
@@ -460,7 +485,7 @@ export function useJobWorksheetState(
     if (areEditableFieldsEqual(row, next)) return
 
     replaceLocalRow(rowId, next)
-    setUndoStack((stack) => [...stack.slice(-39), { rowId, previousRow: cloneRow(row), nextRow: cloneRow(next) }])
+    setUndoStack((stack) => [...stack, { kind: 'edit', rowId, previousRow: cloneRow(row), nextRow: cloneRow(next) }])
     syncRowState(rowId, next)
     writeBackup(jobId, localRowsRef.current.map((currentRow) => (currentRow.id === rowId ? next : currentRow)))
 
@@ -493,10 +518,61 @@ export function useJobWorksheetState(
     setActiveDraft('')
   }
 
+  function deleteWorksheetRow(rowId: string) {
+    const rows = localRowsRef.current
+    const deletedRows = collectRowSubtree(rows, rowId)
+    if (deletedRows.length === 0) return
+
+    const deletedIds = new Set(deletedRows.map((row) => row.id))
+    const nextRows = normalizeSortOrders(rows.filter((row) => !deletedIds.has(row.id)))
+    const nextServerRows = serverRowsRef.current.filter((row) => !deletedIds.has(row.id))
+
+    Object.values(saveTimersRef.current).forEach((timer) => clearTimeout(timer))
+    saveTimersRef.current = {}
+    setUndoStack((stack) => [...stack, { kind: 'delete', rows: deletedRows.map(cloneRow) }])
+    setLocalRowsSync(nextRows)
+    setServerRowsSync(nextServerRows)
+    setRowSaveState(buildRowStateMap(nextRows, nextServerRows))
+    writeBackup(jobId, nextRows)
+
+    deletedRows
+      .filter((row) => !isDraftRowId(row.id))
+      .slice()
+      .reverse()
+      .forEach((row) => {
+        void deleteRow(row.id).catch(() => {
+          setRowState(row.id, 'error')
+          writeBackup(jobId, localRowsRef.current)
+        })
+      })
+  }
+
   function handleUndo() {
     setUndoStack((stack) => {
       const last = stack[stack.length - 1]
       if (!last) return stack
+
+      if (last.kind === 'delete') {
+        const restoredRows = last.rows.map(cloneRow)
+        const restoredIds = new Set(restoredRows.map((row) => row.id))
+        const nextRows = normalizeSortOrders([
+          ...localRowsRef.current.filter((row) => !restoredIds.has(row.id)),
+          ...restoredRows,
+        ]).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+        const nextServerRows = [
+          ...serverRowsRef.current.filter((row) => !restoredIds.has(row.id)),
+          ...restoredRows.filter((row) => !isDraftRowId(row.id)),
+        ]
+
+        setLocalRowsSync(nextRows)
+        setServerRowsSync(nextServerRows)
+        setRowSaveState(buildRowStateMap(nextRows, nextServerRows))
+        writeBackup(jobId, nextRows)
+        void restoreRows(restoredRows.filter((row) => !isDraftRowId(row.id))).catch(() => {
+          restoredRows.forEach((row) => setRowState(row.id, 'error'))
+        })
+        return stack.slice(0, -1)
+      }
 
       replaceLocalRow(last.rowId, cloneRow(last.previousRow))
       syncRowState(last.rowId, last.previousRow)
@@ -534,6 +610,7 @@ export function useJobWorksheetState(
     setActiveDraft,
     commitCellValue,
     createDraftRowAfter,
+    deleteWorksheetRow,
     handleUndo,
     saveCounts,
   }
