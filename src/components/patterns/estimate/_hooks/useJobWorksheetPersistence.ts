@@ -63,6 +63,17 @@ export function useJobWorksheetPersistence() {
     return data as JobWorksheetRow
   }
 
+  async function deleteRow(rowId: string) {
+    const { error } = await supabase
+      .from('job_worksheet_items')
+      .delete()
+      .eq('id', rowId)
+
+    if (error) {
+      throw error
+    }
+  }
+
   async function persistSortOrders(updates: WorksheetSortOrderUpdate[]) {
     if (updates.length === 0) return
 
@@ -81,5 +92,5 @@ export function useJobWorksheetPersistence() {
     if (failed?.error) throw failed.error
   }
 
-  return { persistRow, createRow, persistSortOrders }
+  return { persistRow, createRow, deleteRow, persistSortOrders }
 }
