@@ -30,7 +30,7 @@ const secondaryButtonStyle = {
 } as const
 
 export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: Props) {
-  const { persistRow, createRow, persistSortOrders } = useJobWorksheetPersistence()
+  const { persistRow, createRow, restoreRows, deleteRow, persistSortOrders } = useJobWorksheetPersistence()
 
   const {
     localRows,
@@ -40,9 +40,10 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: P
     setActiveDraft,
     commitCellValue,
     createDraftRowAfter,
+    deleteWorksheetRow,
     handleUndo,
     saveCounts,
-  } = useJobWorksheetState(jobId, rows, persistRow, createRow, persistSortOrders)
+  } = useJobWorksheetState(jobId, rows, persistRow, createRow, restoreRows, deleteRow, persistSortOrders)
 
   const statusLabel = getSheetStatusLabel(saveCounts)
 
@@ -81,6 +82,7 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: P
           setActiveDraft={setActiveDraft}
           commitCellValue={commitCellValue}
           createDraftRowAfter={createDraftRowAfter}
+          deleteRow={deleteWorksheetRow}
           handleUndo={handleUndo}
         />
       </div>
