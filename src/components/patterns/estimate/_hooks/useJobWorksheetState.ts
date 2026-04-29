@@ -41,6 +41,10 @@ function isDraftRowId(rowId: string) {
   return rowId.startsWith('draft_')
 }
 
+function isBlankDraftRow(row: JobWorksheetRow) {
+  return isDraftRowId(row.id) && !row.description.trim()
+}
+
 function canHaveChildRows(_row: JobWorksheetRow | null) {
   return true
 }
@@ -284,6 +288,7 @@ export function useJobWorksheetState(
 
   const localRowsRef = useRef<JobWorksheetRow[]>([])
   const serverRowsRef = useRef<JobWorksheetRow[]>([])
+  const undoStackRef = useRef<UndoEntry[]>([])
   const saveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const savingRowsRef = useRef<Set<string>>(new Set())
   const activeCellRef = useRef<WorksheetActiveCell<JobWorksheetEditableCellKey> | null>(null)
@@ -297,8 +302,27 @@ export function useJobWorksheetState(
   }, [serverRows])
 
   useEffect(() => {
+    undoStackRef.current = undoStack
+  }, [undoStack])
+
+  useEffect(() => {
     activeCellRef.current = activeCell
   }, [activeCell])
+
+  useEffect(() => {
+    function handleWindowKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey)) return
+      if (event.key.toLowerCase() !== 'z') return
+      if (event.defaultPrevented) return
+      if (undoStackRef.current.length === 0) return
+      event.preventDefault()
+      handleUndo()
+    }
+
+    window.addEventListener('keydown', handleWindowKeyDown)
+    return () => window.removeEventListener('keydown', handleWindowKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -312,7 +336,8 @@ export function useJobWorksheetState(
     savingRowsRef.current = new Set()
 
     const backup = readBackup(jobId)
-    const nextRows = backup ? mergeBackupRows(initialRows, backup.rows) : initialRows
+    const restoredRows = backup ? mergeBackupRows(initialRows, backup.rows) : initialRows
+    const nextRows = restoredRows.length > 0 ? restoredRows : normalizeSortOrders([createDraftRow(jobId, null, false)])
 
     setLocalRows(nextRows)
     setServerRows(initialRows)
@@ -320,9 +345,10 @@ export function useJobWorksheetState(
     serverRowsRef.current = initialRows
     setRowSaveState(buildRowStateMap(nextRows, initialRows))
     setUndoStack([])
-    setActiveCell(null)
-    setActiveDraft(null)
-    activeCellRef.current = null
+    undoStackRef.current = []
+    setActiveCell(nextRows.length === 1 && isBlankDraftRow(nextRows[0]) ? { rowId: nextRows[0].id, field: 'description' } : null)
+    setActiveDraft(nextRows.length === 1 && isBlankDraftRow(nextRows[0]) ? '' : null)
+    activeCellRef.current = nextRows.length === 1 && isBlankDraftRow(nextRows[0]) ? { rowId: nextRows[0].id, field: 'description' } : null
 
     if (hasUnsavedRows(nextRows, initialRows)) {
       writeBackup(jobId, nextRows)
@@ -365,6 +391,11 @@ export function useJobWorksheetState(
   function setServerRowsSync(nextRows: JobWorksheetRow[]) {
     serverRowsRef.current = nextRows
     setServerRows(nextRows)
+  }
+
+  function setUndoStackSync(nextStack: UndoEntry[]) {
+    undoStackRef.current = nextStack
+    setUndoStack(nextStack)
   }
 
   function replaceLocalRow(rowId: string, nextRow: JobWorksheetRow) {
@@ -485,7 +516,7 @@ export function useJobWorksheetState(
     if (areEditableFieldsEqual(row, next)) return
 
     replaceLocalRow(rowId, next)
-    setUndoStack((stack) => [...stack, { kind: 'edit', rowId, previousRow: cloneRow(row), nextRow: cloneRow(next) }])
+    setUndoStackSync([...undoStackRef.current, { kind: 'edit', rowId, previousRow: cloneRow(row), nextRow: cloneRow(next) }])
     syncRowState(rowId, next)
     writeBackup(jobId, localRowsRef.current.map((currentRow) => (currentRow.id === rowId ? next : currentRow)))
 
@@ -497,7 +528,17 @@ export function useJobWorksheetState(
     scheduleFlush(rowId)
   }
 
+  function focusExistingBlankDraft() {
+    const blankDraft = localRowsRef.current.find(isBlankDraftRow)
+    if (!blankDraft) return false
+    setActiveCell({ rowId: blankDraft.id, field: 'description' })
+    setActiveDraft('')
+    return true
+  }
+
   function createDraftRowAfter(options?: CreateDraftRowOptions) {
+    if (!options?.sourceRowId && focusExistingBlankDraft()) return
+
     const rows = localRowsRef.current
     const sourceIndex = options?.sourceRowId ? rows.findIndex((row) => row.id === options.sourceRowId) : rows.length - 1
     const safeSourceIndex = sourceIndex >= 0 ? sourceIndex : rows.length - 1
@@ -529,7 +570,7 @@ export function useJobWorksheetState(
 
     Object.values(saveTimersRef.current).forEach((timer) => clearTimeout(timer))
     saveTimersRef.current = {}
-    setUndoStack((stack) => [...stack, { kind: 'delete', rows: deletedRows.map(cloneRow) }])
+    setUndoStackSync([...undoStackRef.current, { kind: 'delete', rows: deletedRows.map(cloneRow) }])
     setLocalRowsSync(nextRows)
     setServerRowsSync(nextServerRows)
     setRowSaveState(buildRowStateMap(nextRows, nextServerRows))
@@ -548,44 +589,44 @@ export function useJobWorksheetState(
   }
 
   function handleUndo() {
-    setUndoStack((stack) => {
-      const last = stack[stack.length - 1]
-      if (!last) return stack
+    const stack = undoStackRef.current
+    const last = stack[stack.length - 1]
+    if (!last) return
 
-      if (last.kind === 'delete') {
-        const restoredRows = last.rows.map(cloneRow)
-        const restoredIds = new Set(restoredRows.map((row) => row.id))
-        const nextRows = normalizeSortOrders([
-          ...localRowsRef.current.filter((row) => !restoredIds.has(row.id)),
-          ...restoredRows,
-        ]).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-        const nextServerRows = [
-          ...serverRowsRef.current.filter((row) => !restoredIds.has(row.id)),
-          ...restoredRows.filter((row) => !isDraftRowId(row.id)),
-        ]
+    if (last.kind === 'delete') {
+      const restoredRows = last.rows.map(cloneRow)
+      const restoredIds = new Set(restoredRows.map((row) => row.id))
+      const nextRows = [
+        ...localRowsRef.current.filter((row) => !restoredIds.has(row.id)),
+        ...restoredRows,
+      ].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      const nextServerRows = [
+        ...serverRowsRef.current.filter((row) => !restoredIds.has(row.id)),
+        ...restoredRows.filter((row) => !isDraftRowId(row.id)),
+      ]
 
-        setLocalRowsSync(nextRows)
-        setServerRowsSync(nextServerRows)
-        setRowSaveState(buildRowStateMap(nextRows, nextServerRows))
-        writeBackup(jobId, nextRows)
-        void restoreRows(restoredRows.filter((row) => !isDraftRowId(row.id))).catch(() => {
-          restoredRows.forEach((row) => setRowState(row.id, 'error'))
-        })
-        return stack.slice(0, -1)
-      }
+      setLocalRowsSync(nextRows)
+      setServerRowsSync(nextServerRows)
+      setRowSaveState(buildRowStateMap(nextRows, nextServerRows))
+      writeBackup(jobId, nextRows)
+      void restoreRows(restoredRows.filter((row) => !isDraftRowId(row.id))).catch(() => {
+        restoredRows.forEach((row) => setRowState(row.id, 'error'))
+      })
+      setUndoStackSync(stack.slice(0, -1))
+      return
+    }
 
-      replaceLocalRow(last.rowId, cloneRow(last.previousRow))
-      syncRowState(last.rowId, last.previousRow)
-      scheduleFlush(last.rowId, 120)
+    replaceLocalRow(last.rowId, cloneRow(last.previousRow))
+    syncRowState(last.rowId, last.previousRow)
+    scheduleFlush(last.rowId, 120)
 
-      const currentActiveCell = activeCellRef.current
-      if (currentActiveCell?.rowId === last.rowId) {
-        const restored = last.previousRow[currentActiveCell.field] as WorksheetCellDraftValue
-        setActiveDraft(restored)
-      }
+    const currentActiveCell = activeCellRef.current
+    if (currentActiveCell?.rowId === last.rowId) {
+      const restored = last.previousRow[currentActiveCell.field] as WorksheetCellDraftValue
+      setActiveDraft(restored)
+    }
 
-      return stack.slice(0, -1)
-    })
+    setUndoStackSync(stack.slice(0, -1))
   }
 
   const saveCounts = useMemo(() => {
