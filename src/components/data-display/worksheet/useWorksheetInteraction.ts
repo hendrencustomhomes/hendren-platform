@@ -12,6 +12,11 @@ function isFullySelected(element: HTMLInputElement | HTMLTextAreaElement) {
   return (element.selectionStart ?? 0) === 0 && (element.selectionEnd ?? 0) === valueLength
 }
 
+function selectElement(element: HTMLInputElement | HTMLTextAreaElement) {
+  if (element instanceof HTMLInputElement && element.type !== 'checkbox') element.select()
+  if (element instanceof HTMLTextAreaElement) element.select()
+}
+
 type CreateRowOptions = {
   sourceRowId?: string
   asChild?: boolean
@@ -59,7 +64,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
   tableScrollTop,
 }: Options<Row, CellKey>) {
   const cellRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({})
-  const pendingFocusRef = useRef<{ rowId: string; field: CellKey } | null>(null)
+  const pendingFocusRef = useRef<{ rowId: string; field: CellKey; select: boolean } | null>(null)
 
   useEffect(() => {
     const pending = pendingFocusRef.current
@@ -71,8 +76,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     pendingFocusRef.current = null
     window.requestAnimationFrame(() => {
       element.focus()
-      if (element instanceof HTMLInputElement && element.type !== 'checkbox') element.select()
-      if (element instanceof HTMLTextAreaElement) element.select()
+      if (pending.select) selectElement(element)
     })
   }, [tableScrollTop, tableViewportHeight, rows])
 
@@ -80,7 +84,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     if (!activeCell) return
     const element = cellRefs.current[getCellDomKey(activeCell.rowId, activeCell.field)]
     if (element && document.activeElement === element) return
-    focusCell(activeCell.rowId, activeCell.field)
+    focusCell(activeCell.rowId, activeCell.field, true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCell, rows])
 
@@ -88,30 +92,25 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     return rows.find((row) => getRowId(row) === rowId) ?? null
   }
 
-  function setActiveCellWithDraft(cell: { rowId: string; field: CellKey }) {
+  function setActiveCellWithDraft(cell: { rowId: string; field: CellKey }, options?: { select?: boolean }) {
     const row = getRowById(cell.rowId)
     onActiveCellChange(cell)
     onActiveDraftChange(row ? getCellValue(row, cell.field) : null)
-    focusCell(cell.rowId, cell.field)
+    focusCell(cell.rowId, cell.field, options?.select ?? true)
   }
 
-  function focusCell(rowId: string, field: CellKey) {
+  function focusCell(rowId: string, field: CellKey, shouldSelect = true) {
     const rowIndex = rows.findIndex((row) => getRowId(row) === rowId)
     if (rowIndex < 0) return
 
-    pendingFocusRef.current = { rowId, field }
+    pendingFocusRef.current = { rowId, field, select: shouldSelect }
 
     const existingElement = cellRefs.current[getCellDomKey(rowId, field)]
     if (existingElement) {
       pendingFocusRef.current = null
       window.requestAnimationFrame(() => {
         existingElement.focus()
-        if (existingElement instanceof HTMLInputElement && existingElement.type !== 'checkbox') {
-          existingElement.select()
-        }
-        if (existingElement instanceof HTMLTextAreaElement) {
-          existingElement.select()
-        }
+        if (shouldSelect) selectElement(existingElement)
       })
       return
     }
@@ -181,11 +180,11 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
 
     if (options?.move) {
       const neighbor = getNeighborCell(previousCell.rowId, previousCell.field, options.move)
-      if (neighbor) setActiveCellWithDraft(neighbor)
+      if (neighbor) setActiveCellWithDraft(neighbor, { select: true })
       return
     }
 
-    setActiveCellWithDraft(previousCell)
+    setActiveCellWithDraft(previousCell, { select: false })
   }
 
   function deleteRow(rowId: string) {
@@ -210,7 +209,8 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     if (!row) return
     onActiveCellChange({ rowId, field: typedField })
     onActiveDraftChange(getCellValue(row, typedField))
-    element.select()
+    if (!isFullySelected(element)) return
+    // Preserve existing user selection on mouse clicks; full select is already present from keyboard navigation.
   }
 
   function handleTextCellBlur(rowId: string, field: string) {
@@ -330,23 +330,23 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     if (event.key === 'Tab') {
       event.preventDefault()
       const neighbor = getNeighborCell(rowId, typedField, event.shiftKey ? 'left' : 'right')
-      if (neighbor) setActiveCellWithDraft(neighbor)
+      if (neighbor) setActiveCellWithDraft(neighbor, { select: true })
       return
     }
 
     if (event.key === 'Enter') {
       event.preventDefault()
       const neighbor = getNeighborCell(rowId, typedField, 'down')
-      if (neighbor) setActiveCellWithDraft(neighbor)
+      if (neighbor) setActiveCellWithDraft(neighbor, { select: true })
       return
     }
 
     if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       event.preventDefault()
-      if (event.key === 'ArrowUp') setActiveCellWithDraft(getNeighborCell(rowId, typedField, 'up') ?? { rowId, field: typedField })
-      if (event.key === 'ArrowDown') setActiveCellWithDraft(getNeighborCell(rowId, typedField, 'down') ?? { rowId, field: typedField })
-      if (event.key === 'ArrowLeft') setActiveCellWithDraft(getNeighborCell(rowId, typedField, 'left') ?? { rowId, field: typedField })
-      if (event.key === 'ArrowRight') setActiveCellWithDraft(getNeighborCell(rowId, typedField, 'right') ?? { rowId, field: typedField })
+      if (event.key === 'ArrowUp') setActiveCellWithDraft(getNeighborCell(rowId, typedField, 'up') ?? { rowId, field: typedField }, { select: true })
+      if (event.key === 'ArrowDown') setActiveCellWithDraft(getNeighborCell(rowId, typedField, 'down') ?? { rowId, field: typedField }, { select: true })
+      if (event.key === 'ArrowLeft') setActiveCellWithDraft(getNeighborCell(rowId, typedField, 'left') ?? { rowId, field: typedField }, { select: true })
+      if (event.key === 'ArrowRight') setActiveCellWithDraft(getNeighborCell(rowId, typedField, 'right') ?? { rowId, field: typedField }, { select: true })
     }
   }
 
