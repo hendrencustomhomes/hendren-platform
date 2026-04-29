@@ -137,8 +137,8 @@ function getColumns(rowsById: Map<string, JobWorksheetRow>, onDeleteRow: (id: st
       kind: 'static',
       width: '60px',
       getValue: () => '',
-      renderStaticCell: (_value, row) => (
-        <button onClick={() => onDeleteRow(row.id)} style={{ cursor: 'pointer' }}>X</button>
+      renderStaticCell: (row) => (
+        <button type="button" onClick={() => onDeleteRow(row.id)} style={{ cursor: 'pointer' }}>X</button>
       ),
     },
   ]
