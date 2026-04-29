@@ -244,6 +244,26 @@ function collectRowSubtree(rows: JobWorksheetRow[], rowId: string) {
   return rows.filter((row) => ids.has(row.id))
 }
 
+function findNextActiveRowAfterDelete(rows: JobWorksheetRow[], deletedIds: Set<string>, deletedRows: JobWorksheetRow[]) {
+  const sortedDeletedIndexes = deletedRows
+    .map((row) => rows.findIndex((candidate) => candidate.id === row.id))
+    .filter((index) => index >= 0)
+    .sort((a, b) => a - b)
+
+  const firstDeletedIndex = sortedDeletedIndexes[0] ?? -1
+  if (firstDeletedIndex < 0) return null
+
+  for (let index = firstDeletedIndex - 1; index >= 0; index -= 1) {
+    if (!deletedIds.has(rows[index].id)) return rows[index]
+  }
+
+  for (let index = firstDeletedIndex; index < rows.length; index += 1) {
+    if (!deletedIds.has(rows[index].id)) return rows[index]
+  }
+
+  return null
+}
+
 function createDraftRow(jobId: string, sourceRow: JobWorksheetRow | null, asChild: boolean): JobWorksheetRow {
   const childOfSource = asChild && canHaveChildRows(sourceRow)
 
@@ -346,9 +366,9 @@ export function useJobWorksheetState(
     setRowSaveState(buildRowStateMap(nextRows, initialRows))
     setUndoStack([])
     undoStackRef.current = []
-    setActiveCell(nextRows.length === 1 && isBlankDraftRow(nextRows[0]) ? { rowId: nextRows[0].id, field: 'description' } : null)
-    setActiveDraft(nextRows.length === 1 && isBlankDraftRow(nextRows[0]) ? '' : null)
-    activeCellRef.current = nextRows.length === 1 && isBlankDraftRow(nextRows[0]) ? { rowId: nextRows[0].id, field: 'description' } : null
+    setActiveCell(nextRows.length === 1 && isBlankDraftRow(nextRows[0]) ? { rowId: nextRows[0].id, field: 'description' } : { rowId: nextRows[0].id, field: 'description' })
+    setActiveDraft(nextRows.length === 1 && isBlankDraftRow(nextRows[0]) ? '' : nextRows[0].description)
+    activeCellRef.current = { rowId: nextRows[0].id, field: 'description' }
 
     if (hasUnsavedRows(nextRows, initialRows)) {
       writeBackup(jobId, nextRows)
@@ -396,6 +416,12 @@ export function useJobWorksheetState(
   function setUndoStackSync(nextStack: UndoEntry[]) {
     undoStackRef.current = nextStack
     setUndoStack(nextStack)
+  }
+
+  function setActiveCellSync(cell: WorksheetActiveCell<JobWorksheetEditableCellKey>, draft: WorksheetCellDraftValue) {
+    activeCellRef.current = cell
+    setActiveCell(cell)
+    setActiveDraft(draft)
   }
 
   function replaceLocalRow(rowId: string, nextRow: JobWorksheetRow) {
@@ -447,8 +473,7 @@ export function useJobWorksheetState(
       setLocalRowsSync(nextRows)
       setServerRowsSync(nextServerRows)
       setRowSaveState(buildRowStateMap(nextRows, nextServerRows))
-      setActiveCell({ rowId: created.id, field: 'description' })
-      setActiveDraft(created.description)
+      setActiveCellSync({ rowId: created.id, field: 'description' }, created.description)
       writeBackup(jobId, nextRows)
     } catch {
       setRowState(row.id, 'error')
@@ -531,8 +556,7 @@ export function useJobWorksheetState(
   function focusExistingBlankDraft() {
     const blankDraft = localRowsRef.current.find(isBlankDraftRow)
     if (!blankDraft) return false
-    setActiveCell({ rowId: blankDraft.id, field: 'description' })
-    setActiveDraft('')
+    setActiveCellSync({ rowId: blankDraft.id, field: 'description' }, '')
     return true
   }
 
@@ -555,8 +579,7 @@ export function useJobWorksheetState(
     setLocalRowsSync(nextRows)
     setRowSaveState(buildRowStateMap(nextRows, serverRowsRef.current))
     writeBackup(jobId, nextRows)
-    setActiveCell({ rowId: draftRow.id, field: 'description' })
-    setActiveDraft('')
+    setActiveCellSync({ rowId: draftRow.id, field: 'description' }, '')
   }
 
   function deleteWorksheetRow(rowId: string) {
@@ -565,8 +588,13 @@ export function useJobWorksheetState(
     if (deletedRows.length === 0) return
 
     const deletedIds = new Set(deletedRows.map((row) => row.id))
-    const nextRows = normalizeSortOrders(rows.filter((row) => !deletedIds.has(row.id)))
+    const targetRow = findNextActiveRowAfterDelete(rows, deletedIds, deletedRows)
+    const remainingRows = rows.filter((row) => !deletedIds.has(row.id))
+    const nextRows = remainingRows.length > 0
+      ? normalizeSortOrders(remainingRows)
+      : normalizeSortOrders([createDraftRow(jobId, null, false)])
     const nextServerRows = serverRowsRef.current.filter((row) => !deletedIds.has(row.id))
+    const nextActiveRow = targetRow && nextRows.some((row) => row.id === targetRow.id) ? targetRow : nextRows[0]
 
     Object.values(saveTimersRef.current).forEach((timer) => clearTimeout(timer))
     saveTimersRef.current = {}
@@ -574,6 +602,7 @@ export function useJobWorksheetState(
     setLocalRowsSync(nextRows)
     setServerRowsSync(nextServerRows)
     setRowSaveState(buildRowStateMap(nextRows, nextServerRows))
+    setActiveCellSync({ rowId: nextActiveRow.id, field: 'description' }, nextActiveRow.description)
     writeBackup(jobId, nextRows)
 
     deletedRows
@@ -604,10 +633,12 @@ export function useJobWorksheetState(
         ...serverRowsRef.current.filter((row) => !restoredIds.has(row.id)),
         ...restoredRows.filter((row) => !isDraftRowId(row.id)),
       ]
+      const activeRow = restoredRows[0] ?? nextRows[0]
 
       setLocalRowsSync(nextRows)
       setServerRowsSync(nextServerRows)
       setRowSaveState(buildRowStateMap(nextRows, nextServerRows))
+      if (activeRow) setActiveCellSync({ rowId: activeRow.id, field: 'description' }, activeRow.description)
       writeBackup(jobId, nextRows)
       void restoreRows(restoredRows.filter((row) => !isDraftRowId(row.id))).catch(() => {
         restoredRows.forEach((row) => setRowState(row.id, 'error'))
@@ -619,12 +650,7 @@ export function useJobWorksheetState(
     replaceLocalRow(last.rowId, cloneRow(last.previousRow))
     syncRowState(last.rowId, last.previousRow)
     scheduleFlush(last.rowId, 120)
-
-    const currentActiveCell = activeCellRef.current
-    if (currentActiveCell?.rowId === last.rowId) {
-      const restored = last.previousRow[currentActiveCell.field] as WorksheetCellDraftValue
-      setActiveDraft(restored)
-    }
+    setActiveCellSync({ rowId: last.rowId, field: 'description' }, last.previousRow.description)
 
     setUndoStackSync(stack.slice(0, -1))
   }
