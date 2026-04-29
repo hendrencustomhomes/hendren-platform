@@ -82,7 +82,18 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     if (element && document.activeElement === element) return
     focusCell(activeCell.rowId, activeCell.field)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCell])
+  }, [activeCell, rows])
+
+  function getRowById(rowId: string) {
+    return rows.find((row) => getRowId(row) === rowId) ?? null
+  }
+
+  function setActiveCellWithDraft(cell: { rowId: string; field: CellKey }) {
+    const row = getRowById(cell.rowId)
+    onActiveCellChange(cell)
+    onActiveDraftChange(row ? getCellValue(row, cell.field) : null)
+    focusCell(cell.rowId, cell.field)
+  }
 
   function focusCell(rowId: string, field: CellKey) {
     const rowIndex = rows.findIndex((row) => getRowId(row) === rowId)
@@ -137,24 +148,19 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     if (mode === 'left') {
       if (fieldIndex > 0) return { rowId, field: cellOrder[fieldIndex - 1] }
       if (rowIndex > 0) return { rowId: getRowId(rows[rowIndex - 1]), field: cellOrder[cellOrder.length - 1] }
-      return null
+      return { rowId, field }
     }
     if (mode === 'right') {
       if (fieldIndex < cellOrder.length - 1) return { rowId, field: cellOrder[fieldIndex + 1] }
       if (rowIndex < rows.length - 1) return { rowId: getRowId(rows[rowIndex + 1]), field: cellOrder[0] }
-      return null
+      return { rowId, field }
     }
     if (mode === 'up') {
       if (rowIndex > 0) return { rowId: getRowId(rows[rowIndex - 1]), field }
-      return null
+      return { rowId, field }
     }
     if (rowIndex < rows.length - 1) return { rowId: getRowId(rows[rowIndex + 1]), field }
-    return null
-  }
-
-  function clearActiveCell() {
-    onActiveCellChange(null)
-    onActiveDraftChange(null)
+    return { rowId, field }
   }
 
   function abandonActiveCellDraft() {
@@ -167,24 +173,22 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
   function commitActiveCell(options?: { move?: 'left' | 'right' | 'up' | 'down' }) {
     if (!activeCell) return
     const row = rows.find((r) => getRowId(r) === activeCell.rowId)
-    if (!row) {
-      clearActiveCell()
-      return
-    }
+    if (!row) return
 
     const nextValue = (activeDraft ?? getCellValue(row, activeCell.field)) as string | boolean
-    commitCellValue(activeCell.rowId, activeCell.field, nextValue)
     const previousCell = activeCell
-    clearActiveCell()
+    commitCellValue(activeCell.rowId, activeCell.field, nextValue)
 
     if (options?.move) {
       const neighbor = getNeighborCell(previousCell.rowId, previousCell.field, options.move)
-      if (neighbor) focusCell(neighbor.rowId, neighbor.field)
+      if (neighbor) setActiveCellWithDraft(neighbor)
+      return
     }
+
+    setActiveCellWithDraft(previousCell)
   }
 
   function deleteRow(rowId: string) {
-    clearActiveCell()
     void onDeleteRow?.(rowId)
   }
 
@@ -308,7 +312,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
   function handleCheckboxBlur(rowId: string, field: string) {
     if (!activeCell) return
     if (activeCell.rowId !== rowId || activeCell.field !== field) return
-    clearActiveCell()
+    commitActiveCell()
   }
 
   function handleCheckboxKeyDown(
@@ -339,14 +343,14 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     if (event.key === 'Tab') {
       event.preventDefault()
       const neighbor = getNeighborCell(rowId, typedField, event.shiftKey ? 'left' : 'right')
-      if (neighbor) focusCell(neighbor.rowId, neighbor.field)
+      if (neighbor) setActiveCellWithDraft(neighbor)
       return
     }
 
     if (event.key === 'Enter') {
       event.preventDefault()
       const neighbor = getNeighborCell(rowId, typedField, 'down')
-      if (neighbor) focusCell(neighbor.rowId, neighbor.field)
+      if (neighbor) setActiveCellWithDraft(neighbor)
     }
   }
 
