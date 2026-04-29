@@ -96,6 +96,13 @@ const tableCellStyle = {
   background: 'var(--surface)',
 } as const
 
+const activeTableCellStyle = {
+  ...tableCellStyle,
+  boxShadow: 'inset 0 0 0 2px var(--accent, #2563eb)',
+  position: 'relative' as const,
+  zIndex: 1,
+}
+
 const headerCellStyle = {
   border: '1px solid var(--border)',
   textAlign: 'left' as const,
@@ -221,9 +228,12 @@ export function EditableDataTable<Row>({
                 return (
                   <tr key={rowId} style={{ height: `${rowHeight}px` }}>
                     {columns.map((column) => {
+                      const isActive = activeCell?.rowId === rowId && activeCell.field === column.key
+                      const cellStyle = isActive ? activeTableCellStyle : tableCellStyle
+
                       if (column.kind === 'static') {
                         return (
-                          <td key={column.key} style={tableCellStyle}>
+                          <td key={column.key} style={cellStyle}>
                             {renderStaticValue(column, row)}
                           </td>
                         )
@@ -232,7 +242,7 @@ export function EditableDataTable<Row>({
                       const editable = isColumnEditable(column, row)
                       if (!editable) {
                         return (
-                          <td key={column.key} style={tableCellStyle}>
+                          <td key={column.key} style={cellStyle}>
                             {renderStaticValue(column, row, true)}
                           </td>
                         )
@@ -241,7 +251,7 @@ export function EditableDataTable<Row>({
                       if (column.kind === 'checkbox') {
                         const checked = Boolean(getRenderedCellValue(row, column.key))
                         return (
-                          <td key={column.key} style={tableCellStyle}>
+                          <td key={column.key} style={cellStyle}>
                             <label
                               style={{ display: 'flex', justifyContent: 'center', padding: '8px', cursor: 'pointer' }}
                             >
@@ -272,7 +282,7 @@ export function EditableDataTable<Row>({
 
                       if (column.kind === 'textarea') {
                         return (
-                          <td key={column.key} style={tableCellStyle}>
+                          <td key={column.key} style={cellStyle}>
                             <textarea
                               ref={(element) => {
                                 cellRefs.current[getCellDomKey(rowId, column.key)] = element
@@ -293,7 +303,7 @@ export function EditableDataTable<Row>({
                       }
 
                       return (
-                        <td key={column.key} style={tableCellStyle}>
+                        <td key={column.key} style={cellStyle}>
                           <input
                             ref={(element) => {
                               cellRefs.current[getCellDomKey(rowId, column.key)] = element
