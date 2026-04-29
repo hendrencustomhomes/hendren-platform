@@ -37,6 +37,7 @@ export type EditableDataTableColumn<Row> = {
   inputType?: HTMLInputTypeAttribute
   textAreaRows?: number
   getValue?: (row: Row) => string | boolean | null | undefined
+  getCellPaddingLeft?: (row: Row) => number
   formatEditableValue?: (
     value: string | boolean | null | undefined,
     row: Row,
@@ -213,10 +214,7 @@ export function EditableDataTable<Row>({
             <tbody>
               {shouldVirtualize && visibleRange.topSpacerHeight > 0 ? (
                 <tr aria-hidden="true">
-                  <td
-                    colSpan={columns.length}
-                    style={{ padding: 0, height: `${visibleRange.topSpacerHeight}px`, border: 'none' }}
-                  />
+                  <td colSpan={columns.length} style={{ padding: 0, height: `${visibleRange.topSpacerHeight}px`, border: 'none' }} />
                 </tr>
               ) : null}
 
@@ -227,6 +225,7 @@ export function EditableDataTable<Row>({
                     {columns.map((column) => {
                       const isActive = activeCell?.rowId === rowId && activeCell.field === column.key
                       const cellStyle = isActive ? activeTableCellStyle : tableCellStyle
+                      const paddingLeft = column.getCellPaddingLeft?.(row)
 
                       if (column.kind === 'static') {
                         return (
@@ -249,9 +248,7 @@ export function EditableDataTable<Row>({
                         const checked = Boolean(getRenderedCellValue(row, column.key))
                         return (
                           <td key={column.key} style={cellStyle}>
-                            <label
-                              style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', height: '100%', padding: '8px', cursor: 'pointer', boxSizing: 'border-box' }}
-                            >
+                            <label style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', height: '100%', padding: '8px', cursor: 'pointer', boxSizing: 'border-box' }}>
                               <input
                                 ref={(element) => {
                                   cellRefs.current[getCellDomKey(rowId, column.key)] = element
@@ -259,9 +256,7 @@ export function EditableDataTable<Row>({
                                 type="checkbox"
                                 checked={checked}
                                 onFocus={() => onCheckboxFocus(rowId, column.key)}
-                                onChange={(event) =>
-                                  onCheckboxCommit(rowId, column.key, event.currentTarget.checked)
-                                }
+                                onChange={(event) => onCheckboxCommit(rowId, column.key, event.currentTarget.checked)}
                                 onBlur={() => onCheckboxBlur(rowId, column.key)}
                                 onKeyDown={(event) => onCheckboxKeyDown(event, rowId, column.key)}
                                 style={{ width: '16px', height: '16px', cursor: 'pointer' }}
@@ -276,18 +271,15 @@ export function EditableDataTable<Row>({
                       const formattedValue = column.formatEditableValue
                         ? column.formatEditableValue(value, row, isEditing)
                         : String(value ?? '')
+                      const dynamicInputStyle = paddingLeft === undefined ? inputStyle : { ...inputStyle, paddingLeft }
 
                       if (column.kind === 'textarea') {
                         return (
-                          <td
-                            key={column.key}
-                            style={cellStyle}
-                            onMouseDown={(event) => {
-                              if (event.target !== event.currentTarget) return
-                              event.preventDefault()
-                              cellRefs.current[getCellDomKey(rowId, column.key)]?.focus()
-                            }}
-                          >
+                          <td key={column.key} style={cellStyle} onMouseDown={(event) => {
+                            if (event.target !== event.currentTarget) return
+                            event.preventDefault()
+                            cellRefs.current[getCellDomKey(rowId, column.key)]?.focus()
+                          }}>
                             <textarea
                               ref={(element) => {
                                 cellRefs.current[getCellDomKey(rowId, column.key)] = element
@@ -298,22 +290,18 @@ export function EditableDataTable<Row>({
                               onBlur={() => onTextCellBlur(rowId, column.key)}
                               onKeyDown={(event) => onTextCellKeyDown(event, rowId, column.key)}
                               rows={column.textAreaRows ?? 1}
-                              style={{ ...inputStyle, resize: 'none' }}
+                              style={{ ...dynamicInputStyle, resize: 'none' }}
                             />
                           </td>
                         )
                       }
 
                       return (
-                        <td
-                          key={column.key}
-                          style={cellStyle}
-                          onMouseDown={(event) => {
-                            if (event.target !== event.currentTarget) return
-                            event.preventDefault()
-                            cellRefs.current[getCellDomKey(rowId, column.key)]?.focus()
-                          }}
-                        >
+                        <td key={column.key} style={cellStyle} onMouseDown={(event) => {
+                          if (event.target !== event.currentTarget) return
+                          event.preventDefault()
+                          cellRefs.current[getCellDomKey(rowId, column.key)]?.focus()
+                        }}>
                           <input
                             ref={(element) => {
                               cellRefs.current[getCellDomKey(rowId, column.key)] = element
@@ -325,7 +313,7 @@ export function EditableDataTable<Row>({
                             onChange={(event) => onTextCellDraftChange(event.currentTarget.value)}
                             onBlur={() => onTextCellBlur(rowId, column.key)}
                             onKeyDown={(event) => onTextCellKeyDown(event, rowId, column.key)}
-                            style={inputStyle}
+                            style={dynamicInputStyle}
                           />
                         </td>
                       )
@@ -336,10 +324,7 @@ export function EditableDataTable<Row>({
 
               {shouldVirtualize && visibleRange.bottomSpacerHeight > 0 ? (
                 <tr aria-hidden="true">
-                  <td
-                    colSpan={columns.length}
-                    style={{ padding: 0, height: `${visibleRange.bottomSpacerHeight}px`, border: 'none' }}
-                  />
+                  <td colSpan={columns.length} style={{ padding: 0, height: `${visibleRange.bottomSpacerHeight}px`, border: 'none' }} />
                 </tr>
               ) : null}
             </tbody>
