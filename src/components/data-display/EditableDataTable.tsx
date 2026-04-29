@@ -120,6 +120,8 @@ const headerCellStyle = {
 
 const inputStyle = {
   width: '100%',
+  height: '100%',
+  minHeight: '34px',
   background: 'transparent',
   border: 'none',
   padding: '6px 8px',
@@ -143,11 +145,6 @@ const lockedStaticCellStyle = {
 
 function getCellDomKey(rowId: string, field: EditableDataTableCellKey) {
   return `${rowId}:${field}`
-}
-
-function isFullySelected(element: HTMLInputElement | HTMLTextAreaElement) {
-  const valueLength = element.value.length
-  return (element.selectionStart ?? 0) === 0 && (element.selectionEnd ?? 0) === valueLength
 }
 
 function isColumnEditable<Row>(column: EditableDataTableColumn<Row>, row: Row) {
@@ -253,7 +250,7 @@ export function EditableDataTable<Row>({
                         return (
                           <td key={column.key} style={cellStyle}>
                             <label
-                              style={{ display: 'flex', justifyContent: 'center', padding: '8px', cursor: 'pointer' }}
+                              style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', height: '100%', padding: '8px', cursor: 'pointer', boxSizing: 'border-box' }}
                             >
                               <input
                                 ref={(element) => {
@@ -282,7 +279,15 @@ export function EditableDataTable<Row>({
 
                       if (column.kind === 'textarea') {
                         return (
-                          <td key={column.key} style={cellStyle}>
+                          <td
+                            key={column.key}
+                            style={cellStyle}
+                            onMouseDown={(event) => {
+                              if (event.target !== event.currentTarget) return
+                              event.preventDefault()
+                              cellRefs.current[getCellDomKey(rowId, column.key)]?.focus()
+                            }}
+                          >
                             <textarea
                               ref={(element) => {
                                 cellRefs.current[getCellDomKey(rowId, column.key)] = element
@@ -291,19 +296,24 @@ export function EditableDataTable<Row>({
                               onFocus={(event) => onTextCellFocus(rowId, column.key, event.currentTarget)}
                               onChange={(event) => onTextCellDraftChange(event.currentTarget.value)}
                               onBlur={() => onTextCellBlur(rowId, column.key)}
-                              onKeyDown={(event) => {
-                                if (event.key.startsWith('Arrow') && isFullySelected(event.currentTarget)) return
-                                onTextCellKeyDown(event, rowId, column.key)
-                              }}
+                              onKeyDown={(event) => onTextCellKeyDown(event, rowId, column.key)}
                               rows={column.textAreaRows ?? 1}
-                              style={{ ...inputStyle, resize: 'none', height: '34px', minHeight: '34px' }}
+                              style={{ ...inputStyle, resize: 'none' }}
                             />
                           </td>
                         )
                       }
 
                       return (
-                        <td key={column.key} style={cellStyle}>
+                        <td
+                          key={column.key}
+                          style={cellStyle}
+                          onMouseDown={(event) => {
+                            if (event.target !== event.currentTarget) return
+                            event.preventDefault()
+                            cellRefs.current[getCellDomKey(rowId, column.key)]?.focus()
+                          }}
+                        >
                           <input
                             ref={(element) => {
                               cellRefs.current[getCellDomKey(rowId, column.key)] = element
@@ -314,10 +324,7 @@ export function EditableDataTable<Row>({
                             onFocus={(event) => onTextCellFocus(rowId, column.key, event.currentTarget)}
                             onChange={(event) => onTextCellDraftChange(event.currentTarget.value)}
                             onBlur={() => onTextCellBlur(rowId, column.key)}
-                            onKeyDown={(event) => {
-                              if (event.key.startsWith('Arrow') && isFullySelected(event.currentTarget)) return
-                              onTextCellKeyDown(event, rowId, column.key)
-                            }}
+                            onKeyDown={(event) => onTextCellKeyDown(event, rowId, column.key)}
                             style={inputStyle}
                           />
                         </td>
