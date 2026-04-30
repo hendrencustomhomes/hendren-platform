@@ -6,6 +6,14 @@ import type { EditableDataTableColumn } from '@/components/data-display/Editable
 import { useWorksheetInteraction } from '@/components/data-display/worksheet/useWorksheetInteraction'
 import { useWorksheetVirtualization } from '@/components/data-display/worksheet/useWorksheetVirtualization'
 import type { WorksheetActiveCell, WorksheetCellDraftValue } from '@/components/data-display/worksheet/worksheetTypes'
+import {
+  unitOptions,
+  rowTotal,
+  currency,
+  parentSubtotal,
+  validationLabel,
+  getDepth,
+} from '@/app/jobs/[id]/takeoff/_worksheetFormatters'
 
 export type JobWorksheetRowKind = 'line_item' | 'assembly' | 'note' | 'allowance'
 export type JobWorksheetPricingType = 'unit' | 'lump_sum' | 'allowance' | 'manual' | 'unpriced'
@@ -45,39 +53,9 @@ const editableCellOrder: readonly JobWorksheetEditableCellKey[] = [
   'description','quantity','unit_price','unit','location','notes'
 ]
 
-const unitOptions = ['flat','ea','sqft','lnft','cuft'] as const
-
 function isMobile() {
   if (typeof window === 'undefined') return false
   return window.innerWidth < 768
-}
-
-function rowTotal(row: JobWorksheetRow) {
-  const q = Number(row.quantity)
-  const p = Number(row.unit_price)
-  return q && p ? q * p : 0
-}
-
-function currency(val: any, editing = false) {
-  if (!val) return ''
-  const num = Number(val)
-  if (Number.isNaN(num)) return String(val)
-  return editing ? String(num) : `$${num.toFixed(2)}`
-}
-
-function parentSubtotal(parent: JobWorksheetRow, rows: JobWorksheetRow[]) {
-  const childTotal = rows
-    .filter((row) => row.parent_id === parent.id)
-    .reduce((sum, row) => sum + rowTotal(row), 0)
-  return childTotal || rowTotal(parent)
-}
-
-function validationLabel(row: JobWorksheetRow) {
-  if (!row.description.trim()) return 'Missing item'
-  if (!Number(row.quantity)) return 'Missing qty'
-  if (!Number(row.unit_price)) return 'Missing price'
-  if (!unitOptions.includes((row.unit ?? 'ea') as any)) return 'Invalid unit'
-  return ''
 }
 
 function MobileView({ rows, commitCellValue, createDraftRowAfter }: any) {
@@ -126,10 +104,6 @@ function MobileView({ rows, commitCellValue, createDraftRowAfter }: any) {
       <datalist id="unit-options">{unitOptions.map((unit) => <option key={unit} value={unit} />)}</datalist>
     </div>
   )
-}
-
-function getDepth(row: JobWorksheetRow, rowsById: Map<string, JobWorksheetRow>) {
-  return row.parent_id ? 1 : 0
 }
 
 function getColumns(rowsById: Map<string, JobWorksheetRow>, onDeleteRow: any, commit: any): EditableDataTableColumn<JobWorksheetRow>[] {
