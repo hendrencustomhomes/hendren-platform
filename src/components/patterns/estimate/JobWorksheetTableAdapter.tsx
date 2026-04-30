@@ -147,7 +147,10 @@ function getColumns(rowsById: Map<string, JobWorksheetRow>, onDeleteRow: any, co
 
 export function JobWorksheetTableAdapter(props:any) {
   const { rows } = props
-  const rowsById = useMemo(()=>new Map(rows.map((row:JobWorksheetRow)=>[row.id,row])),[rows])
+  const rowsById = useMemo<Map<string, JobWorksheetRow>>(
+    () => new Map<string, JobWorksheetRow>(rows.map((row: JobWorksheetRow) => [row.id, row])),
+    [rows]
+  )
   const columns = useMemo(()=>getColumns(rowsById,props.deleteRow,props.commitCellValue),[rowsById,props.deleteRow,props.commitCellValue])
 
   const virt = useWorksheetVirtualization({ rows, rowHeight:64, overscan:8, threshold:20, maxBodyHeight:560 })
