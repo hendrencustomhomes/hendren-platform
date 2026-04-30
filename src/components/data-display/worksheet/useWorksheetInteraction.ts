@@ -72,6 +72,11 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     activeDraftRef.current = activeDraft
   }, [activeDraft])
 
+  function handleDraftChange(value: string) {
+    activeDraftRef.current = value
+    onActiveDraftChange(value)
+  }
+
   useEffect(() => {
     const pending = pendingFocusRef.current
     if (!pending) return
@@ -91,7 +96,6 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     const element = cellRefs.current[getCellDomKey(activeCell.rowId, activeCell.field)]
     if (element && document.activeElement === element) return
     focusCell(activeCell.rowId, activeCell.field, true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCell, rows])
 
   function getRowById(rowId: string) {
@@ -145,11 +149,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     }
   }
 
-  function getNeighborCell(
-    rowId: string,
-    field: CellKey,
-    mode: 'left' | 'right' | 'up' | 'down'
-  ): { rowId: string; field: CellKey } | null {
+  function getNeighborCell(rowId: string, field: CellKey, mode: 'left' | 'right' | 'up' | 'down') {
     const rowIndex = rows.findIndex((row) => getRowId(row) === rowId)
     const fieldIndex = cellOrder.findIndex((key) => key === field)
     if (rowIndex < 0 || fieldIndex < 0) return null
@@ -172,10 +172,6 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     return { rowId, field }
   }
 
-  function commitCell(rowId: string, field: CellKey, value: string | boolean) {
-    commitCellValue(rowId, field, value)
-  }
-
   function commitActiveCell(options?: { move?: 'left' | 'right' | 'up' | 'down'; draftValue?: string | boolean }) {
     const cell = activeCellRef.current
     if (!cell) return
@@ -183,7 +179,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     if (!row) return
 
     const nextValue = (options?.draftValue ?? activeDraftRef.current ?? getCellValue(row, cell.field)) as string | boolean
-    commitCell(cell.rowId, cell.field, nextValue)
+    commitCellValue(cell.rowId, cell.field, nextValue)
 
     if (options?.move) {
       const neighbor = getNeighborCell(cell.rowId, cell.field, options.move)
@@ -199,7 +195,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     void onDeleteRow?.(rowId)
   }
 
-  function getRenderedCellValue(row: Row, field: string): string | boolean {
+  function getRenderedCellValue(row: Row, field: string) {
     const typedField = field as CellKey
     if (activeCell?.rowId === getRowId(row) && activeCell.field === typedField) {
       return (activeDraft ?? '') as string | boolean
@@ -224,7 +220,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     const element = cellRefs.current[getCellDomKey(rowId, typedField)]
     const row = getRowById(rowId)
     if (!row) return
-    commitCell(rowId, typedField, element?.value ?? getCellValue(row, typedField))
+    commitCellValue(rowId, typedField, element?.value ?? getCellValue(row, typedField))
   }
 
   function createRow(rowId: string, asChild: boolean, draftValue?: string | boolean) {
@@ -233,7 +229,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     void onCreateRow({ sourceRowId: rowId, asChild })
   }
 
-  function wantsCreateRow(event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement | HTMLInputElement>) {
+  function wantsCreateRow(event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
     return event.key === 'Enter' && (event.ctrlKey || event.metaKey)
   }
 
@@ -241,11 +237,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     return editingCellRef.current === getCellDomKey(rowId, field)
   }
 
-  function handleTextCellKeyDown(
-    event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
-    rowId: string,
-    field: string
-  ) {
+  function handleTextCellKeyDown(event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>, rowId: string, field: string) {
     const typedField = field as CellKey
     const currentValue = event.currentTarget.value
 
@@ -261,13 +253,6 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
       event.preventDefault()
-      const row = rows.find((r) => getRowId(r) === rowId)
-      const localValue = row ? getCellValue(row, typedField) : ''
-      if (activeDraftRef.current !== localValue) {
-        activeDraftRef.current = localValue as string | boolean
-        onActiveDraftChange(localValue as string | boolean)
-        return
-      }
       handleUndo()
       return
     }
@@ -275,6 +260,13 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     if (wantsCreateRow(event)) {
       event.preventDefault()
       createRow(rowId, event.shiftKey, currentValue)
+      return
+    }
+
+    // SHIFT+ENTER = child row
+    if (event.key === 'Enter' && event.shiftKey) {
+      event.preventDefault()
+      createRow(rowId, true, currentValue)
       return
     }
 
@@ -302,7 +294,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
       return
     }
 
-    if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    if (event.key.startsWith('Arrow')) {
       if (shouldArrowEditText(event, rowId, field)) return
       event.preventDefault()
       editingCellRef.current = null
@@ -330,11 +322,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     commitActiveCell({ draftValue: Boolean(getCellValue(getRowById(rowId) as Row, typedField)) })
   }
 
-  function handleCheckboxKeyDown(
-    event: ReactKeyboardEvent<HTMLInputElement>,
-    rowId: string,
-    field: string
-  ) {
+  function handleCheckboxKeyDown(event: ReactKeyboardEvent<HTMLInputElement>, rowId: string, field: string) {
     const typedField = field as CellKey
 
     if (event.key === 'Delete') {
@@ -369,7 +357,7 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
       return
     }
 
-    if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    if (event.key.startsWith('Arrow')) {
       event.preventDefault()
       if (event.key === 'ArrowUp') setActiveCellWithDraft(getNeighborCell(rowId, typedField, 'up') ?? { rowId, field: typedField }, { select: true })
       if (event.key === 'ArrowDown') setActiveCellWithDraft(getNeighborCell(rowId, typedField, 'down') ?? { rowId, field: typedField }, { select: true })
@@ -394,5 +382,6 @@ export function useWorksheetInteraction<Row, CellKey extends string>({
     handleCheckboxBlur,
     handleCheckboxKeyDown,
     handleCheckboxCommit,
+    handleDraftChange,
   }
 }
