@@ -41,11 +41,6 @@ export type JobWorksheetEditableCellKey =
   | 'location'
   | 'notes'
 
-export type JobWorksheetCreateRowOptions = {
-  sourceRowId?: string
-  asChild?: boolean
-}
-
 const editableCellOrder: readonly JobWorksheetEditableCellKey[] = [
   'description',
   'quantity',
@@ -56,54 +51,27 @@ const editableCellOrder: readonly JobWorksheetEditableCellKey[] = [
 ]
 
 const unitOptions = ['flat', 'ea', 'sqft', 'lnft', 'cuft'] as const
-const VIRTUAL_ROW_HEIGHT = 64
-const VIRTUAL_OVERSCAN = 8
-const VIRTUAL_MAX_BODY_HEIGHT = 560
-const VIRTUAL_THRESHOLD = 20
-
-function toCellString(value: number | string | null | undefined) {
-  if (value === null || value === undefined || value === '') return ''
-  return String(value)
-}
 
 function getDepth(row: JobWorksheetRow, rowsById: Map<string, JobWorksheetRow>) {
   let depth = 0
-  let currentParentId = row.parent_id
-  const seen = new Set<string>()
-
-  while (currentParentId && !seen.has(currentParentId) && depth < 8) {
-    seen.add(currentParentId)
-    const parent = rowsById.get(currentParentId)
+  let current = row.parent_id
+  while (current) {
+    const parent = rowsById.get(current)
     if (!parent) break
-    depth += 1
-    currentParentId = parent.parent_id
+    depth++
+    current = parent.parent_id
   }
-
   return depth
 }
 
-function getWorksheetCellValue(row: JobWorksheetRow, field: JobWorksheetEditableCellKey): string {
-  switch (field) {
-    case 'description':
-      return row.description
-    case 'quantity':
-      return toCellString(row.quantity)
-    case 'unit_price':
-      return toCellString(row.unit_price)
-    case 'unit':
-      return row.unit ?? 'ea'
-    case 'location':
-      return row.location ?? ''
-    case 'notes':
-      return row.notes ?? ''
-  }
+function currency(val: any, editing: boolean) {
+  if (!val) return ''
+  const num = Number(val)
+  if (isNaN(num)) return val
+  return editing ? String(num) : `$${num.toFixed(2)}`
 }
 
-function getColumns(
-  rowsById: Map<string, JobWorksheetRow>,
-  onDeleteRow: (id: string) => void,
-  onUnitChange: (rowId: string, value: string) => void
-): EditableDataTableColumn<JobWorksheetRow>[] {
+function getColumns(rowsById: Map<string, JobWorksheetRow>, onDeleteRow: any, commit: any): EditableDataTableColumn<JobWorksheetRow>[] {
   return [
     {
       key: 'description',
@@ -111,59 +79,24 @@ function getColumns(
       kind: 'text',
       width: '300px',
       getValue: (row) => row.description,
-      formatEditableValue: (value, row, isEditing) => {
-        if (isEditing) return String(value ?? '')
-        return String(value ?? '')
-      },
-      renderStaticCell: (row) => (
-        <div style={{ padding: '8px', paddingLeft: 8 + getDepth(row, rowsById) * 16, fontSize: '13px' }}>
-          {row.description}
-        </div>
-      ),
+      getCellPaddingLeft: (row) => 8 + getDepth(row, rowsById) * 16,
     },
-    {
-      key: 'quantity',
-      label: 'Qty',
-      kind: 'text',
-      width: '90px',
-      inputMode: 'decimal',
-      getValue: (row) => toCellString(row.quantity),
-    },
+    { key: 'quantity', label: 'Qty', kind: 'text', width: '90px', getValue: (row) => String(row.quantity ?? '') },
     {
       key: 'unit_price',
       label: 'Unit Price',
       kind: 'text',
       width: '120px',
-      inputMode: 'decimal',
-      getValue: (row) => toCellString(row.unit_price),
+      getValue: (row) => String(row.unit_price ?? ''),
+      formatEditableValue: (v, r, editing) => currency(v, editing),
     },
     {
       key: 'unit',
       label: 'Unit',
       kind: 'static',
-      width: '90px',
-      getValue: (row) => row.unit ?? 'ea',
+      width: '120px',
       renderStaticCell: (row) => (
-        <select
-          value={row.unit ?? 'ea'}
-          onChange={(event) => onUnitChange(row.id, event.currentTarget.value)}
-          style={{
-            width: '100%',
-            height: '100%',
-            minHeight: '34px',
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--text)',
-            fontSize: '13px',
-            padding: '6px 8px',
-            outline: 'none',
-            boxSizing: 'border-box',
-          }}
-        >
-          {unitOptions.map((unit) => (
-            <option key={unit} value={unit}>{unit}</option>
-          ))}
-        </select>
+        <input list="unit-options" value={row.unit ?? 'ea'} onChange={(e) => commit(row.id, 'unit', e.target.value)} />
       ),
     },
     {
@@ -171,98 +104,42 @@ function getColumns(
       label: 'Total',
       kind: 'static',
       width: '120px',
-      getValue: (row) => toCellString(row.total_price),
+      getValue: (row) => {
+        const q = Number(row.quantity)
+        const p = Number(row.unit_price)
+        if (!q || !p) return ''
+        return `$${(q * p).toFixed(2)}`
+      },
     },
-    {
-      key: 'location',
-      label: 'Location',
-      kind: 'text',
-      width: '140px',
-      getValue: (row) => row.location ?? '',
-    },
-    {
-      key: 'notes',
-      label: 'Notes',
-      kind: 'text',
-      width: '200px',
-      getValue: (row) => row.notes ?? '',
-    },
+    { key: 'location', label: 'Location', kind: 'text', width: '140px', getValue: (row) => row.location ?? '' },
+    { key: 'notes', label: 'Notes', kind: 'text', width: '200px', getValue: (row) => row.notes ?? '' },
     {
       key: 'actions',
       label: '',
       kind: 'static',
       width: '50px',
-      getValue: () => '',
       renderStaticCell: (row) => (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-          <button
-            type="button"
-            aria-label="Delete row"
-            onClick={() => onDeleteRow(row.id)}
-            style={{
-              color: '#dc2626',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontWeight: 800,
-              fontSize: '16px',
-              lineHeight: 1,
-            }}
-          >
-            ✕
-          </button>
-        </div>
+        <button onClick={() => onDeleteRow(row.id)} style={{ color: '#dc2626' }}>✕</button>
       ),
     },
   ]
 }
 
-type Props = {
-  rows: JobWorksheetRow[]
-  activeCell: WorksheetActiveCell<JobWorksheetEditableCellKey> | null
-  activeDraft: WorksheetCellDraftValue
-  setActiveCell: (cell: WorksheetActiveCell<JobWorksheetEditableCellKey> | null) => void
-  setActiveDraft: (draft: WorksheetCellDraftValue) => void
-  commitCellValue: (rowId: string, field: JobWorksheetEditableCellKey, value: string | boolean) => void
-  createDraftRowAfter: (options?: JobWorksheetCreateRowOptions) => void
-  deleteRow: (rowId: string) => void
-  handleUndo: () => void
-}
+export function JobWorksheetTableAdapter({ rows, activeCell, activeDraft, setActiveCell, setActiveDraft, commitCellValue, createDraftRowAfter, deleteRow, handleUndo }: any) {
+  const rowsById = useMemo(() => new Map(rows.map((r: any) => [r.id, r])), [rows])
+  const columns = useMemo(() => getColumns(rowsById, deleteRow, commitCellValue), [rowsById, deleteRow])
 
-export function JobWorksheetTableAdapter({
-  rows,
-  activeCell,
-  activeDraft,
-  setActiveCell,
-  setActiveDraft,
-  commitCellValue,
-  createDraftRowAfter,
-  deleteRow,
-  handleUndo,
-}: Props) {
-  const rowsById = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows])
-  const columns = useMemo(
-    () => getColumns(rowsById, deleteRow, (rowId, value) => commitCellValue(rowId, 'unit', value)),
-    [rowsById, deleteRow, commitCellValue]
-  )
+  const virt = useWorksheetVirtualization({ rows, rowHeight: 64, overscan: 8, threshold: 20, maxBodyHeight: 560 })
 
-  const virt = useWorksheetVirtualization({
+  const interaction = useWorksheetInteraction({
     rows,
-    rowHeight: VIRTUAL_ROW_HEIGHT,
-    overscan: VIRTUAL_OVERSCAN,
-    threshold: VIRTUAL_THRESHOLD,
-    maxBodyHeight: VIRTUAL_MAX_BODY_HEIGHT,
-  })
-
-  const interaction = useWorksheetInteraction<JobWorksheetRow, JobWorksheetEditableCellKey>({
-    rows,
-    getRowId: (row) => row.id,
+    getRowId: (r: any) => r.id,
     cellOrder: editableCellOrder,
     activeCell,
     onActiveCellChange: setActiveCell,
     activeDraft,
     onActiveDraftChange: setActiveDraft,
-    getCellValue: getWorksheetCellValue,
+    getCellValue: (row: any, field: any) => row[field] ?? '',
     commitCellValue,
     handleUndo,
     onCreateRow: createDraftRowAfter,
@@ -271,34 +148,37 @@ export function JobWorksheetTableAdapter({
     shouldVirtualize: virt.shouldVirtualize,
     tableViewportHeight: virt.tableViewportHeight,
     onTableScrollTopChange: virt.setTableScrollTop,
-    rowHeight: VIRTUAL_ROW_HEIGHT,
+    rowHeight: 64,
     tableScrollTop: virt.tableScrollTop,
   })
 
   return (
-    <EditableDataTable
-      columns={columns}
-      rows={rows}
-      getRowId={(row) => row.id}
-      canManage
-      minWidth="1070px"
-      rowHeight={VIRTUAL_ROW_HEIGHT}
-      shouldVirtualize={virt.shouldVirtualize}
-      visibleRange={virt.visibleRange}
-      scrollContainerRef={virt.scrollContainerRef}
-      cellRefs={interaction.cellRefs}
-      activeCell={activeCell}
-      activeDraft={activeDraft}
-      onTableScrollTopChange={virt.setTableScrollTop}
-      onTextCellFocus={interaction.handleTextCellFocus}
-      onTextCellBlur={interaction.handleTextCellBlur}
-      onTextCellKeyDown={interaction.handleTextCellKeyDown}
-      onTextCellDraftChange={setActiveDraft}
-      onCheckboxFocus={interaction.handleCheckboxFocus}
-      onCheckboxBlur={interaction.handleCheckboxBlur}
-      onCheckboxKeyDown={interaction.handleCheckboxKeyDown}
-      onCheckboxCommit={interaction.handleCheckboxCommit}
-      getRenderedCellValue={interaction.getRenderedCellValue}
-    />
+    <>
+      <datalist id="unit-options">
+        {unitOptions.map(u => <option key={u} value={u} />)}
+      </datalist>
+      <EditableDataTable
+        columns={columns}
+        rows={rows}
+        getRowId={(r: any) => r.id}
+        canManage
+        cellRefs={interaction.cellRefs}
+        activeCell={activeCell}
+        activeDraft={activeDraft}
+        scrollContainerRef={virt.scrollContainerRef}
+        shouldVirtualize={virt.shouldVirtualize}
+        visibleRange={virt.visibleRange}
+        onTableScrollTopChange={virt.setTableScrollTop}
+        onTextCellFocus={interaction.handleTextCellFocus}
+        onTextCellBlur={interaction.handleTextCellBlur}
+        onTextCellKeyDown={interaction.handleTextCellKeyDown}
+        onTextCellDraftChange={interaction.handleDraftChange}
+        onCheckboxFocus={interaction.handleCheckboxFocus}
+        onCheckboxBlur={interaction.handleCheckboxBlur}
+        onCheckboxKeyDown={interaction.handleCheckboxKeyDown}
+        onCheckboxCommit={interaction.handleCheckboxCommit}
+        getRenderedCellValue={interaction.getRenderedCellValue}
+      />
+    </>
   )
 }
