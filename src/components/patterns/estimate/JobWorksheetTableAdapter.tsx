@@ -52,27 +52,78 @@ function isMobile() {
   return window.innerWidth < 768
 }
 
-function MobileView({ rows, commitCellValue }: any) {
-  const total = rows.reduce((s:any,r:any)=>{
-    const q=Number(r.quantity);const p=Number(r.unit_price)
-    return s+(q&&p?q*p:0)
-  },0)
+function rowTotal(row: JobWorksheetRow) {
+  const q = Number(row.quantity)
+  const p = Number(row.unit_price)
+  return q && p ? q * p : 0
+}
+
+function currency(val: any, editing = false) {
+  if (!val) return ''
+  const num = Number(val)
+  if (Number.isNaN(num)) return String(val)
+  return editing ? String(num) : `$${num.toFixed(2)}`
+}
+
+function parentSubtotal(parent: JobWorksheetRow, rows: JobWorksheetRow[]) {
+  const childTotal = rows
+    .filter((row) => row.parent_id === parent.id)
+    .reduce((sum, row) => sum + rowTotal(row), 0)
+  return childTotal || rowTotal(parent)
+}
+
+function validationLabel(row: JobWorksheetRow) {
+  if (!row.description.trim()) return 'Missing item'
+  if (!Number(row.quantity)) return 'Missing qty'
+  if (!Number(row.unit_price)) return 'Missing price'
+  if (!unitOptions.includes((row.unit ?? 'ea') as any)) return 'Invalid unit'
+  return ''
+}
+
+function MobileView({ rows, commitCellValue, createDraftRowAfter }: any) {
+  const total = rows.reduce((sum: number, row: JobWorksheetRow) => sum + rowTotal(row), 0)
 
   return (
-    <div style={{padding:12}}>
-      <div style={{fontWeight:600, marginBottom:12}}>Total: ${total.toFixed(2)}</div>
-      {rows.map((row:any)=>(
-        <div key={row.id} style={{marginBottom:10, paddingLeft: row.parent_id?12:0}}>
-          <input value={row.description} onChange={(e)=>commitCellValue(row.id,'description',e.target.value)} style={{width:'100%'}} />
-          <div style={{display:'flex', gap:6}}>
-            <input value={row.quantity??''} onChange={(e)=>commitCellValue(row.id,'quantity',e.target.value)} style={{flex:1}} />
-            <input value={row.unit_price??''} onChange={(e)=>commitCellValue(row.id,'unit_price',e.target.value)} style={{flex:1}} />
-            <input list="unit-options" value={row.unit??'ea'} onChange={(e)=>commitCellValue(row.id,'unit',e.target.value)} style={{flex:1}} />
-            <div style={{flex:1}}>{row.quantity&&row.unit_price?`$${(Number(row.quantity)*Number(row.unit_price)).toFixed(2)}`:''}</div>
+    <div style={{ padding: 12, paddingBottom: 72 }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 10, marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Grand Total</div>
+        <div style={{ fontWeight: 800, fontSize: 20 }}>{currency(total)}</div>
+      </div>
+
+      {rows.map((row: JobWorksheetRow) => {
+        const warning = validationLabel(row)
+        const subtotal = parentSubtotal(row, rows)
+        return (
+          <div key={row.id} style={{ marginBottom: 10, paddingLeft: row.parent_id ? 12 : 0 }}>
+            <input
+              value={row.description}
+              placeholder="Item"
+              onChange={(event) => commitCellValue(row.id, 'description', event.currentTarget.value)}
+              style={{ width: '100%', fontSize: 14, fontWeight: row.parent_id ? 500 : 700, border: warning ? '1px solid #dc2626' : '1px solid var(--border)', borderRadius: 8, padding: 8, boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'grid', gridTemplateColumns: '0.7fr 1fr 0.9fr 1fr', gap: 6, marginTop: 4, alignItems: 'center' }}>
+              <input value={row.quantity ?? ''} inputMode="decimal" onChange={(event) => commitCellValue(row.id, 'quantity', event.currentTarget.value)} style={{ minWidth: 0 }} />
+              <input value={currency(row.unit_price, true)} inputMode="decimal" onChange={(event) => commitCellValue(row.id, 'unit_price', event.currentTarget.value)} style={{ minWidth: 0 }} />
+              <input list="unit-options" value={row.unit ?? 'ea'} onChange={(event) => commitCellValue(row.id, 'unit', event.currentTarget.value)} style={{ minWidth: 0 }} />
+              <div style={{ fontWeight: 700, textAlign: 'right' }}>{currency(rowTotal(row))}</div>
+            </div>
+            {!row.parent_id && subtotal !== rowTotal(row) ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Subtotal: {currency(subtotal)}</div>
+            ) : null}
+            {warning ? <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{warning}</div> : null}
           </div>
-        </div>
-      ))}
-      <datalist id="unit-options">{unitOptions.map(u=><option key={u} value={u}/>)}</datalist>
+        )
+      })}
+
+      <button
+        type="button"
+        onClick={() => createDraftRowAfter?.()}
+        style={{ position: 'fixed', right: 16, bottom: 16, border: 'none', borderRadius: 999, padding: '12px 16px', background: 'var(--accent, #2563eb)', color: 'white', fontWeight: 800, boxShadow: '0 8px 24px rgba(0,0,0,.18)' }}
+      >
+        + Item
+      </button>
+
+      <datalist id="unit-options">{unitOptions.map((unit) => <option key={unit} value={unit} />)}</datalist>
     </div>
   )
 }
@@ -81,44 +132,35 @@ function getDepth(row: JobWorksheetRow, rowsById: Map<string, JobWorksheetRow>) 
   return row.parent_id ? 1 : 0
 }
 
-function currency(val: any, editing: boolean) {
-  if (!val) return ''
-  const num = Number(val)
-  if (isNaN(num)) return val
-  return editing ? String(num) : `$${num.toFixed(2)}`
-}
-
 function getColumns(rowsById: Map<string, JobWorksheetRow>, onDeleteRow: any, commit: any): EditableDataTableColumn<JobWorksheetRow>[] {
   return [
-    { key:'description',label:'Item',kind:'text',width:'300px',getValue:(r)=>r.description,getCellPaddingLeft:(r)=>8+getDepth(r,rowsById)*16 },
-    { key:'quantity',label:'Qty',kind:'text',width:'90px',getValue:(r)=>String(r.quantity??'') },
-    { key:'unit_price',label:'Unit Price',kind:'text',width:'120px',getValue:(r)=>String(r.unit_price??''),formatEditableValue:(v,r,e)=>currency(v,e) },
-    { key:'unit',label:'Unit',kind:'static',width:'120px',renderStaticCell:(r)=>(<input list="unit-options" value={r.unit??'ea'} onChange={(e)=>commit(r.id,'unit',e.target.value)} />) },
-    { key:'total_price',label:'Total',kind:'static',width:'120px',getValue:(r)=>{const q=Number(r.quantity);const p=Number(r.unit_price);if(!q||!p)return'';return`$${(q*p).toFixed(2)}`} },
-    { key:'location',label:'Location',kind:'text',width:'140px',getValue:(r)=>r.location??'' },
-    { key:'notes',label:'Notes',kind:'text',width:'200px',getValue:(r)=>r.notes??'' },
-    { key:'actions',label:'',kind:'static',width:'50px',renderStaticCell:(r)=>(<button onClick={()=>onDeleteRow(r.id)} style={{color:'#dc2626'}}>✕</button>) }
+    { key:'description',label:'Item',kind:'text',width:'300px',getValue:(row)=>row.description,getCellPaddingLeft:(row)=>8+getDepth(row,rowsById)*16 },
+    { key:'quantity',label:'Qty',kind:'text',width:'90px',getValue:(row)=>String(row.quantity??'') },
+    { key:'unit_price',label:'Unit Price',kind:'text',width:'120px',getValue:(row)=>String(row.unit_price??''),formatEditableValue:(value,row,editing)=>currency(value,editing) },
+    { key:'unit',label:'Unit',kind:'static',width:'120px',renderStaticCell:(row)=>(<input list="unit-options" value={row.unit??'ea'} onChange={(event)=>commit(row.id,'unit',event.currentTarget.value)} />) },
+    { key:'total_price',label:'Total',kind:'static',width:'120px',getValue:(row)=>currency(rowTotal(row)) },
+    { key:'location',label:'Location',kind:'text',width:'140px',getValue:(row)=>row.location??'' },
+    { key:'notes',label:'Notes',kind:'text',width:'200px',getValue:(row)=>row.notes??'' },
+    { key:'actions',label:'',kind:'static',width:'50px',renderStaticCell:(row)=>(<button type="button" onClick={()=>onDeleteRow(row.id)} style={{color:'#dc2626',background:'none',border:'none',fontWeight:800,cursor:'pointer'}}>✕</button>) }
   ]
 }
 
 export function JobWorksheetTableAdapter(props:any) {
-  if (isMobile()) return <MobileView {...props} />
-
   const { rows } = props
-  const rowsById = useMemo(()=>new Map(rows.map((r:any)=>[r.id,r])),[rows])
-  const columns = useMemo(()=>getColumns(rowsById,props.deleteRow,props.commitCellValue),[rowsById])
+  const rowsById = useMemo(()=>new Map(rows.map((row:JobWorksheetRow)=>[row.id,row])),[rows])
+  const columns = useMemo(()=>getColumns(rowsById,props.deleteRow,props.commitCellValue),[rowsById,props.deleteRow,props.commitCellValue])
 
   const virt = useWorksheetVirtualization({ rows, rowHeight:64, overscan:8, threshold:20, maxBodyHeight:560 })
 
   const interaction = useWorksheetInteraction({
     rows,
-    getRowId:(r:any)=>r.id,
+    getRowId:(row:JobWorksheetRow)=>row.id,
     cellOrder:editableCellOrder,
     activeCell:props.activeCell,
     onActiveCellChange:props.setActiveCell,
     activeDraft:props.activeDraft,
     onActiveDraftChange:props.setActiveDraft,
-    getCellValue:(r:any,f:any)=>r[f]??'',
+    getCellValue:(row:any,field:any)=>row[field]??'',
     commitCellValue:props.commitCellValue,
     handleUndo:props.handleUndo,
     onCreateRow:props.createDraftRowAfter,
@@ -131,13 +173,15 @@ export function JobWorksheetTableAdapter(props:any) {
     tableScrollTop:virt.tableScrollTop
   })
 
+  if (isMobile()) return <MobileView {...props} />
+
   return (
     <>
-      <datalist id="unit-options">{unitOptions.map(u=><option key={u} value={u}/>)}</datalist>
+      <datalist id="unit-options">{unitOptions.map((unit)=><option key={unit} value={unit}/>)}</datalist>
       <EditableDataTable
         columns={columns}
         rows={rows}
-        getRowId={(r:any)=>r.id}
+        getRowId={(row:JobWorksheetRow)=>row.id}
         canManage
         cellRefs={interaction.cellRefs}
         activeCell={props.activeCell}
