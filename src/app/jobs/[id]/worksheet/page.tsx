@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import JobWorksheetPageOrchestrator from '@/components/patterns/estimate/JobWorksheetPageOrchestrator'
+import type { Estimate } from '@/lib/estimateTypes'
 
 export default async function JobWorksheetPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -17,14 +18,24 @@ export default async function JobWorksheetPage({ params }: { params: Promise<{ i
 
   if (!job) notFound()
 
-  const { data: rows, error } = await supabase
-    .from('job_worksheet_items')
-    .select('*')
-    .eq('job_id', id)
-    .order('sort_order', { ascending: true })
+  const [
+    { data: rows, error: rowsError },
+    { data: estimates },
+  ] = await Promise.all([
+    supabase
+      .from('job_worksheet_items')
+      .select('*')
+      .eq('job_id', id)
+      .order('sort_order', { ascending: true }),
+    supabase
+      .from('estimates')
+      .select('id, job_id, title, status, is_change_order, parent_estimate_id, created_by, created_at, updated_at')
+      .eq('job_id', id)
+      .order('created_at', { ascending: true }),
+  ])
 
-  if (error) {
-    console.error('job_worksheet_items load failed:', error)
+  if (rowsError) {
+    console.error('job_worksheet_items load failed:', rowsError)
   }
 
   return (
@@ -34,6 +45,7 @@ export default async function JobWorksheetPage({ params }: { params: Promise<{ i
           jobId={id}
           jobName={job.job_name}
           rows={(rows || []) as any}
+          estimates={(estimates || []) as Estimate[]}
         />
       </div>
     </div>

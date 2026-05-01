@@ -2,13 +2,16 @@
 
 import { PageShell } from '@/components/layout/PageShell'
 import { JobWorksheetTableAdapter, type JobWorksheetRow } from './JobWorksheetTableAdapter'
+import { EstimateSelector } from './EstimateSelector'
 import { useJobWorksheetState } from './_hooks/useJobWorksheetState'
 import { useJobWorksheetPersistence } from './_hooks/useJobWorksheetPersistence'
+import type { Estimate } from '@/lib/estimateTypes'
 
 type Props = {
   jobId: string
   jobName: string
   rows: JobWorksheetRow[]
+  estimates: Estimate[]
 }
 
 function getSheetStatusLabel(saveCounts: { saving: number; dirty: number; error: number }) {
@@ -29,7 +32,7 @@ const secondaryButtonStyle = {
   cursor: 'pointer',
 } as const
 
-export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: Props) {
+export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows, estimates }: Props) {
   const { persistRow, createRow, restoreRows, deleteRow, persistSortOrders } = useJobWorksheetPersistence()
 
   const {
@@ -71,6 +74,10 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows }: P
                 Add row
               </button>
             </div>
+          </div>
+
+          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
+            <EstimateSelector jobId={jobId} estimates={estimates} />
           </div>
         </div>
 
