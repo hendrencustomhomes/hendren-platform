@@ -34,7 +34,7 @@ const secondaryButtonStyle = {
 } as const
 
 export default function JobWorksheetPageOrchestrator({ jobId, jobName, activeEstimateId, rows, estimates }: Props) {
-  const { persistRow, createRow, restoreRows, deleteRow, persistSortOrders } = useJobWorksheetPersistence()
+  const { persistRow, createRow, restoreRows, deleteRow, persistSortOrders } = useJobWorksheetPersistence(activeEstimateId)
 
   const {
     localRows,

@@ -34,7 +34,7 @@ export type WorksheetSortOrderUpdate = {
   sort_order: number
 }
 
-export function useJobWorksheetPersistence() {
+export function useJobWorksheetPersistence(estimateId: string) {
   const supabase = createClient()
 
   async function persistRow(rowId: string, patch: UpdateJobWorksheetRowPatch) {
@@ -42,6 +42,7 @@ export function useJobWorksheetPersistence() {
       .from('job_worksheet_items')
       .update(patch)
       .eq('id', rowId)
+      .eq('estimate_id', estimateId)
       .select('*')
       .single()
 
@@ -86,6 +87,7 @@ export function useJobWorksheetPersistence() {
       .from('job_worksheet_items')
       .delete()
       .eq('id', rowId)
+      .eq('estimate_id', estimateId)
 
     if (error) {
       throw error
@@ -101,6 +103,7 @@ export function useJobWorksheetPersistence() {
           .from('job_worksheet_items')
           .update({ sort_order: update.sort_order })
           .eq('id', update.id)
+          .eq('estimate_id', estimateId)
           .select('id, sort_order')
           .single()
       )
