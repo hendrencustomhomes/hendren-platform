@@ -57,7 +57,11 @@ function isMobile() {
   return window.innerWidth < 768
 }
 
-function getColumns(rowsById: Map<string, JobWorksheetRow>, onDeleteRow: any, commit: any): EditableDataTableColumn<JobWorksheetRow>[] {
+function getColumns(
+  rowsById: Map<string, JobWorksheetRow>,
+  onDeleteRow: (rowId: string) => void,
+  commit: (rowId: string, field: JobWorksheetEditableCellKey, value: string) => void,
+): EditableDataTableColumn<JobWorksheetRow>[] {
   return [
     { key:'description',label:'Item',kind:'text',width:'300px',getValue:(row)=>row.description,getCellPaddingLeft:(row)=>8+getDepth(row,rowsById)*16 },
     { key:'quantity',label:'Qty',kind:'text',width:'90px',getValue:(row)=>String(row.quantity??'') },
@@ -70,10 +74,22 @@ function getColumns(rowsById: Map<string, JobWorksheetRow>, onDeleteRow: any, co
   ]
 }
 
-export function JobWorksheetTableAdapter(props:any) {
+type AdapterProps = {
+  rows: JobWorksheetRow[]
+  activeCell: WorksheetActiveCell<JobWorksheetEditableCellKey> | null
+  activeDraft: WorksheetCellDraftValue
+  setActiveCell: (cell: WorksheetActiveCell<JobWorksheetEditableCellKey> | null) => void
+  setActiveDraft: (draft: WorksheetCellDraftValue) => void
+  commitCellValue: (rowId: string, field: JobWorksheetEditableCellKey, value: string | boolean) => void
+  handleUndo: () => void
+  createDraftRowAfter: (options?: { sourceRowId?: string; asChild?: boolean }) => void
+  deleteRow: (rowId: string) => void
+}
+
+export function JobWorksheetTableAdapter(props: AdapterProps) {
   const { rows } = props
   const rowsById = useMemo<Map<string, JobWorksheetRow>>(
-    () => new Map<string, JobWorksheetRow>(rows.map((row: JobWorksheetRow) => [row.id, row])),
+    () => new Map<string, JobWorksheetRow>(rows.map((row) => [row.id, row])),
     [rows]
   )
   const columns = useMemo(()=>getColumns(rowsById,props.deleteRow,props.commitCellValue),[rowsById,props.deleteRow,props.commitCellValue])

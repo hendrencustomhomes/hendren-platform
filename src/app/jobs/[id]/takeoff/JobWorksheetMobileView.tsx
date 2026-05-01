@@ -1,6 +1,6 @@
 'use client'
 
-import type { JobWorksheetRow } from '@/components/patterns/estimate/JobWorksheetTableAdapter'
+import type { JobWorksheetRow, JobWorksheetEditableCellKey } from '@/components/patterns/estimate/JobWorksheetTableAdapter'
 import {
   unitOptions,
   rowTotal,
@@ -11,7 +11,7 @@ import { validationLabel } from './_worksheetValidation'
 
 type Props = {
   rows: JobWorksheetRow[]
-  commitCellValue: (rowId: string, field: string, value: string) => void
+  commitCellValue: (rowId: string, field: JobWorksheetEditableCellKey, value: string) => void
   createDraftRowAfter?: () => void
 }
 
