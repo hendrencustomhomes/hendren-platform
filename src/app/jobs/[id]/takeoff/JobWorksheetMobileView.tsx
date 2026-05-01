@@ -6,8 +6,8 @@ import {
   rowTotal,
   currency,
   parentSubtotal,
-  validationLabel,
 } from './_worksheetFormatters'
+import { validationLabel } from './_worksheetValidation'
 
 type Props = {
   rows: JobWorksheetRow[]
