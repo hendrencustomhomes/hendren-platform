@@ -157,3 +157,49 @@ change the rows displayed.
 **4. `created_by` on seeded estimates is NULL.**
 Migration-inserted seed rows have no `created_by` since migrations run under the
 service role. This is acceptable for seed data.
+
+---
+
+## Pre-Slice 07 Cleanup Decision Required
+
+During DB discovery, three legacy tables were found that reference `estimates.id`
+and were not part of the new worksheet system:
+
+| Table | Purpose | Rows |
+|---|---|---|
+| `estimate_versions` | Old versioned estimate snapshots | 0 |
+| `estimate_line_items` | Old line items linked to legacy estimates | 0 |
+| `estimate_version_items` | Old line items linked to estimate_versions | 0 |
+
+All three are empty. The `estimates` table itself is also a legacy external-estimate
+schema (status lifecycle: draft → sent → accepted → superseded/voided; includes
+`signature_path`, `signed_at`, `margin_pct`, `overhead_pct` fields). The new
+worksheet estimates coexist in the same table, distinguished by the new `active`
+and `archived` status values.
+
+**Before Slice 07 (binding worksheet rows to estimates) begins, a decision is
+required:**
+
+- **Option A — Retire the legacy tables:** Drop `estimate_versions`,
+  `estimate_line_items`, and `estimate_version_items`. Remove the legacy
+  `sent`/`accepted`/`superseded`/`voided` status values from the enum (requires
+  replacing the enum type since Postgres does not support `DROP VALUE`). Clean up
+  the signature and margin columns from the `estimates` table. The result is a
+  clean, worksheet-only `estimates` table.
+
+- **Option B — Keep the legacy tables as parallel infrastructure:** Leave all
+  legacy tables intact. Worksheet estimates use `draft`/`active`/`approved`/`archived`
+  status values; the legacy external-estimate flow (if it will ever be used) uses
+  `sent`/`accepted`/`superseded`/`voided`. The tables coexist in the same schema
+  but serve different purposes. This avoids migration risk now but adds permanent
+  ambiguity.
+
+- **Option C — Rename the legacy tables and separate concerns:** Rename
+  `estimate_versions` → `legacy_estimate_versions` etc. to make the split explicit
+  without dropping anything.
+
+**Recommendation: Option A**, given that all tables are empty, no UI references
+these legacy tables, and the legacy status values (`sent`, `accepted`, etc.) have
+no app code behind them. Cleaning now costs nothing and prevents confusion when
+Supabase type generation is eventually added. The cleanup should be its own
+named migration and does not need to block Slice 07 if the team decides to defer.
