@@ -1,6 +1,6 @@
 'use client'
 
-import type { JobWorksheetRow, JobWorksheetEditableCellKey } from '@/components/patterns/estimate/JobWorksheetTableAdapter'
+import type { JobWorksheetRow, JobWorksheetEditableCellKey } from './JobWorksheetTableAdapter'
 import {
   unitOptions,
   rowTotal,

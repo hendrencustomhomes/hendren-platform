@@ -11,8 +11,8 @@ import {
   rowTotal,
   currency,
   getDepth,
-} from '@/app/jobs/[id]/takeoff/_worksheetFormatters'
-import { JobWorksheetMobileView } from '@/app/jobs/[id]/takeoff/JobWorksheetMobileView'
+} from './_worksheetFormatters'
+import { JobWorksheetMobileView } from './JobWorksheetMobileView'
 
 export type JobWorksheetRowKind = 'line_item' | 'assembly' | 'note' | 'allowance'
 export type JobWorksheetPricingType = 'unit' | 'lump_sum' | 'allowance' | 'manual' | 'unpriced'

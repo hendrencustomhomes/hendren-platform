@@ -1,4 +1,4 @@
-import type { JobWorksheetRow } from '@/components/patterns/estimate/JobWorksheetTableAdapter'
+import type { JobWorksheetRow } from './JobWorksheetTableAdapter'
 
 export const unitOptions = ['flat', 'ea', 'sqft', 'lnft', 'cuft'] as const
 

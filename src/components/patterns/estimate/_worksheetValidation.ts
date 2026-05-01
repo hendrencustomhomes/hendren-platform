@@ -1,4 +1,4 @@
-import type { JobWorksheetRow } from '@/components/patterns/estimate/JobWorksheetTableAdapter'
+import type { JobWorksheetRow } from './JobWorksheetTableAdapter'
 import { unitOptions } from './_worksheetFormatters'
 
 export function validationLabel(row: JobWorksheetRow): string {
