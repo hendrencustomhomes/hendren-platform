@@ -47,7 +47,7 @@ export default async function JobDetailPage({params}:{params:Promise<{id:string}
   `
 
   const [
-    {data:checklistItems},{data:checklistState},{data:issues},{data:logs},{data:scheduleItems},{data:procurementItems},{data:selections},{data:scopeItems},{data:takeoffItems},{data:trades},{data:costCodes},{data:jobClients},{data:activeInternalUsers},{data:pmRoleAssignments},{data:estimatorRoleAssignments},{data:bookkeeperRoleAssignments},{data:tasks}
+    {data:checklistItems},{data:checklistState},{data:issues},{data:logs},{data:scheduleItems},{data:procurementItems},{data:selections},{data:trades},{data:costCodes},{data:jobClients},{data:activeInternalUsers},{data:pmRoleAssignments},{data:estimatorRoleAssignments},{data:bookkeeperRoleAssignments},{data:tasks}
   ]=await Promise.all([
     supabase.from('checklist_items').select('*').is('job_id',null).order('sort_order'),
     supabase.from('job_checklist_state').select('*').eq('job_id',id),
@@ -56,8 +56,6 @@ export default async function JobDetailPage({params}:{params:Promise<{id:string}
     supabase.from('sub_schedule').select('*').eq('job_id',id).order('start_date',{ascending:true,nullsFirst:false}),
     supabase.from('procurement_items').select('*').eq('job_id',id).order('order_by_date',{ascending:true,nullsFirst:false}),
     supabase.from('job_selections').select('*').eq('job_id',id),
-    supabase.from('job_scope_items').select('*').eq('job_id',id),
-    supabase.from('takeoff_items').select('*').eq('job_id',id),
     supabase.from('trades').select('*').eq('is_active',true),
     supabase.from('cost_codes').select('*').eq('is_active',true),
     supabase.from('job_clients').select('*').eq('job_id',id),
@@ -76,8 +74,6 @@ export default async function JobDetailPage({params}:{params:Promise<{id:string}
     procurement:openProcurementItems.length,
     tasks:(tasks||[]).length,
     selections:(selections||[]).length,
-    takeoff:(takeoffItems||[]).length,
-    scope:(scopeItems||[]).length
   }
 
   return(
@@ -100,7 +96,7 @@ export default async function JobDetailPage({params}:{params:Promise<{id:string}
           </div>
         </div>
 
-        <JobTabs jobId={id} job={job} stageItems={{}} checkedMap={{}} stateMap={{}} issues={issues||[]} logs={logs||[]} scheduleItems={scheduleItems||[]} procurementItems={procurementItems||[]} scopeItems={scopeItems||[]} takeoffItems={takeoffItems||[]} selections={selections||[]} trades={trades||[]} costCodes={costCodes||[]} stages={STAGES} stageLabels={STAGE_LABELS} stageIcons={STAGE_ICONS} statusColors={{}} userId={user.id} canEditInfo={true} pmOptions={[]} estimatorOptions={[]} bookkeeperOptions={[]} tasks={tasks||[]}/>
+        <JobTabs jobId={id} job={job} stageItems={{}} checkedMap={{}} stateMap={{}} issues={issues||[]} logs={logs||[]} scheduleItems={scheduleItems||[]} procurementItems={procurementItems||[]} selections={selections||[]} trades={trades||[]} costCodes={costCodes||[]} stages={STAGES} stageLabels={STAGE_LABELS} stageIcons={STAGE_ICONS} statusColors={{}} userId={user.id} canEditInfo={true} pmOptions={[]} estimatorOptions={[]} bookkeeperOptions={[]} tasks={tasks||[]}/>
       </div>
     </div>
   )

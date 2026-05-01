@@ -18,13 +18,42 @@ export default async function JobWorksheetPage({ params }: { params: Promise<{ i
 
   if (!job) notFound()
 
-  const { data: estimates } = await supabase
+  const { data: estimatesRaw } = await supabase
     .from('estimates')
     .select('id, job_id, title, status, is_change_order, parent_estimate_id, created_by, created_at, updated_at')
     .eq('job_id', id)
     .order('created_at', { ascending: true })
 
-  const activeEstimate = (estimates ?? []).find((e) => e.status === 'active') ?? null
+  let estimates = (estimatesRaw ?? []) as Estimate[]
+  let activeEstimate = estimates.find((e) => e.status === 'active') ?? null
+
+  // Guard: every worksheet load must have an active estimate.
+  // Promote an existing non-archived estimate, or create a new one.
+  if (!activeEstimate) {
+    const candidate = estimates.find((e) => e.status !== 'archived') ?? estimates[0] ?? null
+
+    if (candidate) {
+      await supabase.rpc('set_active_estimate', {
+        p_estimate_id: candidate.id,
+        p_job_id: id,
+      })
+      activeEstimate = { ...candidate, status: 'active' }
+      estimates = estimates.map((e) =>
+        e.id === candidate.id ? activeEstimate! : { ...e, status: e.status === 'active' ? 'draft' : e.status }
+      )
+    } else {
+      const { data: created } = await supabase
+        .from('estimates')
+        .insert({ job_id: id, title: 'Base Estimate', status: 'active', created_by: user.id })
+        .select('id, job_id, title, status, is_change_order, parent_estimate_id, created_by, created_at, updated_at')
+        .single()
+
+      if (created) {
+        activeEstimate = created as Estimate
+        estimates = [activeEstimate]
+      }
+    }
+  }
 
   const { data: rows, error: rowsError } = activeEstimate
     ? await supabase
@@ -46,7 +75,7 @@ export default async function JobWorksheetPage({ params }: { params: Promise<{ i
           jobName={job.job_name}
           activeEstimateId={activeEstimate?.id ?? ''}
           rows={(rows || []) as any}
-          estimates={(estimates || []) as Estimate[]}
+          estimates={estimates}
         />
       </div>
     </div>

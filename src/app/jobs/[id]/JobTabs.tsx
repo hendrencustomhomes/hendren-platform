@@ -4,8 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import FilesTab from '@/components/FilesTab'
 import { createClient } from '@/utils/supabase/client'
-import ScopeTab from './ScopeTab'
-import TakeoffTab from './TakeoffTab'
 import SelectionsTab from './SelectionsTab'
 import BidsTab from './BidsTab'
 
@@ -114,8 +112,6 @@ type JobTabProps = {
   logs: any[]
   scheduleItems?: any[]
   procurementItems?: any[]
-  scopeItems?: any[]
-  takeoffItems?: any[]
   selections?: any[]
   trades?: any[]
   costCodes?: any[]
@@ -361,8 +357,6 @@ export default function JobTabs(props: JobTabProps) {
   const TABS = [
     'info',
     'pipeline',
-    'scope',
-    'takeoff',
     'selections',
     'bids',
     'log',
@@ -376,8 +370,6 @@ export default function JobTabs(props: JobTabProps) {
   const TAB_LABELS: Record<string, string> = {
     info: 'Info',
     pipeline: 'Pipeline',
-    scope: 'Scope',
-    takeoff: 'Takeoff',
     selections: 'Selections',
     bids: 'Bids',
     log: 'Log',
@@ -1653,18 +1645,6 @@ export default function JobTabs(props: JobTabProps) {
             )
           })}
         </div>
-      )}
-
-      {activeTab === 'scope' && <ScopeTab jobId={jobId} scopeItems={props.scopeItems ?? []} />}
-
-      {activeTab === 'takeoff' && (
-        <TakeoffTab
-          jobId={jobId}
-          takeoffItems={props.takeoffItems ?? []}
-          trades={props.trades ?? []}
-          costCodes={props.costCodes ?? []}
-          scopeItems={props.scopeItems ?? []}
-        />
       )}
 
       {activeTab === 'selections' && (
