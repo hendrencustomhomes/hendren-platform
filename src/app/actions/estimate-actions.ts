@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/utils/supabase/server'
 import type { Estimate } from '@/lib/estimateTypes'
+import { parseImportCsv } from '@/lib/worksheetCsv'
 
 async function requireUser() {
   const supabase = await createClient()
@@ -176,6 +177,41 @@ export async function duplicateEstimate(
 
   revalidateWorksheet(jobId)
   return { estimate: data as Estimate }
+}
+
+export async function importEstimate(
+  jobId: string,
+  csvText: string,
+): Promise<{ estimateId: string } | { error: string }> {
+  const auth = await requireUser()
+  if ('error' in auth) return { error: 'Not authenticated' }
+
+  const { data: newEstimate, error: createError } = await auth.supabase
+    .from('estimates')
+    .insert({ job_id: jobId, title: 'Imported Estimate', status: 'draft', created_by: auth.user.id })
+    .select('id')
+    .single()
+
+  if (createError || !newEstimate) return { error: createError?.message ?? 'Failed to create estimate.' }
+
+  const { rows, errors } = parseImportCsv(csvText, newEstimate.id, jobId)
+
+  if (errors.length > 0) {
+    await auth.supabase.from('estimates').delete().eq('id', newEstimate.id)
+    return { error: errors[0] }
+  }
+
+  const { error: insertError } = await auth.supabase
+    .from('job_worksheet_items')
+    .insert(rows as any[])
+
+  if (insertError) {
+    await auth.supabase.from('estimates').delete().eq('id', newEstimate.id)
+    return { error: insertError.message }
+  }
+
+  revalidateWorksheet(jobId)
+  return { estimateId: newEstimate.id }
 }
 
 export async function renameEstimate(
