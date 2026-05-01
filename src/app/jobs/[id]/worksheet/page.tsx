@@ -18,21 +18,21 @@ export default async function JobWorksheetPage({ params }: { params: Promise<{ i
 
   if (!job) notFound()
 
-  const [
-    { data: rows, error: rowsError },
-    { data: estimates },
-  ] = await Promise.all([
-    supabase
-      .from('job_worksheet_items')
-      .select('*')
-      .eq('job_id', id)
-      .order('sort_order', { ascending: true }),
-    supabase
-      .from('estimates')
-      .select('id, job_id, title, status, is_change_order, parent_estimate_id, created_by, created_at, updated_at')
-      .eq('job_id', id)
-      .order('created_at', { ascending: true }),
-  ])
+  const { data: estimates } = await supabase
+    .from('estimates')
+    .select('id, job_id, title, status, is_change_order, parent_estimate_id, created_by, created_at, updated_at')
+    .eq('job_id', id)
+    .order('created_at', { ascending: true })
+
+  const activeEstimate = (estimates ?? []).find((e) => e.status === 'active') ?? null
+
+  const { data: rows, error: rowsError } = activeEstimate
+    ? await supabase
+        .from('job_worksheet_items')
+        .select('*')
+        .eq('estimate_id', activeEstimate.id)
+        .order('sort_order', { ascending: true })
+    : { data: [], error: null }
 
   if (rowsError) {
     console.error('job_worksheet_items load failed:', rowsError)
@@ -44,6 +44,7 @@ export default async function JobWorksheetPage({ params }: { params: Promise<{ i
         <JobWorksheetPageOrchestrator
           jobId={id}
           jobName={job.job_name}
+          activeEstimateId={activeEstimate?.id ?? ''}
           rows={(rows || []) as any}
           estimates={(estimates || []) as Estimate[]}
         />

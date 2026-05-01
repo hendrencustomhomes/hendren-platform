@@ -56,25 +56,12 @@ export async function setActiveEstimate(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  const now = new Date().toISOString()
+  const { error } = await auth.supabase.rpc('set_active_estimate', {
+    p_estimate_id: estimateId,
+    p_job_id: jobId,
+  })
 
-  // Demote current active to draft first (removes unique-index occupant)
-  const { error: demoteError } = await auth.supabase
-    .from('estimates')
-    .update({ status: 'draft', updated_at: now })
-    .eq('job_id', jobId)
-    .eq('status', 'active')
-
-  if (demoteError) return { error: demoteError.message }
-
-  // Promote target estimate to active
-  const { error: promoteError } = await auth.supabase
-    .from('estimates')
-    .update({ status: 'active', updated_at: now })
-    .eq('id', estimateId)
-
-  if (promoteError) return { error: promoteError.message }
-
+  if (error) return { error: error.message }
   revalidateWorksheet(jobId)
   return { success: true }
 }
@@ -114,13 +101,24 @@ export async function duplicateEstimate(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  const { data: source, error: fetchError } = await auth.supabase
-    .from('estimates')
-    .select('title, is_change_order')
-    .eq('id', estimateId)
-    .single()
+  const [
+    { data: source, error: fetchError },
+    { data: sourceRows, error: rowsError },
+  ] = await Promise.all([
+    auth.supabase
+      .from('estimates')
+      .select('title, is_change_order')
+      .eq('id', estimateId)
+      .single(),
+    auth.supabase
+      .from('job_worksheet_items')
+      .select('*')
+      .eq('estimate_id', estimateId)
+      .order('sort_order', { ascending: true }),
+  ])
 
   if (fetchError || !source) return { error: fetchError?.message ?? 'Estimate not found' }
+  if (rowsError) return { error: rowsError.message }
 
   const { data, error } = await auth.supabase
     .from('estimates')
@@ -135,6 +133,46 @@ export async function duplicateEstimate(
     .single()
 
   if (error) return { error: error.message }
+
+  const rows = sourceRows ?? []
+  if (rows.length > 0) {
+    // Build old→new id mapping so parent_id references survive the copy
+    const idMap = new Map<string, string>()
+    for (const row of rows) {
+      idMap.set(row.id, crypto.randomUUID())
+    }
+
+    const copiedRows = rows.map((row: any) => ({
+      id: idMap.get(row.id)!,
+      estimate_id: data.id,
+      job_id: jobId,
+      parent_id: row.parent_id ? (idMap.get(row.parent_id) ?? null) : null,
+      sort_order: row.sort_order,
+      row_kind: row.row_kind,
+      description: row.description,
+      location: row.location,
+      quantity: row.quantity,
+      unit: row.unit,
+      unit_price: row.unit_price,
+      notes: row.notes,
+      scope_status: row.scope_status,
+      is_upgrade: row.is_upgrade,
+      pricing_type: row.pricing_type,
+      replaces_item_id: null,
+      pricing_source_row_id: null,
+      pricing_header_id: null,
+      catalog_sku: row.catalog_sku,
+      source_sku: row.source_sku,
+      total_price: row.total_price,
+    }))
+
+    const { error: insertError } = await auth.supabase
+      .from('job_worksheet_items')
+      .insert(copiedRows)
+
+    if (insertError) return { error: insertError.message }
+  }
+
   revalidateWorksheet(jobId)
   return { estimate: data as Estimate }
 }

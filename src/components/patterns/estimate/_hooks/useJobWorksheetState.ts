@@ -30,8 +30,8 @@ type CreateDraftRowOptions = {
 
 const ALLOWED_UNITS = ['flat', 'ea', 'sqft', 'lnft', 'cuft']
 
-function getBackupKey(jobId: string) {
-  return `hendren:job-worksheet:${jobId}:draft`
+function getBackupKey(jobId: string, estimateId: string) {
+  return `hendren:job-worksheet:${jobId}:${estimateId}:draft`
 }
 
 function getDraftId() {
@@ -99,8 +99,9 @@ function buildPatch(row: JobWorksheetRow): UpdateJobWorksheetRowPatch {
   }
 }
 
-function buildCreateInput(jobId: string, row: JobWorksheetRow): CreateJobWorksheetRowInput {
+function buildCreateInput(jobId: string, estimateId: string, row: JobWorksheetRow): CreateJobWorksheetRowInput {
   return {
+    estimate_id: estimateId,
     job_id: jobId,
     parent_id: row.parent_id,
     sort_order: row.sort_order,
@@ -151,10 +152,10 @@ function mergeBackupRows(initialRows: JobWorksheetRow[], backupRows: JobWorkshee
   return [...mergedRows, ...missingServerRows].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
 }
 
-function readBackup(jobId: string): WorksheetBackup | null {
+function readBackup(jobId: string, estimateId: string): WorksheetBackup | null {
   if (typeof window === 'undefined') return null
   try {
-    const raw = window.localStorage.getItem(getBackupKey(jobId))
+    const raw = window.localStorage.getItem(getBackupKey(jobId, estimateId))
     if (!raw) return null
     const parsed = JSON.parse(raw) as WorksheetBackup
     if (!Array.isArray(parsed.rows)) return null
@@ -164,11 +165,11 @@ function readBackup(jobId: string): WorksheetBackup | null {
   }
 }
 
-function writeBackup(jobId: string, rows: JobWorksheetRow[]) {
+function writeBackup(jobId: string, estimateId: string, rows: JobWorksheetRow[]) {
   if (typeof window === 'undefined') return
   try {
     window.localStorage.setItem(
-      getBackupKey(jobId),
+      getBackupKey(jobId, estimateId),
       JSON.stringify({ savedAt: new Date().toISOString(), rows } satisfies WorksheetBackup)
     )
   } catch {
@@ -176,10 +177,10 @@ function writeBackup(jobId: string, rows: JobWorksheetRow[]) {
   }
 }
 
-function clearBackup(jobId: string) {
+function clearBackup(jobId: string, estimateId: string) {
   if (typeof window === 'undefined') return
   try {
-    window.localStorage.removeItem(getBackupKey(jobId))
+    window.localStorage.removeItem(getBackupKey(jobId, estimateId))
   } catch {
     // no-op
   }
@@ -276,11 +277,12 @@ function findNextActiveRowAfterDelete(rows: JobWorksheetRow[], deletedIds: Set<s
   return null
 }
 
-function createDraftRow(jobId: string, sourceRow: JobWorksheetRow | null, asChild: boolean): JobWorksheetRow {
+function createDraftRow(jobId: string, estimateId: string, sourceRow: JobWorksheetRow | null, asChild: boolean): JobWorksheetRow {
   const childOfSource = asChild && canHaveChildRows(sourceRow)
 
   return {
     id: getDraftId(),
+    estimate_id: estimateId,
     parent_id: childOfSource ? sourceRow?.id ?? null : sourceRow?.parent_id ?? null,
     sort_order: 0,
     row_kind: 'line_item',
@@ -304,6 +306,7 @@ function createDraftRow(jobId: string, sourceRow: JobWorksheetRow | null, asChil
 
 export function useJobWorksheetState(
   jobId: string,
+  estimateId: string,
   initialRows: JobWorksheetRow[],
   persistRow: (rowId: string, patch: UpdateJobWorksheetRowPatch) => Promise<JobWorksheetRow>,
   createRow: (input: CreateJobWorksheetRowInput) => Promise<JobWorksheetRow>,
@@ -367,9 +370,9 @@ export function useJobWorksheetState(
     saveTimersRef.current = {}
     savingRowsRef.current = new Set()
 
-    const backup = readBackup(jobId)
+    const backup = readBackup(jobId, estimateId)
     const restoredRows = backup ? mergeBackupRows(initialRows, backup.rows) : initialRows
-    const nextRows = restoredRows.length > 0 ? restoredRows : normalizeSortOrders([createDraftRow(jobId, null, false)])
+    const nextRows = restoredRows.length > 0 ? restoredRows : normalizeSortOrders([createDraftRow(jobId, estimateId, null, false)])
 
     setLocalRows(nextRows)
     setServerRows(initialRows)
@@ -383,29 +386,29 @@ export function useJobWorksheetState(
     activeCellRef.current = { rowId: nextRows[0].id, field: 'description' }
 
     if (hasUnsavedRows(nextRows, initialRows)) {
-      writeBackup(jobId, nextRows)
+      writeBackup(jobId, estimateId, nextRows)
       nextRows.forEach((row) => {
         if (!isDraftRowId(row.id) && !areEditableFieldsEqual(row, initialRows.find((serverRow) => serverRow.id === row.id))) {
           scheduleFlush(row.id, 900)
         }
       })
     } else {
-      clearBackup(jobId)
+      clearBackup(jobId, estimateId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId, initialRows])
+  }, [jobId, estimateId, initialRows])
 
   useEffect(() => {
     if (!localRows.length) {
-      clearBackup(jobId)
+      clearBackup(jobId, estimateId)
       return
     }
     if (hasUnsavedRows(localRows, serverRows)) {
-      writeBackup(jobId, localRows)
+      writeBackup(jobId, estimateId, localRows)
       return
     }
-    clearBackup(jobId)
-  }, [jobId, localRows, serverRows])
+    clearBackup(jobId, estimateId)
+  }, [jobId, estimateId, localRows, serverRows])
 
   function getLocalRow(rowId: string) {
     return localRowsRef.current.find((row) => row.id === rowId) ?? null
@@ -474,10 +477,10 @@ export function useJobWorksheetState(
 
     savingRowsRef.current.add(row.id)
     setRowState(row.id, 'saving')
-    writeBackup(jobId, localRowsRef.current)
+    writeBackup(jobId, estimateId, localRowsRef.current)
 
     try {
-      const created = await createRow(buildCreateInput(jobId, row))
+      const created = await createRow(buildCreateInput(jobId, estimateId, row))
       const nextRows = localRowsRef.current.map((currentRow) => (currentRow.id === row.id ? created : currentRow))
       const createdServerRows = [...serverRowsRef.current, created]
       const nextServerRows = await persistCurrentSortOrders(nextRows, createdServerRows)
@@ -486,10 +489,10 @@ export function useJobWorksheetState(
       setServerRowsSync(nextServerRows)
       setRowSaveState(buildRowStateMap(nextRows, nextServerRows))
       setActiveCellSync({ rowId: created.id, field: 'description' }, created.description)
-      writeBackup(jobId, nextRows)
+      writeBackup(jobId, estimateId, nextRows)
     } catch {
       setRowState(row.id, 'error')
-      writeBackup(jobId, localRowsRef.current)
+      writeBackup(jobId, estimateId, localRowsRef.current)
     } finally {
       savingRowsRef.current.delete(row.id)
     }
@@ -527,7 +530,7 @@ export function useJobWorksheetState(
       scheduleFlush(rowId, 220)
     } catch {
       setRowState(rowId, 'error')
-      writeBackup(jobId, localRowsRef.current)
+      writeBackup(jobId, estimateId, localRowsRef.current)
     } finally {
       savingRowsRef.current.delete(rowId)
     }
@@ -555,7 +558,7 @@ export function useJobWorksheetState(
     replaceLocalRow(rowId, next)
     setUndoStackSync([...undoStackRef.current, { kind: 'edit', rowId, previousRow: cloneRow(row), nextRow: cloneRow(next) }])
     syncRowState(rowId, next)
-    writeBackup(jobId, localRowsRef.current.map((currentRow) => (currentRow.id === rowId ? next : currentRow)))
+    writeBackup(jobId, estimateId, localRowsRef.current.map((currentRow) => (currentRow.id === rowId ? next : currentRow)))
 
     if (isDraftRowId(rowId)) {
       if (field === 'description' && next.description.trim()) void promoteDraftRow(next)
@@ -581,7 +584,7 @@ export function useJobWorksheetState(
     const sourceRow = safeSourceIndex >= 0 ? rows[safeSourceIndex] : null
     const childOfSource = Boolean(options?.asChild && canHaveChildRows(sourceRow))
     const insertIndex = childOfSource ? safeSourceIndex + 1 : safeSourceIndex >= 0 ? findLastDescendantIndex(rows, safeSourceIndex) + 1 : rows.length
-    const draftRow = createDraftRow(jobId, sourceRow, childOfSource)
+    const draftRow = createDraftRow(jobId, estimateId, sourceRow, childOfSource)
     const nextRows = normalizeSortOrders([
       ...rows.slice(0, insertIndex),
       draftRow,
@@ -590,7 +593,7 @@ export function useJobWorksheetState(
 
     setLocalRowsSync(nextRows)
     setRowSaveState(buildRowStateMap(nextRows, serverRowsRef.current))
-    writeBackup(jobId, nextRows)
+    writeBackup(jobId, estimateId, nextRows)
     setActiveCellSync({ rowId: draftRow.id, field: 'description' }, '')
   }
 
@@ -604,7 +607,7 @@ export function useJobWorksheetState(
     const remainingRows = rows.filter((row) => !deletedIds.has(row.id))
     const nextRows = remainingRows.length > 0
       ? normalizeSortOrders(remainingRows)
-      : normalizeSortOrders([createDraftRow(jobId, null, false)])
+      : normalizeSortOrders([createDraftRow(jobId, estimateId, null, false)])
     const nextServerRows = serverRowsRef.current.filter((row) => !deletedIds.has(row.id))
     const nextActiveRow = targetRow && nextRows.some((row) => row.id === targetRow.id) ? targetRow : nextRows[0]
 
@@ -615,7 +618,7 @@ export function useJobWorksheetState(
     setServerRowsSync(nextServerRows)
     setRowSaveState(buildRowStateMap(nextRows, nextServerRows))
     setActiveCellSync({ rowId: nextActiveRow.id, field: 'description' }, nextActiveRow.description)
-    writeBackup(jobId, nextRows)
+    writeBackup(jobId, estimateId, nextRows)
 
     deletedRows
       .filter((row) => !isDraftRowId(row.id))
@@ -624,7 +627,7 @@ export function useJobWorksheetState(
       .forEach((row) => {
         void deleteRow(row.id).catch(() => {
           setRowState(row.id, 'error')
-          writeBackup(jobId, localRowsRef.current)
+          writeBackup(jobId, estimateId, localRowsRef.current)
         })
       })
   }
@@ -651,7 +654,7 @@ export function useJobWorksheetState(
       setServerRowsSync(nextServerRows)
       setRowSaveState(buildRowStateMap(nextRows, nextServerRows))
       if (activeRow) setActiveCellSync({ rowId: activeRow.id, field: 'description' }, activeRow.description)
-      writeBackup(jobId, nextRows)
+      writeBackup(jobId, estimateId, nextRows)
       void restoreRows(restoredRows.filter((row) => !isDraftRowId(row.id))).catch(() => {
         restoredRows.forEach((row) => setRowState(row.id, 'error'))
       })

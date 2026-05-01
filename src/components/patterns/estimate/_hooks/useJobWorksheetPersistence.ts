@@ -13,6 +13,7 @@ export type UpdateJobWorksheetRowPatch = {
 }
 
 export type CreateJobWorksheetRowInput = {
+  estimate_id: string
   job_id: string
   parent_id: string | null
   sort_order: number

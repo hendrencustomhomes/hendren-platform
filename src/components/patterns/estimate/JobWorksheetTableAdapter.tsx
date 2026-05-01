@@ -20,6 +20,7 @@ export type JobWorksheetScopeStatus = 'included' | 'excluded'
 
 export type JobWorksheetRow = {
   id: string
+  estimate_id: string
   parent_id: string | null
   sort_order: number
   row_kind: JobWorksheetRowKind

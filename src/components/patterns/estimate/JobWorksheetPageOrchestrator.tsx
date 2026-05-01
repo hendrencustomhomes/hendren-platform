@@ -10,6 +10,7 @@ import type { Estimate } from '@/lib/estimateTypes'
 type Props = {
   jobId: string
   jobName: string
+  activeEstimateId: string
   rows: JobWorksheetRow[]
   estimates: Estimate[]
 }
@@ -32,7 +33,7 @@ const secondaryButtonStyle = {
   cursor: 'pointer',
 } as const
 
-export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows, estimates }: Props) {
+export default function JobWorksheetPageOrchestrator({ jobId, jobName, activeEstimateId, rows, estimates }: Props) {
   const { persistRow, createRow, restoreRows, deleteRow, persistSortOrders } = useJobWorksheetPersistence()
 
   const {
@@ -46,7 +47,7 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, rows, est
     deleteWorksheetRow,
     handleUndo,
     saveCounts,
-  } = useJobWorksheetState(jobId, rows, persistRow, createRow, restoreRows, deleteRow, persistSortOrders)
+  } = useJobWorksheetState(jobId, activeEstimateId, rows, persistRow, createRow, restoreRows, deleteRow, persistSortOrders)
 
   const statusLabel = getSheetStatusLabel(saveCounts)
 
