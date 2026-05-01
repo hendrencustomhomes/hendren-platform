@@ -5,6 +5,7 @@ import type { WorksheetActiveCell, WorksheetCellDraftValue, WorksheetRowSaveStat
 import { parseNumber } from '@/lib/shared/numbers'
 import type { JobWorksheetEditableCellKey, JobWorksheetRow } from '../JobWorksheetTableAdapter'
 import type { CreateJobWorksheetRowInput, UpdateJobWorksheetRowPatch, WorksheetSortOrderUpdate } from './useJobWorksheetPersistence'
+import { unitOptions } from '../_worksheetFormatters'
 
 type UndoEntry =
   | {
@@ -27,8 +28,6 @@ type CreateDraftRowOptions = {
   sourceRowId?: string
   asChild?: boolean
 }
-
-const ALLOWED_UNITS = ['flat', 'ea', 'sqft', 'lnft', 'cuft']
 
 function getBackupKey(jobId: string, estimateId: string) {
   return `hendren:job-worksheet:${jobId}:${estimateId}:draft`
@@ -62,7 +61,7 @@ function normalizeText(value: WorksheetCellDraftValue) {
 
 function normalizeUnit(value: WorksheetCellDraftValue, fallback: string | null) {
   const next = String(value ?? '')
-  return ALLOWED_UNITS.includes(next) ? next : fallback ?? 'ea'
+  return (unitOptions as readonly string[]).includes(next) ? next : fallback ?? 'ea'
 }
 
 function applyEditableCellValue(
@@ -103,7 +102,9 @@ function buildCreateInput(jobId: string, estimateId: string, row: JobWorksheetRo
   return {
     estimate_id: estimateId,
     job_id: jobId,
-    parent_id: row.parent_id,
+    // Strip draft parent_ids: a draft ID is not a valid UUID and would cause a FK error.
+    // If the parent hasn't been persisted yet, orphan the child (null parent) rather than failing.
+    parent_id: row.parent_id && !isDraftRowId(row.parent_id) ? row.parent_id : null,
     sort_order: row.sort_order,
     row_kind: row.row_kind,
     description: row.description,
@@ -558,7 +559,7 @@ export function useJobWorksheetState(
     replaceLocalRow(rowId, next)
     setUndoStackSync([...undoStackRef.current, { kind: 'edit', rowId, previousRow: cloneRow(row), nextRow: cloneRow(next) }])
     syncRowState(rowId, next)
-    writeBackup(jobId, estimateId, localRowsRef.current.map((currentRow) => (currentRow.id === rowId ? next : currentRow)))
+    writeBackup(jobId, estimateId, localRowsRef.current)
 
     if (isDraftRowId(rowId)) {
       if (field === 'description' && next.description.trim()) void promoteDraftRow(next)

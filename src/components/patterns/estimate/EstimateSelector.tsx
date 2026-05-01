@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react'
 import type { Estimate, EstimateStatus } from '@/lib/estimateTypes'
 import {
   createEstimate,
@@ -63,6 +63,18 @@ export function EstimateSelector({ jobId, estimates }: Props) {
   const [editingTitle, setEditingTitle] = useState('')
   const [flashError, setFlashError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleOutsideClick(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [open])
 
   const active = estimates.find((e) => e.status === 'active')
   const nonArchived = estimates.filter((e) => e.status !== 'archived')
@@ -93,7 +105,7 @@ export function EstimateSelector({ jobId, estimates }: Props) {
   }
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={containerRef} style={{ position: 'relative' }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

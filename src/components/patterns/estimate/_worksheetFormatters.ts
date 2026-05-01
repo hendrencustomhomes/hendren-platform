@@ -23,5 +23,15 @@ export function parentSubtotal(parent: JobWorksheetRow, rows: JobWorksheetRow[])
 }
 
 export function getDepth(row: JobWorksheetRow, rowsById: Map<string, JobWorksheetRow>): number {
-  return row.parent_id ? 1 : 0
+  let depth = 0
+  let currentParentId = row.parent_id
+  const seen = new Set<string>()
+  while (currentParentId && !seen.has(currentParentId) && depth < 8) {
+    seen.add(currentParentId)
+    const parent = rowsById.get(currentParentId)
+    if (!parent) break
+    depth++
+    currentParentId = parent.parent_id
+  }
+  return depth
 }

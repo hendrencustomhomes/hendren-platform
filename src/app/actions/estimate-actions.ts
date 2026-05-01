@@ -88,6 +88,7 @@ export async function archiveEstimate(
     .from('estimates')
     .update({ status: 'archived', updated_at: new Date().toISOString() })
     .eq('id', estimateId)
+    .eq('job_id', jobId)
 
   if (error) return { error: error.message }
   revalidateWorksheet(jobId)
@@ -191,6 +192,7 @@ export async function renameEstimate(
     .from('estimates')
     .update({ title: title.trim(), updated_at: new Date().toISOString() })
     .eq('id', estimateId)
+    .eq('job_id', jobId)
 
   if (error) return { error: error.message }
   revalidateWorksheet(jobId)
