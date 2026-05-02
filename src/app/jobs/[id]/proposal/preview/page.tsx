@@ -5,6 +5,7 @@ import type { Estimate } from '@/lib/estimateTypes'
 import { ESTIMATE_SELECT } from '@/lib/estimateTypes'
 import { fmtCurrency, fmtQty, fmtUnitPrice, INDENT_PER_DEPTH } from '@/lib/proposalFormatters'
 import type { ProposalSection, ProposalLineItem } from '@/lib/proposalSummary'
+import SnapshotCreateButton from '@/components/patterns/proposal/SnapshotCreateButton'
 
 const STATUS_BADGE: Record<ProposalStatus, { bg: string; color: string; label: string }> = {
   draft:  { bg: '#f1f5f9', color: '#475569', label: 'Draft' },
@@ -37,7 +38,7 @@ export default async function ProposalPreviewPage({ params }: { params: Promise<
   const estimates = (estimatesRaw ?? []) as Estimate[]
   const activeEstimate = estimates.find((e) => e.status === 'active') ?? null
 
-  const [{ data: rowsRaw }, { data: structureRecord }] = await Promise.all([
+  const [{ data: rowsRaw }, { data: structureRecord }, { data: latestDocRaw }] = await Promise.all([
     activeEstimate
       ? supabase
           .from('job_worksheet_items')
@@ -50,6 +51,15 @@ export default async function ProposalPreviewPage({ params }: { params: Promise<
           .from('proposal_structures')
           .select('structure_json, proposal_status, locked_at')
           .eq('estimate_id', activeEstimate.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    activeEstimate
+      ? supabase
+          .from('proposal_documents')
+          .select('id, doc_status, created_at')
+          .eq('estimate_id', activeEstimate.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
           .maybeSingle()
       : Promise.resolve({ data: null }),
   ])
@@ -69,6 +79,7 @@ export default async function ProposalPreviewPage({ params }: { params: Promise<
 
   const summary = applyStructure(structure, worksheetRows)
   const badge = STATUS_BADGE[proposalStatus]
+  const latestDoc = latestDocRaw as { id: string; doc_status: string; created_at: string } | null
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100dvh' }}>
@@ -148,6 +159,21 @@ export default async function ProposalPreviewPage({ params }: { params: Promise<
               </div>
             )}
           </div>
+          {activeEstimate && (
+            <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              {latestDoc && (
+                <a
+                  href={`/jobs/${id}/proposal/documents/${latestDoc.id}`}
+                  style={{ fontSize: '12px', color: 'var(--text-muted)' }}
+                >
+                  Latest snapshot →
+                </a>
+              )}
+              {proposalStatus !== 'voided' && (
+                <SnapshotCreateButton estimateId={activeEstimate.id} jobId={id} />
+              )}
+            </div>
+          )}
         </div>
 
         {/* Sections */}

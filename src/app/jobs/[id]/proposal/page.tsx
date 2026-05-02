@@ -110,7 +110,7 @@ export default async function ProposalSummaryPage({ params }: { params: Promise<
   const estimates = (estimatesRaw ?? []) as Estimate[]
   const activeEstimate = estimates.find((e) => e.status === 'active') ?? null
 
-  const [{ data: rowsRaw }, { data: structureRecord }] = await Promise.all([
+  const [{ data: rowsRaw }, { data: structureRecord }, { data: latestDocRaw }] = await Promise.all([
     activeEstimate
       ? supabase
           .from('job_worksheet_items')
@@ -123,6 +123,15 @@ export default async function ProposalSummaryPage({ params }: { params: Promise<
           .from('proposal_structures')
           .select('structure_json, proposal_status, locked_at')
           .eq('estimate_id', activeEstimate.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    activeEstimate
+      ? supabase
+          .from('proposal_documents')
+          .select('id')
+          .eq('estimate_id', activeEstimate.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
           .maybeSingle()
       : Promise.resolve({ data: null }),
   ])
@@ -141,6 +150,7 @@ export default async function ProposalSummaryPage({ params }: { params: Promise<
   }
 
   const summary = applyStructure(structure, worksheetRows)
+  const latestDocId = (latestDocRaw as any)?.id as string | null ?? null
 
   return (
     <PageShell title={`${job.job_name || 'Job'} · Proposal Summary`} back={`/jobs/${id}`}>
@@ -194,6 +204,11 @@ export default async function ProposalSummaryPage({ params }: { params: Promise<
                 <a href={`/jobs/${id}/proposal/pdf`} style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                   PDF →
                 </a>
+                {latestDocId && (
+                  <a href={`/jobs/${id}/proposal/documents/${latestDocId}`} style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Snapshot →
+                  </a>
+                )}
               </div>
             )}
           </div>
