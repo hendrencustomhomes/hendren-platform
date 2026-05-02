@@ -1,14 +1,15 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
 import {
   saveProposalStructure,
-  lockProposal,
   unlockProposal,
   signProposal,
   voidProposal,
 } from '@/app/actions/proposal-actions'
+import { sendProposal } from '@/app/actions/document-actions'
 import type { ProposalStructureJson, ProposalStructureSection, ProposalStatus } from '@/lib/proposalStructure'
 import type { JobWorksheetRow } from '@/components/patterns/estimate/JobWorksheetTableAdapter'
 
@@ -62,6 +63,7 @@ export default function ProposalBuilderOrchestrator({
   proposalStatus,
   isLocked,
 }: Props) {
+  const router = useRouter()
   const [sections, setSections] = useState<ProposalStructureSection[]>(initialStructure.sections)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [actionError, setActionError] = useState<string | null>(null)
@@ -127,11 +129,15 @@ export default function ProposalBuilderOrchestrator({
     })
   }
 
-  function handleLock() {
+  function handleSend() {
     setActionError(null)
     startTransition(async () => {
-      const result = await lockProposal(estimateId, jobId)
-      if ('error' in result) setActionError(result.error)
+      const result = await sendProposal(estimateId, jobId)
+      if ('error' in result) {
+        setActionError(result.error)
+      } else {
+        router.push(`/jobs/${jobId}/proposal/documents/${result.documentId}`)
+      }
     })
   }
 
@@ -228,10 +234,10 @@ export default function ProposalBuilderOrchestrator({
               </button>
             )}
 
-            {/* Lock: draft → sent */}
+            {/* Send: atomic — locks proposal + estimate + creates snapshot in one transaction */}
             {proposalStatus === 'draft' && (
-              <button type="button" onClick={handleLock} disabled={isPending} style={btnStyle}>
-                Mark as sent
+              <button type="button" onClick={handleSend} disabled={isPending} style={btnStyle}>
+                Send proposal
               </button>
             )}
 
