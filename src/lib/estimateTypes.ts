@@ -11,4 +11,9 @@ export type Estimate = {
   created_by: string | null
   created_at: string
   updated_at: string
+  locked_at: string | null
+  locked_by: string | null
 }
+
+export const ESTIMATE_SELECT =
+  'id, job_id, title, status, is_change_order, parent_estimate_id, created_by, created_at, updated_at, locked_at, locked_by'

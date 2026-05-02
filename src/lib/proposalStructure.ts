@@ -4,6 +4,8 @@ import type { JobWorksheetRow } from '@/components/patterns/estimate/JobWorkshee
 import { rowTotal } from '@/components/patterns/estimate/_worksheetFormatters'
 import type { ProposalLineItem, ProposalSection, ProposalSummary } from './proposalSummary'
 
+export type ProposalStatus = 'draft' | 'sent' | 'signed' | 'voided'
+
 export type ProposalStructureSection = {
   id: string
   title: string | null        // null = use first source row's description
@@ -13,6 +15,39 @@ export type ProposalStructureSection = {
 
 export type ProposalStructureJson = {
   sections: ProposalStructureSection[]
+}
+
+// Reconcile a saved structure with current worksheet rows (call only when NOT locked).
+// Preserves saved section order, visibility, and title overrides.
+// Appends newly discovered top-level rows as visible sections at the end.
+// Rows that have been deleted from the worksheet are left in-place (applyStructure skips them).
+export function reconcileStructure(
+  saved: ProposalStructureJson,
+  rows: JobWorksheetRow[],
+): ProposalStructureJson {
+  const rowsById = new Map<string, JobWorksheetRow>()
+  for (const row of rows) rowsById.set(row.id, row)
+
+  const topLevel = rows
+    .filter((row) => !row.parent_id || !rowsById.has(row.parent_id))
+    .sort((a, b) => a.sort_order - b.sort_order)
+
+  const knownIds = new Set<string>()
+  for (const s of saved.sections) {
+    for (const rowId of s.source_row_ids) knownIds.add(rowId)
+  }
+
+  const newSections: ProposalStructureSection[] = topLevel
+    .filter((row) => !knownIds.has(row.id))
+    .map((row) => ({
+      id: crypto.randomUUID(),
+      title: null,
+      source_row_ids: [row.id],
+      visible: true,
+    }))
+
+  if (newSections.length === 0) return saved
+  return { sections: [...saved.sections, ...newSections] }
 }
 
 // Derive a default structure from worksheet rows: each top-level row becomes one section.

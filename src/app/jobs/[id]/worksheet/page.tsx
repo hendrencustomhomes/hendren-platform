@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import JobWorksheetPageOrchestrator from '@/components/patterns/estimate/JobWorksheetPageOrchestrator'
 import type { Estimate } from '@/lib/estimateTypes'
+import { ESTIMATE_SELECT } from '@/lib/estimateTypes'
 
 export default async function JobWorksheetPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -20,7 +21,7 @@ export default async function JobWorksheetPage({ params }: { params: Promise<{ i
 
   const { data: estimatesRaw } = await supabase
     .from('estimates')
-    .select('id, job_id, title, status, is_change_order, parent_estimate_id, created_by, created_at, updated_at')
+    .select(ESTIMATE_SELECT)
     .eq('job_id', id)
     .order('created_at', { ascending: true })
 
@@ -45,7 +46,7 @@ export default async function JobWorksheetPage({ params }: { params: Promise<{ i
       const { data: created } = await supabase
         .from('estimates')
         .insert({ job_id: id, title: 'Base Estimate', status: 'active', created_by: user.id })
-        .select('id, job_id, title, status, is_change_order, parent_estimate_id, created_by, created_at, updated_at')
+        .select(ESTIMATE_SELECT)
         .single()
 
       if (created) {
@@ -67,6 +68,8 @@ export default async function JobWorksheetPage({ params }: { params: Promise<{ i
     console.error('job_worksheet_items load failed:', rowsError)
   }
 
+  const isLocked = !!(activeEstimate as any)?.locked_at
+
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh', color: 'var(--text)', fontFamily: 'system-ui,-apple-system,sans-serif' }}>
       <div style={{ width: '100%', maxWidth: '100%', margin: '0 auto', padding: '0 24px', boxSizing: 'border-box' }}>
@@ -76,6 +79,7 @@ export default async function JobWorksheetPage({ params }: { params: Promise<{ i
           activeEstimateId={activeEstimate?.id ?? ''}
           rows={(rows || []) as any}
           estimates={estimates}
+          isLocked={isLocked}
         />
       </div>
     </div>

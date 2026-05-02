@@ -1,8 +1,9 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect, notFound } from 'next/navigation'
-import { deriveDefaultStructure, type ProposalStructureJson } from '@/lib/proposalStructure'
+import { deriveDefaultStructure, reconcileStructure, type ProposalStructureJson, type ProposalStatus } from '@/lib/proposalStructure'
 import ProposalBuilderOrchestrator from '@/components/patterns/proposal/ProposalBuilderOrchestrator'
 import type { Estimate } from '@/lib/estimateTypes'
+import { ESTIMATE_SELECT } from '@/lib/estimateTypes'
 
 export default async function ProposalBuilderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -21,7 +22,7 @@ export default async function ProposalBuilderPage({ params }: { params: Promise<
 
   const { data: estimatesRaw } = await supabase
     .from('estimates')
-    .select('id, job_id, title, status, is_change_order, parent_estimate_id, created_by, created_at, updated_at')
+    .select(ESTIMATE_SELECT)
     .eq('job_id', id)
     .order('created_at', { ascending: true })
 
@@ -40,14 +41,23 @@ export default async function ProposalBuilderPage({ params }: { params: Promise<
       .order('sort_order', { ascending: true }),
     supabase
       .from('proposal_structures')
-      .select('structure_json')
+      .select('structure_json, proposal_status, locked_at')
       .eq('estimate_id', activeEstimate.id)
       .maybeSingle(),
   ])
 
   const worksheetRows = (rowsRaw ?? []) as any[]
-  const structure: ProposalStructureJson =
-    (structureRecord as any)?.structure_json ?? deriveDefaultStructure(worksheetRows)
+  const proposalStatus = ((structureRecord as any)?.proposal_status ?? 'draft') as ProposalStatus
+  const isLocked = !!((structureRecord as any)?.locked_at)
+
+  let structure: ProposalStructureJson
+  if (!(structureRecord as any)?.structure_json) {
+    structure = deriveDefaultStructure(worksheetRows)
+  } else if (isLocked) {
+    structure = (structureRecord as any).structure_json
+  } else {
+    structure = reconcileStructure((structureRecord as any).structure_json, worksheetRows)
+  }
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh', color: 'var(--text)', fontFamily: 'system-ui,-apple-system,sans-serif' }}>
@@ -59,6 +69,8 @@ export default async function ProposalBuilderPage({ params }: { params: Promise<
           estimateTitle={activeEstimate.title}
           worksheetRows={worksheetRows}
           initialStructure={structure}
+          proposalStatus={proposalStatus}
+          isLocked={isLocked}
         />
       </div>
     </div>

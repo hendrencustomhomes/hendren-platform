@@ -2,8 +2,9 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { PageShell } from '@/components/layout/PageShell'
 import { type ProposalSection, type ProposalLineItem } from '@/lib/proposalSummary'
-import { deriveDefaultStructure, applyStructure, type ProposalStructureJson } from '@/lib/proposalStructure'
+import { deriveDefaultStructure, reconcileStructure, applyStructure, type ProposalStructureJson, type ProposalStatus } from '@/lib/proposalStructure'
 import type { Estimate } from '@/lib/estimateTypes'
+import { ESTIMATE_SELECT } from '@/lib/estimateTypes'
 
 function fmtCurrency(val: number): string {
   return '$' + val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -120,7 +121,7 @@ export default async function ProposalSummaryPage({ params }: { params: Promise<
 
   const { data: estimatesRaw } = await supabase
     .from('estimates')
-    .select('id, job_id, title, status, is_change_order, parent_estimate_id, created_by, created_at, updated_at')
+    .select(ESTIMATE_SELECT)
     .eq('job_id', id)
     .order('created_at', { ascending: true })
 
@@ -138,15 +139,25 @@ export default async function ProposalSummaryPage({ params }: { params: Promise<
     activeEstimate
       ? supabase
           .from('proposal_structures')
-          .select('structure_json')
+          .select('structure_json, proposal_status, locked_at')
           .eq('estimate_id', activeEstimate.id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
   ])
 
   const worksheetRows = (rowsRaw ?? []) as any
-  const structure: ProposalStructureJson =
-    (structureRecord as any)?.structure_json ?? deriveDefaultStructure(worksheetRows)
+  const proposalStatus = ((structureRecord as any)?.proposal_status ?? 'draft') as ProposalStatus
+  const isLocked = !!((structureRecord as any)?.locked_at)
+
+  let structure: ProposalStructureJson
+  if (!(structureRecord as any)?.structure_json) {
+    structure = deriveDefaultStructure(worksheetRows)
+  } else if (isLocked) {
+    structure = (structureRecord as any).structure_json
+  } else {
+    structure = reconcileStructure((structureRecord as any).structure_json, worksheetRows)
+  }
+
   const summary = applyStructure(structure, worksheetRows)
 
   return (
@@ -167,15 +178,35 @@ export default async function ProposalSummaryPage({ params }: { params: Promise<
         >
           <div>
             <div style={{ fontSize: '18px', fontWeight: 700 }}>Proposal Summary</div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              {activeEstimate ? activeEstimate.title : 'No active estimate'} · Read-only
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                {activeEstimate ? activeEstimate.title : 'No active estimate'} · Read-only
+              </span>
+              {activeEstimate && (
+                <span style={{
+                  fontSize: '10px',
+                  padding: '2px 7px',
+                  borderRadius: '4px',
+                  fontWeight: 700,
+                  background:
+                    proposalStatus === 'signed' ? '#dbeafe' :
+                    proposalStatus === 'sent' ? '#fef9c3' :
+                    proposalStatus === 'voided' ? '#fee2e2' : '#f1f5f9',
+                  color:
+                    proposalStatus === 'signed' ? '#1d4ed8' :
+                    proposalStatus === 'sent' ? '#92400e' :
+                    proposalStatus === 'voided' ? '#991b1b' : '#475569',
+                }}>
+                  {proposalStatus}
+                </span>
+              )}
             </div>
             {activeEstimate && (
               <a
                 href={`/jobs/${id}/proposal/builder`}
                 style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px', display: 'inline-block' }}
               >
-                Customize structure →
+                {isLocked ? 'View structure →' : 'Customize structure →'}
               </a>
             )}
           </div>

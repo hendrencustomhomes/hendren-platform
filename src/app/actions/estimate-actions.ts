@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/utils/supabase/server'
 import type { Estimate } from '@/lib/estimateTypes'
+import { ESTIMATE_SELECT } from '@/lib/estimateTypes'
 import { parseImportCsv } from '@/lib/worksheetCsv'
 
 async function requireUser() {
@@ -24,7 +25,7 @@ export async function getEstimatesForJob(
 
   const { data, error } = await auth.supabase
     .from('estimates')
-    .select('id, job_id, title, status, is_change_order, parent_estimate_id, created_by, created_at, updated_at')
+    .select(ESTIMATE_SELECT)
     .eq('job_id', jobId)
     .order('created_at', { ascending: true })
 
@@ -42,7 +43,7 @@ export async function createEstimate(
   const { data, error } = await auth.supabase
     .from('estimates')
     .insert({ job_id: jobId, title, status: 'draft', created_by: auth.user.id })
-    .select('id, job_id, title, status, is_change_order, parent_estimate_id, created_by, created_at, updated_at')
+    .select(ESTIMATE_SELECT)
     .single()
 
   if (error) return { error: error.message }
@@ -131,7 +132,7 @@ export async function duplicateEstimate(
       is_change_order: source.is_change_order,
       created_by: auth.user.id,
     })
-    .select('id, job_id, title, status, is_change_order, parent_estimate_id, created_by, created_at, updated_at')
+    .select(ESTIMATE_SELECT)
     .single()
 
   if (error) return { error: error.message }
@@ -186,6 +187,8 @@ export async function importEstimate(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
+  // Import always creates a new draft estimate — it is never locked by definition.
+  // (Locking applies to existing estimates, not freshly created ones.)
   const { data: newEstimate, error: createError } = await auth.supabase
     .from('estimates')
     .insert({ job_id: jobId, title: 'Imported Estimate', status: 'draft', created_by: auth.user.id })

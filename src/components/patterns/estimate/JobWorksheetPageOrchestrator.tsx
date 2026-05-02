@@ -15,6 +15,7 @@ type Props = {
   activeEstimateId: string
   rows: JobWorksheetRow[]
   estimates: Estimate[]
+  isLocked?: boolean
 }
 
 function getSheetStatusLabel(saveCounts: { saving: number; dirty: number; error: number }) {
@@ -43,7 +44,7 @@ function csvEscape(value: string | number | null | undefined): string {
   return s
 }
 
-export default function JobWorksheetPageOrchestrator({ jobId, jobName, activeEstimateId, rows, estimates }: Props) {
+export default function JobWorksheetPageOrchestrator({ jobId, jobName, activeEstimateId, rows, estimates, isLocked = false }: Props) {
   const { persistRow, createRow, restoreRows, deleteRow, persistSortOrders } = useJobWorksheetPersistence(activeEstimateId)
 
   const {
@@ -135,6 +136,21 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, activeEst
   return (
     <PageShell title={`${jobName || 'Job'} · Worksheet`} back={`/jobs/${jobId}`}>
       <div style={{ display: 'grid', gap: '12px' }}>
+        {isLocked && (
+          <div style={{
+            background: '#fef9c3',
+            border: '1px solid #fcd34d',
+            borderRadius: '8px',
+            padding: '10px 14px',
+            fontSize: '12px',
+            color: '#92400e',
+          }}>
+            This estimate is locked — a proposal has been sent or signed. Edits are blocked.{' '}
+            <a href={`/jobs/${jobId}/proposal/builder`} style={{ color: 'inherit', fontWeight: 700 }}>
+              Manage proposal →
+            </a>
+          </div>
+        )}
         <div
           style={{
             background: 'var(--surface)',
@@ -147,7 +163,7 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, activeEst
             <div>
               <div style={{ fontSize: '18px', fontWeight: 700 }}>Internal Job Worksheet</div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                Editable slice. Changes auto-save.
+                {isLocked ? 'Locked — read only.' : 'Editable slice. Changes auto-save.'}
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -164,24 +180,28 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, activeEst
               <button type="button" onClick={handleExport} style={secondaryButtonStyle}>
                 Export CSV
               </button>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isPending}
-                style={secondaryButtonStyle}
-              >
-                {isPending ? 'Importing…' : 'Import CSV'}
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                style={{ display: 'none' }}
-                onChange={handleImportFileChange}
-              />
-              <button type="button" onClick={() => createDraftRowAfter()} style={secondaryButtonStyle}>
-                Add row
-              </button>
+              {!isLocked && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isPending}
+                    style={secondaryButtonStyle}
+                  >
+                    {isPending ? 'Importing…' : 'Import CSV'}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv"
+                    style={{ display: 'none' }}
+                    onChange={handleImportFileChange}
+                  />
+                  <button type="button" onClick={() => createDraftRowAfter()} style={secondaryButtonStyle}>
+                    Add row
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
