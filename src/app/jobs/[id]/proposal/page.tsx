@@ -6,25 +6,7 @@ import { deriveDefaultStructure, reconcileStructure, applyStructure, type Propos
 import type { Estimate } from '@/lib/estimateTypes'
 import { ESTIMATE_SELECT } from '@/lib/estimateTypes'
 
-function fmtCurrency(val: number): string {
-  return '$' + val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-function fmtQty(quantity: number | string | null, unit: string | null): string {
-  if (quantity == null || quantity === '') return ''
-  const q = Number(quantity)
-  if (Number.isNaN(q)) return ''
-  return unit ? `${q} ${unit}` : String(q)
-}
-
-function fmtUnitPrice(val: number | string | null): string {
-  if (val == null || val === '') return ''
-  const n = Number(val)
-  if (Number.isNaN(n) || n === 0) return ''
-  return '$' + n.toFixed(2)
-}
-
-const INDENT_PER_DEPTH = 16
+import { fmtCurrency, fmtQty, fmtUnitPrice, INDENT_PER_DEPTH } from '@/lib/proposalFormatters'
 
 function SectionHeader({ section }: { section: ProposalSection }) {
   return (
@@ -202,12 +184,14 @@ export default async function ProposalSummaryPage({ params }: { params: Promise<
               )}
             </div>
             {activeEstimate && (
-              <a
-                href={`/jobs/${id}/proposal/builder`}
-                style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px', display: 'inline-block' }}
-              >
-                {isLocked ? 'View structure →' : 'Customize structure →'}
-              </a>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '6px' }}>
+                <a href={`/jobs/${id}/proposal/builder`} style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {isLocked ? 'View structure →' : 'Customize structure →'}
+                </a>
+                <a href={`/jobs/${id}/proposal/preview`} style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  Preview →
+                </a>
+              </div>
             )}
           </div>
           {summary.grandTotal > 0 && (

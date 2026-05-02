@@ -203,6 +203,11 @@ export default function ProposalBuilderOrchestrator({
               {estimateTitle}
               {isLocked ? ' · Read-only — proposal is locked' : ' · Reorder, hide, or rename sections'}
             </div>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '6px' }}>
+              <a href={`/jobs/${jobId}/proposal/preview`} style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                Preview →
+              </a>
+            </div>
           </div>
 
           {/* Action buttons */}
