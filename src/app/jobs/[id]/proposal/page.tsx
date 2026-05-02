@@ -1,7 +1,8 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { PageShell } from '@/components/layout/PageShell'
-import { buildProposalSummary, type ProposalSection, type ProposalLineItem } from '@/lib/proposalSummary'
+import { type ProposalSection, type ProposalLineItem } from '@/lib/proposalSummary'
+import { deriveDefaultStructure, applyStructure, type ProposalStructureJson } from '@/lib/proposalStructure'
 import type { Estimate } from '@/lib/estimateTypes'
 
 function fmtCurrency(val: number): string {
@@ -126,15 +127,27 @@ export default async function ProposalSummaryPage({ params }: { params: Promise<
   const estimates = (estimatesRaw ?? []) as Estimate[]
   const activeEstimate = estimates.find((e) => e.status === 'active') ?? null
 
-  const { data: rowsRaw } = activeEstimate
-    ? await supabase
-        .from('job_worksheet_items')
-        .select('*')
-        .eq('estimate_id', activeEstimate.id)
-        .order('sort_order', { ascending: true })
-    : { data: [] }
+  const [{ data: rowsRaw }, { data: structureRecord }] = await Promise.all([
+    activeEstimate
+      ? supabase
+          .from('job_worksheet_items')
+          .select('*')
+          .eq('estimate_id', activeEstimate.id)
+          .order('sort_order', { ascending: true })
+      : Promise.resolve({ data: [] }),
+    activeEstimate
+      ? supabase
+          .from('proposal_structures')
+          .select('structure_json')
+          .eq('estimate_id', activeEstimate.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
 
-  const summary = buildProposalSummary((rowsRaw ?? []) as any)
+  const worksheetRows = (rowsRaw ?? []) as any
+  const structure: ProposalStructureJson =
+    (structureRecord as any)?.structure_json ?? deriveDefaultStructure(worksheetRows)
+  const summary = applyStructure(structure, worksheetRows)
 
   return (
     <PageShell title={`${job.job_name || 'Job'} · Proposal Summary`} back={`/jobs/${id}`}>
@@ -157,6 +170,14 @@ export default async function ProposalSummaryPage({ params }: { params: Promise<
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
               {activeEstimate ? activeEstimate.title : 'No active estimate'} · Read-only
             </div>
+            {activeEstimate && (
+              <a
+                href={`/jobs/${id}/proposal/builder`}
+                style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px', display: 'inline-block' }}
+              >
+                Customize structure →
+              </a>
+            )}
           </div>
           {summary.grandTotal > 0 && (
             <div style={{ textAlign: 'right' }}>
