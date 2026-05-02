@@ -191,6 +191,9 @@ export default async function ProposalSummaryPage({ params }: { params: Promise<
                 <a href={`/jobs/${id}/proposal/preview`} style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                   Preview →
                 </a>
+                <a href={`/jobs/${id}/proposal/pdf`} style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  PDF →
+                </a>
               </div>
             )}
           </div>

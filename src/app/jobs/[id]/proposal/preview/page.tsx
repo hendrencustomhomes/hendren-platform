@@ -101,6 +101,12 @@ export default async function ProposalPreviewPage({ params }: { params: Promise<
         >
           {isLocked ? 'View structure →' : 'Edit structure →'}
         </a>
+        <a
+          href={`/jobs/${id}/proposal/pdf`}
+          style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}
+        >
+          PDF →
+        </a>
       </div>
 
       <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '760px', margin: '0 auto' }}>
