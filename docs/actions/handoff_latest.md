@@ -1,58 +1,70 @@
-# Handoff — 2026-05-03
+# Handoff — 2026-05-03 (Docs Sync Slice)
 
 ## What changed this session
 
-### 1. Docs restructure (completed)
-- `docs/claude/` → `docs/slices/` (19 slice/bugfix/stitch docs)
-- New `docs/audits/` folder with 12 audit/cleanup docs moved from `docs/claude/`:
-  - `catalog_audit_r01.md`, `catalog_identity_edit_r01.md`, `catalog_stress_audit_r01.md`
-  - `pricing_stabilization_audit_r01.md`
-  - `worksheet_cleanup_slice_r01–r05a–r05b.md` (6 files)
-  - `worksheet_stability_audit_r01.md`, `worksheet_takeoff_reuse_audit_r01.md`
-- All `docs/claude/` path references updated to `docs/slices/` in:
-  - `docs/actions/current.md`
-  - `docs/craft-agent/project_state.md`
-  - All internal cross-references within `docs/slices/` files
-- `docs/actions/current.md` updated to record audit folder location
+### 1. Current state doc corrected (completed)
+- `docs/actions/current.md` updated to reflect verified code truth
+- Pricing orchestrator confirmed live via:
+  - `PricingWorksheetPage.tsx` exporting orchestrator
+  - `PricingWorksheetPageOrchestrator.tsx` active composition layer
+- Removed ambiguity around pricing “reverted” state (marked as stale doc issue, not active truth)
 
-### Earlier in session (prior context)
-- Slice 17 (pricing link) implemented and pushed to dev
-- Stop hook fixed to skip push check for `claude/*` branches
-- 8 stale docs archived to `docs/archive/stale-2026-05-02/`
+### 2. Conflicts triaged
+
+#### Conflict A — Pricing state
+- RESOLVED via code verification
+- Docs claiming revert are stale and should not drive decisions
+
+#### Conflict B — Missing architecture doc
+- CONFIRMED missing via repo search
+- Still requires deliberate slice (create vs remove reference)
+
+#### Conflict C — instructions.md
+- DOWNGRADED
+- File not found on `dev` during sync
+- Do not act unless file is confirmed to exist in current repo
+
+### 3. project_state.md handling
+- `docs/craft-agent/project_state.md` did not resolve via direct path on `dev`
+- Avoided recreating or modifying to prevent duplicate truth sources
+- Requires explicit decision in future slice if this file is still intended to exist
 
 ---
 
 ## Current state
 
-- Branch `dev` is clean and up to date
-- Slice 17 is complete (pricing link UI + server actions)
-- Doc folder structure:
-  - `docs/slices/` — slice reports (authoritative execution history)
-  - `docs/audits/` — audit, cleanup, and worksheet-family audit docs
-  - `docs/archive/stale-2026-05-02/` — superseded design docs
-  - `docs/actions/` — session operating memory
-  - `docs/modules/` — module specs
-  - `docs/design/` — design standards
+- Branch `dev` is clean
+- Slice 17 is still the latest completed execution slice
+- Pricing system is **confirmed orchestrated + active in code**
+- Docs are now aligned with code for pricing state
 
 ---
 
 ## Next steps
 
-1. **Resolve Conflict A** — Pricing truth: `docs/modules/pricing/*` (r03) says orchestrated worksheet is live; `docs/craft-agent/project_state.md` says it was reverted. Verify actual imports in code before any pricing work.
-2. **Resolve Conflict B** — `hendren_platform_architecture.md` referenced in execution doc but does not exist. Create or remove reference.
-3. **Resolve Conflict C** — `instructions.md` references missing `docs/dev_scope.md`. Replace with Actions docs entry point.
-4. **Continue estimate/proposal enhancements** only after conflicts verified.
+1. **Architecture doc decision (high priority)**
+   - Create `hendren_platform_architecture.md` OR
+   - Remove/replace references in execution docs
+
+2. **Estimate/proposal gap verification**
+   - Inspect Slice 17 outputs in code
+   - Identify real missing behavior before defining Slice 18
+
+3. **Takeoff vs worksheet audit**
+   - Confirm whether legacy Takeoff paths are still reachable
+   - Validate single source of truth direction (`job_worksheet_items`)
 
 ---
 
 ## What NOT to touch
 
-- Do not re-rename `docs/slices/` or `docs/audits/` without a deliberate slice
-- Do not rebuild shared worksheet logic
-- Do not assume pricing centralization state without checking code
+- Do not rebuild pricing or worksheet architecture
+- Do not recreate `project_state.md` without confirming ownership
+- Do not introduce new systems
+- Do not modify estimate/proposal flow without verifying actual gaps
 
 ---
 
 ## current.md updated?
 
-Yes — updated to record `docs/audits/` location under section 2.
+Yes — updated to reflect pricing truth and remove stale conflict framing
