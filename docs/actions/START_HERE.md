@@ -128,7 +128,21 @@ Claude Chat = SQL / DB
 
 ---
 
-## 12. Next required file
+## 12. File write safety
+
+Before modifying any existing repo file, ChatGPT must read the full current file from `dev`.
+
+Do not write from memory.
+Do not overwrite a full file with a patch fragment.
+Do not replace a file unless full replacement is explicitly intended.
+
+Default edit mode is surgical: preserve unrelated content exactly.
+
+If the file is too large or risky to safely rewrite, stop and report instead of writing.
+
+---
+
+## 13. Next required file
 
 Create next:
 
@@ -136,7 +150,7 @@ Create next:
 
 ---
 
-## 13. Fresh chat opener
+## 14. Fresh chat opener
 
 Use this:
 
@@ -144,6 +158,6 @@ Use this:
 
 ---
 
-## 14. Directive
+## 15. Directive
 
 Keep the repo clean, current, and resumable.
