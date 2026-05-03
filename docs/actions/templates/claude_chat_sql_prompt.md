@@ -11,13 +11,15 @@ You are working on the Hendren Platform Supabase database.
 
 Branch/context target: dev
 
-Start by reading:
-1. docs/actions/START_HERE.md
-2. docs/actions/current.md
-3. [ADD ACTIVE MODULE OR SLICE DOCS ONLY]
+[OPTIONAL — ONLY IF REQUIRED FOR THIS TASK]
+Reference docs:
+- [SPECIFIC SLICE OR MODULE DOC ONLY]
 
 Task:
 [ONE-SENTENCE DATABASE OBJECTIVE]
+
+Context:
+[ALL REQUIRED CONTEXT MUST BE PROVIDED HERE — do not rely on external docs unless explicitly listed above]
 
 Database scope:
 - [TABLE / FUNCTION / POLICY / VIEW]
@@ -34,7 +36,7 @@ Rules:
 - Do not combine unrelated schema changes.
 - Do not make destructive changes unless explicitly authorized in this prompt.
 - Do not drop tables, columns, enum values, policies, or data without explicit approval.
-- If the live DB differs from repo docs, stop and report the mismatch before changing schema.
+- If the live DB differs from provided context, stop and report the mismatch before changing schema.
 - If RLS is involved, inspect existing policies before proposing changes.
 - Prefer additive changes unless the prompt explicitly authorizes cleanup/removal.
 
@@ -67,6 +69,9 @@ Required final report:
 ---
 
 ## Notes for Actions GPT
+
+- ALL required context should be embedded directly in the prompt whenever possible.
+- Only reference docs when absolutely necessary for that specific slice.
 
 Use this template when the task involves:
 
