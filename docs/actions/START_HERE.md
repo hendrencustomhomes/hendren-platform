@@ -10,6 +10,8 @@ Purpose: mandatory starting point for every fresh Actions GPT session.
 
 Start here. Not from memory. Not from prior chats. Not from `main`.
 
+All rules in this file remain active for the entire session. Re-check before writing or modifying files.
+
 ---
 
 ## 2. Startup sequence (always follow)
@@ -24,18 +26,28 @@ If `current.md` does not exist → create it before implementation work.
 
 ---
 
-## 3. Source of truth order
+## 3. Keyword triggers
+
+- "sync" → perform full sync before any work
+- "handoff" → execute handoff procedure and update repo docs
+- "slice" → define a bounded unit (1–3 max per session)
+
+If a session begins without an explicit sync, perform one anyway.
+
+---
+
+## 4. Source of truth order
 
 1. `docs/actions/START_HERE.md`
 2. `docs/actions/current.md`
 3. `docs/actions/handoff_latest.md`
 4. Active docs listed in `current.md`
 
-Everything else is secondary unless explicitly referenced.
+If a document is not referenced in `current.md`, treat it as non-authoritative.
 
 ---
 
-## 4. Branch rule
+## 5. Branch rule
 
 `dev` is the only development truth.
 
@@ -45,7 +57,7 @@ Everything else is secondary unless explicitly referenced.
 
 ---
 
-## 5. Session constraint
+## 6. Session constraint
 
 Each chat = **1–3 slices max**
 
@@ -54,11 +66,15 @@ A slice must be:
 - testable
 - non-drifting
 
+If additional work is discovered mid-slice:
+- do not include it
+- list it as a future slice
+
 Stop before context gets fuzzy.
 
 ---
 
-## 6. Sync rule
+## 7. Sync rule
 
 Every new session begins with a sync:
 
@@ -71,12 +87,13 @@ No blind execution.
 
 ---
 
-## 7. Handoff rule
+## 8. Handoff rule
 
 End of session must:
 
 - Update `docs/actions/current.md` (if truth changed)
 - Overwrite `docs/actions/handoff_latest.md`
+- Explicitly state whether `current.md` was updated or intentionally not updated
 
 Handoff must include:
 - what changed
@@ -86,7 +103,7 @@ Handoff must include:
 
 ---
 
-## 8. Scope of Actions docs
+## 9. Scope of Actions docs
 
 These files are **ChatGPT operating memory only**.
 
@@ -100,7 +117,7 @@ They do NOT replace module specs.
 
 ---
 
-## 9. Conflict handling
+## 10. Conflict handling
 
 If docs disagree:
 
@@ -108,11 +125,15 @@ If docs disagree:
 2. Verify against code
 3. Record conflict in `current.md`
 
-Do not guess.
+If a conflict affects implementation direction:
+- stop
+- present the conflict
+- propose options
+- do not proceed with assumptions
 
 ---
 
-## 10. Tool roles
+## 11. Tool roles
 
 Actions GPT = planner + truth manager
 Claude Code = executor
@@ -120,7 +141,7 @@ Claude Chat = SQL / DB
 
 ---
 
-## 11. Database rule
+## 12. Database rule
 
 - Schema changes = migrations only
 - No casual DDL
@@ -128,7 +149,7 @@ Claude Chat = SQL / DB
 
 ---
 
-## 12. File write safety
+## 13. File write safety
 
 Before modifying any existing repo file, ChatGPT must read the full current file from `dev`.
 
@@ -142,7 +163,7 @@ If the file is too large or risky to safely rewrite, stop and report instead of 
 
 ---
 
-## 13. Design standard (non-negotiable)
+## 14. Design standard (non-negotiable)
 
 All file writes and edits must conform to:
 
@@ -154,6 +175,7 @@ Do not introduce:
 - duplicated logic or styling
 - multiple owners of the same concern
 - module logic inside shared UI
+- alternative/parallel patterns for an existing concern
 
 Prefer:
 - small, single-responsibility files
@@ -165,9 +187,13 @@ Before writing new files or extracting logic:
 - prefer reuse over creation
 - justify any new structure that cannot reuse an existing pattern
 
+Before proposing structural or architectural changes:
+- read relevant repo files or docs
+- do not reason from memory or assumptions
+
 ---
 
-## 14. Next required file
+## 15. Next required file
 
 Create next:
 
@@ -175,7 +201,7 @@ Create next:
 
 ---
 
-## 15. Fresh chat opener
+## 16. Fresh chat opener
 
 Use this:
 
@@ -183,6 +209,6 @@ Use this:
 
 ---
 
-## 16. Directive
+## 17. Directive
 
 Keep the repo clean, current, and resumable.
