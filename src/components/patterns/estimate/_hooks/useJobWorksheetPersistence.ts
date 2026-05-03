@@ -1,6 +1,12 @@
 'use client'
 
-import { createClient } from '@/utils/supabase/client'
+import {
+  persistWorksheetRow,
+  createWorksheetRow,
+  restoreWorksheetRows,
+  deleteWorksheetRow,
+  persistWorksheetSortOrders,
+} from '@/app/actions/worksheet-item-actions'
 import type { JobWorksheetRow, JobWorksheetRowKind } from '../JobWorksheetTableAdapter'
 
 export type UpdateJobWorksheetRowPatch = {
@@ -37,82 +43,32 @@ export type WorksheetSortOrderUpdate = {
 }
 
 export function useJobWorksheetPersistence(estimateId: string) {
-  const supabase = createClient()
-
   async function persistRow(rowId: string, patch: UpdateJobWorksheetRowPatch) {
-    const { data, error } = await supabase
-      .from('job_worksheet_items')
-      .update(patch)
-      .eq('id', rowId)
-      .eq('estimate_id', estimateId)
-      .select('*')
-      .single()
-
-    if (error || !data) {
-      throw error ?? new Error('Failed to save worksheet row.')
-    }
-
-    return data as JobWorksheetRow
+    const result = await persistWorksheetRow(estimateId, rowId, patch)
+    if ('error' in result) throw new Error(result.error)
+    return result
   }
 
   async function createRow(input: CreateJobWorksheetRowInput) {
-    const { data, error } = await supabase
-      .from('job_worksheet_items')
-      .insert(input)
-      .select('*')
-      .single()
-
-    if (error || !data) {
-      throw error ?? new Error('Failed to create worksheet row.')
-    }
-
-    return data as JobWorksheetRow
+    const result = await createWorksheetRow(input)
+    if ('error' in result) throw new Error(result.error)
+    return result
   }
 
   async function restoreRows(rows: JobWorksheetRow[]) {
-    if (rows.length === 0) return []
-
-    const { data, error } = await supabase
-      .from('job_worksheet_items')
-      .insert(rows as any[])
-      .select('*')
-
-    if (error || !data) {
-      throw error ?? new Error('Failed to restore worksheet rows.')
-    }
-
-    return data as JobWorksheetRow[]
+    const result = await restoreWorksheetRows(estimateId, rows)
+    if ('error' in result) throw new Error(result.error)
+    return result
   }
 
   async function deleteRow(rowId: string) {
-    const { error } = await supabase
-      .from('job_worksheet_items')
-      .delete()
-      .eq('id', rowId)
-      .eq('estimate_id', estimateId)
-
-    if (error) {
-      throw error
-    }
+    const result = await deleteWorksheetRow(estimateId, rowId)
+    if ('error' in result) throw new Error(result.error)
   }
 
   async function persistSortOrders(updates: WorksheetSortOrderUpdate[]) {
-    if (updates.length === 0) return
-
-    const results = await Promise.all(
-      updates.map((update) =>
-        supabase
-          .from('job_worksheet_items')
-          .update({ sort_order: update.sort_order })
-          .eq('id', update.id)
-          .eq('estimate_id', estimateId)
-          .select('id, sort_order')
-          .single()
-      )
-    )
-
-    const failed = results.find((result) => result.error)
-    if (failed?.error) throw failed.error
+    const result = await persistWorksheetSortOrders(estimateId, updates)
+    if ('error' in result) throw new Error(result.error)
   }
 
   return { persistRow, createRow, restoreRows, deleteRow, persistSortOrders }
