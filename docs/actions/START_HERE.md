@@ -160,6 +160,11 @@ Prefer:
 - composition and layered reuse
 - shared primitives and patterns over duplication
 
+Before writing new files or extracting logic:
+- check whether a shared or existing implementation already exists
+- prefer reuse over creation
+- justify any new structure that cannot reuse an existing pattern
+
 ---
 
 ## 14. Next required file
