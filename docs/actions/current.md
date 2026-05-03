@@ -69,8 +69,27 @@ Slice reports live in:
 
 ## 4. Known conflicts / stale docs
 
+### Archived stale docs (2026-05-02)
+
+The following superseded files were moved to `docs/archive/stale-2026-05-02/`:
+
+- `estimate_proposal_consolidation_plan_r01.md` (was `docs/claude/`)
+- `anchor.md` (was `docs/modules/takeoff/`)
+- `takeoff_estimate_unified_design_r01.md` (was `docs/modules/estimate/`)
+- `worksheet_reuse_design_r01.md` (was `docs/modules/pricing/`)
+- `worksheet_reuse_design_r02.md` (was `docs/modules/pricing/`)
+- `cleanup_plan_r01.md` (was `docs/modules/pricing/`)
+- `cleanup_plan_r02.md` (was `docs/modules/pricing/`)
+- `worksheet_centralization_handoff_r01.md` (was `docs/modules/pricing/`)
+
+Current replacement docs (do not archive):
+- `docs/modules/estimate/takeoff_estimate_unified_design_r02.md`
+- `docs/modules/pricing/worksheet_reuse_design_r03.md`
+- `docs/modules/pricing/cleanup_plan_r03.md`
+- `docs/modules/pricing/worksheet_centralization_handoff_r02.md`
+
 ### Conflict A — Pricing state
-- `docs/modules/pricing/*` → says orchestrated worksheet is active
+- `docs/modules/pricing/*` (r03 revisions) → says orchestrated worksheet is active
 - `docs/craft-agent/project_state.md` → says it was reverted
 
 → Action: verify code before any pricing work
@@ -85,12 +104,6 @@ Slice reports live in:
 - References `docs/dev_scope.md` (does not exist)
 
 → Action: replace with Actions docs entry point
-
-### Conflict D — Old estimate / takeoff docs
-- Some docs describe pre-slice behavior
-- Superseded by Slice 06–17 work
-
-→ Treat as historical unless explicitly referenced
 
 ---
 
