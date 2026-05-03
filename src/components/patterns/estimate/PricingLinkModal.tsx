@@ -1,8 +1,11 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
-import { createClient } from '@/utils/supabase/client'
-import { linkRowToPricing } from '@/app/actions/worksheet-pricing-actions'
+import {
+  linkRowToPricing,
+  getAvailablePricingHeaders,
+  getAvailablePricingRows,
+} from '@/app/actions/worksheet-pricing-actions'
 import type { PricingHeader, PricingRow } from '@/lib/pricing/types'
 import { PRICING_HEADER_KIND_CONFIG } from '@/lib/pricing/headerKinds'
 import type { JobWorksheetRow } from './JobWorksheetTableAdapter'
@@ -91,19 +94,12 @@ export function PricingLinkModal({ rowId, estimateId, jobId, onClose, onLinked }
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase
-      .from('pricing_headers')
-      .select('id, kind, title, is_active, company_id, trade_id, cost_code_id, job_id, revision, status, effective_date, received_at, supersedes_header_id, notes, created_at, updated_at')
-      .eq('is_active', true)
-      .order('kind')
-      .order('title')
-      .then(({ data, error: err }) => {
-        if (err) setError(err.message)
-        else setHeaders((data ?? []) as PricingHeader[])
-        setLoadingHeaders(false)
-      })
-  }, [])
+    getAvailablePricingHeaders(jobId).then((result) => {
+      if ('error' in result) setError(result.error)
+      else setHeaders(result.headers)
+      setLoadingHeaders(false)
+    })
+  }, [jobId])
 
   useEffect(() => {
     if (!selectedHeaderId) {
@@ -113,19 +109,12 @@ export function PricingLinkModal({ rowId, estimateId, jobId, onClose, onLinked }
     }
     setLoadingRows(true)
     setSelectedRowId(null)
-    const supabase = createClient()
-    supabase
-      .from('pricing_rows')
-      .select('id, pricing_header_id, catalog_sku, cost_code_id, source_sku, vendor_sku, description_snapshot, pricing_type, quantity, unit, unit_price, lead_days, notes, sort_order, is_active, created_at, updated_at')
-      .eq('pricing_header_id', selectedHeaderId)
-      .eq('is_active', true)
-      .order('sort_order')
-      .then(({ data, error: err }) => {
-        if (err) setError(err.message)
-        else setPricingRows((data ?? []) as PricingRow[])
-        setLoadingRows(false)
-      })
-  }, [selectedHeaderId])
+    getAvailablePricingRows(selectedHeaderId, jobId).then((result) => {
+      if ('error' in result) setError(result.error)
+      else setPricingRows(result.rows)
+      setLoadingRows(false)
+    })
+  }, [selectedHeaderId, jobId])
 
   function handleConfirm() {
     if (!selectedRowId) return
