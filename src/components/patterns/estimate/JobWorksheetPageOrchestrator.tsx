@@ -54,6 +54,7 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, activeEst
     setActiveCell,
     setActiveDraft,
     commitCellValue,
+    forceUpdateRow,
     createDraftRowAfter,
     deleteWorksheetRow,
     handleUndo,
@@ -211,12 +212,15 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, activeEst
         </div>
 
         <JobWorksheetTableAdapter
+          jobId={jobId}
+          activeEstimateId={activeEstimateId}
           rows={localRows}
           activeCell={activeCell}
           activeDraft={activeDraft}
           setActiveCell={setActiveCell}
           setActiveDraft={setActiveDraft}
           commitCellValue={commitCellValue}
+          forceUpdateRow={forceUpdateRow}
           createDraftRowAfter={createDraftRowAfter}
           deleteRow={deleteWorksheetRow}
           handleUndo={handleUndo}

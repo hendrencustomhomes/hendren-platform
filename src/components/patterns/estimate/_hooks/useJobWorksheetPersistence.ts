@@ -10,6 +10,8 @@ export type UpdateJobWorksheetRowPatch = {
   unit: string | null
   unit_price: number | string | null
   notes: string | null
+  pricing_source_row_id?: string | null
+  pricing_header_id?: string | null
 }
 
 export type CreateJobWorksheetRowInput = {

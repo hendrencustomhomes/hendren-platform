@@ -88,7 +88,7 @@ function applyEditableCellValue(
 }
 
 function buildPatch(row: JobWorksheetRow): UpdateJobWorksheetRowPatch {
-  return {
+  const patch: UpdateJobWorksheetRowPatch = {
     description: row.description,
     location: row.location,
     quantity: row.row_kind === 'note' ? null : row.quantity,
@@ -96,6 +96,10 @@ function buildPatch(row: JobWorksheetRow): UpdateJobWorksheetRowPatch {
     unit_price: row.row_kind === 'note' ? null : row.unit_price,
     notes: row.notes,
   }
+  // Only include link fields when they have been explicitly cleared (link-drop path)
+  if (row.pricing_source_row_id === null) patch.pricing_source_row_id = null
+  if (row.pricing_header_id === null) patch.pricing_header_id = null
+  return patch
 }
 
 function buildCreateInput(jobId: string, estimateId: string, row: JobWorksheetRow): CreateJobWorksheetRowInput {
@@ -127,7 +131,9 @@ function areEditableFieldsEqual(a: JobWorksheetRow | null | undefined, b: JobWor
     (a.quantity ?? null) === (b.quantity ?? null) &&
     (a.unit ?? null) === (b.unit ?? null) &&
     (a.unit_price ?? null) === (b.unit_price ?? null) &&
-    (a.notes ?? null) === (b.notes ?? null)
+    (a.notes ?? null) === (b.notes ?? null) &&
+    (a.pricing_source_row_id ?? null) === (b.pricing_source_row_id ?? null) &&
+    (a.pricing_header_id ?? null) === (b.pricing_header_id ?? null)
   )
 }
 
@@ -553,7 +559,13 @@ export function useJobWorksheetState(
     const row = getLocalRow(rowId)
     if (!row) return
 
-    const next = applyEditableCellValue(row, field, value)
+    let next = applyEditableCellValue(row, field, value)
+
+    // Manual unit_price edit on a linked row drops the link (UI shows confirm first)
+    if (field === 'unit_price' && row.pricing_source_row_id !== null) {
+      next = { ...next, pricing_source_row_id: null, pricing_header_id: null }
+    }
+
     if (areEditableFieldsEqual(row, next)) return
 
     replaceLocalRow(rowId, next)
@@ -567,6 +579,13 @@ export function useJobWorksheetState(
     }
 
     scheduleFlush(rowId)
+  }
+
+  // Used by link/unlink actions to apply server-returned row data without a full page reload
+  function forceUpdateRow(updatedRow: JobWorksheetRow) {
+    replaceLocalRow(updatedRow.id, updatedRow)
+    replaceServerRow(updatedRow.id, updatedRow)
+    setRowState(updatedRow.id, 'idle')
   }
 
   function focusExistingBlankDraft() {
@@ -692,6 +711,7 @@ export function useJobWorksheetState(
     setActiveCell,
     setActiveDraft,
     commitCellValue,
+    forceUpdateRow,
     createDraftRowAfter,
     deleteWorksheetRow,
     handleUndo,
