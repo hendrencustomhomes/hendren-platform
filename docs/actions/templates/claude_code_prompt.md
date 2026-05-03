@@ -63,6 +63,7 @@ Expected files to inspect:
 Expected files to modify:
 - [FILE]
 - [FILE]
+- [SLICE REPORT PATH]
 
 Files/modules not to touch:
 - [FILE OR MODULE]
@@ -89,6 +90,21 @@ STOP CONDITIONS
 
 ---
 
+Slice report:
+- Write a concise completion report to: [SLICE REPORT PATH]
+- Create the parent folder if needed.
+- The report must include:
+  1. Slice name
+  2. Status: completed / stopped
+  3. Files changed
+  4. What changed
+  5. Validation results
+  6. Risks / follow-up
+  7. Anything intentionally not changed
+- This report is required so Actions GPT can resync later without a full repo audit.
+
+---
+
 Rules:
 - Work only on dev.
 - Keep this to one bounded slice.
@@ -103,15 +119,16 @@ Validation:
 - Run build/check command if available and relevant.
 - If local env vars block prerender/build, identify the env failure as unrelated only if the compile/type stages pass.
 
-Required final report:
+Required final response:
 1. Files changed
 2. What changed
 3. Validation results
 4. Risks / follow-up
-5. Anything intentionally not changed
+5. Slice report path
+6. Anything intentionally not changed
 
 Commit:
-- Commit only the completed bounded slice.
+- Commit only the completed bounded slice, including the slice report.
 - Commit message: [COMMIT MESSAGE]
 ```
 
@@ -127,6 +144,7 @@ Before generating a Claude Code prompt:
 4. Include exact files whenever possible.
 5. Include explicit stop conditions.
 6. Do not include general Actions docs in Claude prompts unless directly needed for implementation.
+7. Use a deterministic report path, preferably `docs/actions/reports/slice_##_<short_name>.md`.
 
 Do not send Claude Code a broad platform prompt.
 Do not ask Claude Code to plan multiple phases at once.
