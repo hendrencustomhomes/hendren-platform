@@ -92,6 +92,7 @@ STOP CONDITIONS
 
 Slice report:
 - Write a concise completion report to: [SLICE REPORT PATH]
+- Use `docs/actions/slices/slice_##_<short_name>.md` unless a different path is explicitly required.
 - Create the parent folder if needed.
 - The report must include:
   1. Slice name
@@ -144,7 +145,7 @@ Before generating a Claude Code prompt:
 4. Include exact files whenever possible.
 5. Include explicit stop conditions.
 6. Do not include general Actions docs in Claude prompts unless directly needed for implementation.
-7. Use a deterministic report path, preferably `docs/actions/reports/slice_##_<short_name>.md`.
+7. Use a deterministic slice report path, preferably `docs/actions/slices/slice_##_<short_name>.md`.
 
 Do not send Claude Code a broad platform prompt.
 Do not ask Claude Code to plan multiple phases at once.
