@@ -101,6 +101,9 @@ Slice reports live in:
 - No duplicate implementations of formatting / types
 - Schema changes must use migrations
 - Sessions limited to 1–3 slices
+- Follow design standard:
+  - `docs/design/module_structure`
+  - `docs/design/module_design_strategy_r02.md`
 
 ---
 
