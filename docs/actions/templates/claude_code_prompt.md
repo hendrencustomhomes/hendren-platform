@@ -39,17 +39,6 @@ Conform to module design rules defined in:
 
 ---
 
-REQUIRED BEFORE CODING
-
-You must first output:
-1. Files you will modify and why each file owns the concern
-2. What existing pattern(s) you are reusing
-3. Where the logic will live (single owner)
-
-Do not proceed to implementation until this is clearly defined.
-
----
-
 Task:
 [ONE-SENTENCE OBJECTIVE]
 
