@@ -29,6 +29,27 @@ Start by reading:
 2. docs/actions/current.md
 3. [ADD ONLY THE ACTIVE MODULE DOCS FOR THIS SLICE]
 
+---
+
+DESIGN CONSTRAINT (NON-NEGOTIABLE)
+
+Conform to module design rules defined in:
+- docs/design/module_structure
+- docs/design/module_design_strategy_r02.md
+
+---
+
+REQUIRED BEFORE CODING
+
+You must first output:
+1. Files you will modify and why each file owns the concern
+2. What existing pattern(s) you are reusing
+3. Where the logic will live (single owner)
+
+Do not proceed to implementation until this is clearly defined.
+
+---
+
 Task:
 [ONE-SENTENCE OBJECTIVE]
 
@@ -53,6 +74,27 @@ Expected files to modify:
 Files/modules not to touch:
 - [FILE OR MODULE]
 - [FILE OR MODULE]
+
+---
+
+STRUCTURE RULES (HARD CONSTRAINTS)
+
+- No duplicate logic
+- No new parallel systems (especially status or permissions)
+- No logic inside shared UI components
+- No "quick inline fixes"
+- One clear owner for new logic
+- Server-side enforcement first, UI second
+
+---
+
+STOP CONDITIONS
+
+- If proper implementation conflicts with module structure → STOP and report
+- If multiple ownership paths are required → STOP and report
+- If a new architectural pattern seems required → STOP and report
+
+---
 
 Rules:
 - Work only on dev.
