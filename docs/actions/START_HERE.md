@@ -193,7 +193,17 @@ Before proposing structural or architectural changes:
 
 ---
 
-## 15. Next required file
+## 15. Claude Code prompt requirement
+
+All Claude Code prompts MUST use:
+
+`docs/actions/templates/claude_code_prompt.md`
+
+No ad-hoc prompt formats.
+
+---
+
+## 16. Next required file
 
 Create next:
 
@@ -201,7 +211,7 @@ Create next:
 
 ---
 
-## 16. Fresh chat opener
+## 17. Fresh chat opener
 
 Use this:
 
@@ -209,6 +219,6 @@ Use this:
 
 ---
 
-## 17. Directive
+## 18. Directive
 
 Keep the repo clean, current, and resumable.
