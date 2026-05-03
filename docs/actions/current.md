@@ -8,7 +8,7 @@ Last updated: 2026-05-03
 
 ## 1. Active execution track
 
-Primary track: **Estimate → Proposal → Send pipeline (Slices 06–20)**
+Primary track: **Estimate → Proposal → Send pipeline (Slices 06–21)**
 
 Locked flow:
 
@@ -18,15 +18,17 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 ## 2. Last verified completed work
 
-Latest completed slice: **Slice 20 — worksheet persistence guardrails**
+Latest completed slice: **Slice 21 — job_worksheet_items RLS estimate editability**
 
 Recent completed slices:
 - **Slice 19 — estimate lock / status guardrails**
 - **Slice 20 — worksheet persistence guardrails**
+- **Slice 21 — job_worksheet_items RLS estimate editability**
 
 Slice reports:
 - `docs/actions/slices/slice_19_estimate_lock.md`
 - `docs/actions/slices/slice_20_worksheet_persistence_guardrails.md`
+- `docs/actions/slices/slice_21_job_worksheet_items_rls.md`
 
 ---
 
@@ -49,8 +51,9 @@ Slice reports:
 - Direct client-side Supabase writes from `useJobWorksheetPersistence` were removed
 
 ### Data model / DB enforcement
-- Application-layer guards are now in place for estimate/worksheet mutations
-- RLS on `job_worksheet_items` has not been audited or tightened
+- Application-layer guards enforce estimate/worksheet editability
+- **RLS on `job_worksheet_items` now enforces estimate editability for INSERT/UPDATE/DELETE**
+- DB and app layers are now aligned for worksheet mutation safety
 
 ---
 
@@ -59,22 +62,22 @@ Slice reports:
 - No estimate completeness signal
 - No pricing resolution logic
 - No send validation
-- RLS policies for `job_worksheet_items` have not been audited against estimate editability
 - `setActiveEstimate` can activate a locked estimate; review if `locked_at` semantics evolve
 - Estimate approval flow/status transitions are not yet fully developed
+- RLS is not forced (BYPASSRLS roles can bypass policies)
 
 ---
 
 ## 5. Next recommended slices
 
-1. **RLS audit for `job_worksheet_items` estimate editability**
-2. **Estimate health indicators (read-only)**
-3. **Send validation / pre-send guardrails**
+1. **Estimate health indicators (read-only)**
+2. **Send validation / pre-send guardrails**
+3. **RLS hardening / service-role usage audit**
 
 ---
 
 ## 6. Summary
 
-System is feature-complete enough for the current Estimate → Proposal → Send path, and estimate mutation guardrails are now substantially stronger at the application layer.
+The Estimate → Proposal → Send pipeline now has aligned application-layer and database-layer enforcement for worksheet mutations.
 
-Remaining safety work should focus on DB/RLS enforcement, estimate completeness visibility, and send validation before expanding pricing automation or proposal redesign.
+The highest remaining risks are now around visibility (estimate completeness), pre-send safety, and ensuring no privileged bypass paths exist at the DB level.
