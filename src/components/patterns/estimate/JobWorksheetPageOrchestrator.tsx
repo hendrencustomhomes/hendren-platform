@@ -8,6 +8,7 @@ import { useJobWorksheetState } from './_hooks/useJobWorksheetState'
 import { useJobWorksheetPersistence } from './_hooks/useJobWorksheetPersistence'
 import { importEstimate } from '@/app/actions/estimate-actions'
 import type { Estimate } from '@/lib/estimateTypes'
+import { EstimateHealthSummary } from './EstimateHealthSummary'
 
 type Props = {
   jobId: string
@@ -210,6 +211,8 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, activeEst
             <EstimateSelector jobId={jobId} estimates={estimates} />
           </div>
         </div>
+
+        <EstimateHealthSummary rows={localRows} />
 
         <JobWorksheetTableAdapter
           jobId={jobId}
