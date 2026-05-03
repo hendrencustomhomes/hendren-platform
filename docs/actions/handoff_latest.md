@@ -1,70 +1,76 @@
-# Handoff — 2026-05-03 (Docs Sync Slice)
+# Handoff — 2026-05-03 (Estimate Audit + Slice 18 Alignment)
+
+---
 
 ## What changed this session
 
-### 1. Current state doc corrected (completed)
-- `docs/actions/current.md` updated to reflect verified code truth
-- Pricing orchestrator confirmed live via:
-  - `PricingWorksheetPage.tsx` exporting orchestrator
-  - `PricingWorksheetPageOrchestrator.tsx` active composition layer
-- Removed ambiguity around pricing “reverted” state (marked as stale doc issue, not active truth)
+### 1. Full estimate module audit (code-verified)
+- Verified:
+  - Estimate uses `job_worksheet_items`
+  - Proposal derives directly from estimate rows
+  - Send path lacks validation
+  - Pricing link is manual (user-driven)
 
-### 2. Conflicts triaged
+### 2. Slice 18 incorporated (critical correction)
+- Pricing link is NOT basic/manual-only
+- It is now:
+  - server-side controlled
+  - permission-gated
+  - job-scoped
+- Client-side exposure issue is resolved
 
-#### Conflict A — Pricing state
-- RESOLVED via code verification
-- Docs claiming revert are stale and should not drive decisions
+### 3. Audit corrected
+- Previous assumptions replaced with code-backed truth
+- Gaps now limited to **enforcement + guardrails**, not missing systems
 
-#### Conflict B — Missing architecture doc
-- CONFIRMED missing via repo search
-- Still requires deliberate slice (create vs remove reference)
-
-#### Conflict C — instructions.md
-- DOWNGRADED
-- File not found on `dev` during sync
-- Do not act unless file is confirmed to exist in current repo
-
-### 3. project_state.md handling
-- `docs/craft-agent/project_state.md` did not resolve via direct path on `dev`
-- Avoided recreating or modifying to prevent duplicate truth sources
-- Requires explicit decision in future slice if this file is still intended to exist
+### 4. current.md updated
+- Slice 18 recorded as latest completed work
+- Pricing state corrected to reflect hardening
+- Next slices shifted toward guardrails (not features)
 
 ---
 
 ## Current state
 
-- Branch `dev` is clean
-- Slice 17 is still the latest completed execution slice
-- Pricing system is **confirmed orchestrated + active in code**
-- Docs are now aligned with code for pricing state
+- Estimate → Proposal → Send pipeline exists end-to-end
+- Pricing system is:
+  - orchestrated
+  - linked into estimate
+  - hardened at permission layer
+- No:
+  - pricing resolution logic
+  - estimate completeness signal
+  - validation before send
+  - estimate lock/state enforcement
+
+System is **functionally complete but not safe**.
 
 ---
 
-## Next steps
+## Next step (locked)
 
-1. **Architecture doc decision (high priority)**
-   - Create `hendren_platform_architecture.md` OR
-   - Remove/replace references in execution docs
+### Slice: Estimate lock + status guardrails
 
-2. **Estimate/proposal gap verification**
-   - Inspect Slice 17 outputs in code
-   - Identify real missing behavior before defining Slice 18
+Scope:
+- Prevent mutation (link/edit) when estimate is not draft
+- Add basic estimate status enforcement
+- Do NOT introduce pricing automation yet
 
-3. **Takeoff vs worksheet audit**
-   - Confirm whether legacy Takeoff paths are still reachable
-   - Validate single source of truth direction (`job_worksheet_items`)
+Follow-up slice:
+- Read-only estimate health indicators (counts only)
 
 ---
 
 ## What NOT to touch
 
-- Do not rebuild pricing or worksheet architecture
-- Do not recreate `project_state.md` without confirming ownership
-- Do not introduce new systems
-- Do not modify estimate/proposal flow without verifying actual gaps
+- Do NOT rebuild worksheet or pricing systems
+- Do NOT add pricing resolution logic yet
+- Do NOT redesign proposal system
+- Do NOT create new architecture docs
+- Do NOT expand scope beyond guardrails
 
 ---
 
 ## current.md updated?
 
-Yes — updated to reflect pricing truth and remove stale conflict framing
+Yes — updated to reflect Slice 18 and corrected system state
