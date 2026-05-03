@@ -1,76 +1,85 @@
-# Handoff — 2026-05-03 (Estimate Audit + Slice 18 Alignment)
+# Handoff — 2026-05-03 (Slices 19–20 Guardrail Completion)
 
 ---
 
 ## What changed this session
 
-### 1. Full estimate module audit (code-verified)
-- Verified:
-  - Estimate uses `job_worksheet_items`
-  - Proposal derives directly from estimate rows
-  - Send path lacks validation
-  - Pricing link is manual (user-driven)
+### 1. Slice 19 — Estimate lock / status guardrails
+- Introduced canonical editability rule:
+  - `isEstimateEditable(estimate)` in `src/lib/estimateTypes.ts`
+- Enforced across:
+  - estimate rename
+  - pricing link/unlink
+  - worksheet UI gating
+- UI now disables interactions when estimate is not editable
 
-### 2. Slice 18 incorporated (critical correction)
-- Pricing link is NOT basic/manual-only
-- It is now:
-  - server-side controlled
-  - permission-gated
-  - job-scoped
-- Client-side exposure issue is resolved
+### 2. Slice 20 — Worksheet persistence guardrails
+- Closed remaining mutation gap from Slice 19
+- All `job_worksheet_items` mutations now routed through server actions
+- Removed direct client-side Supabase writes from `useJobWorksheetPersistence`
+- All mutations now enforce estimate editability before write
 
-### 3. Audit corrected
-- Previous assumptions replaced with code-backed truth
-- Gaps now limited to **enforcement + guardrails**, not missing systems
+### 3. Enforcement architecture (current)
 
-### 4. current.md updated
-- Slice 18 recorded as latest completed work
-- Pricing state corrected to reflect hardening
-- Next slices shifted toward guardrails (not features)
+Single source of truth:
+- `isEstimateEditable()`
+
+Server enforcement:
+- estimate actions
+- pricing link actions
+- worksheet item actions
+
+UI enforcement:
+- worksheet page + adapter + table gating
+
+System is now guarded at both UI and server layers.
 
 ---
 
 ## Current state
 
 - Estimate → Proposal → Send pipeline exists end-to-end
-- Pricing system is:
-  - orchestrated
-  - linked into estimate
-  - hardened at permission layer
-- No:
-  - pricing resolution logic
-  - estimate completeness signal
-  - validation before send
-  - estimate lock/state enforcement
+- Estimate editability is enforced across:
+  - estimate-level mutations
+  - pricing link/unlink
+  - worksheet row mutations
+- Worksheet persistence now fully server-routed
 
-System is **functionally complete but not safe**.
+Remaining gaps:
+- No estimate completeness signal
+- No pricing resolution logic
+- No send validation
+- RLS not aligned with application guardrails
+
+System is now **functionally complete and partially safe**, with remaining risk at DB enforcement layer.
 
 ---
 
 ## Next step (locked)
 
-### Slice: Estimate lock + status guardrails
+### Slice: RLS audit for `job_worksheet_items`
 
 Scope:
-- Prevent mutation (link/edit) when estimate is not draft
-- Add basic estimate status enforcement
-- Do NOT introduce pricing automation yet
+- Audit Supabase RLS policies for `job_worksheet_items`
+- Ensure locked estimates cannot be mutated via direct API access
+- Align DB enforcement with `isEstimateEditable()` semantics
+- Prefer minimal changes (policies or functions), no broad schema redesign
 
-Follow-up slice:
-- Read-only estimate health indicators (counts only)
+Follow-up slices:
+- Estimate health indicators (read-only)
+- Send validation / pre-send guardrails
 
 ---
 
 ## What NOT to touch
 
-- Do NOT rebuild worksheet or pricing systems
-- Do NOT add pricing resolution logic yet
+- Do NOT rebuild worksheet system
+- Do NOT introduce pricing resolution logic yet
 - Do NOT redesign proposal system
-- Do NOT create new architecture docs
-- Do NOT expand scope beyond guardrails
+- Do NOT expand scope beyond guardrails and enforcement
 
 ---
 
 ## current.md updated?
 
-Yes — updated to reflect Slice 18 and corrected system state
+Yes — updated to reflect Slices 19–20 and corrected system state
