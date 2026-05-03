@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-01
 **Branch:** dev
-**Reference:** design/estimate_system_execution_plan_r02.md, docs/claude/slice_06_estimate_entity_report.md
+**Reference:** design/estimate_system_execution_plan_r02.md, docs/slices/slice_06_estimate_entity_report.md
 
 ---
 

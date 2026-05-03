@@ -36,7 +36,10 @@ Covered capabilities:
 - Pricing linkage
 
 Slice reports live in:
-- `docs/claude/slice_06_*` → `slice_17_*`
+- `docs/slices/slice_06_*` → `slice_17_*`
+
+Audit/cleanup docs live in:
+- `docs/audits/`
 
 ---
 
@@ -130,7 +133,7 @@ Start with:
 Then read only:
 
 - `design/estimate_system_execution_plan_r02.md`
-- Relevant `docs/claude/slice_*` files for current area
+- Relevant `docs/slices/slice_*` files for current area
 - Module docs under `docs/modules/*` ONLY if working in that module
 
 Do NOT bulk-read all docs.

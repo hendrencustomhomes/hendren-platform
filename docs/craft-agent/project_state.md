@@ -88,7 +88,7 @@
 ## Key File Paths (quick reference)
 
 - Active execution plan: `design/estimate_system_execution_plan_r02.md`
-- Slice reports: `docs/claude/`
+- Slice reports: `docs/slices/`
 - Module design docs: `docs/modules/`
 - Shared worksheet engine: `src/components/data-display/worksheet/`
 - Job worksheet adapter: `src/components/patterns/estimate/`

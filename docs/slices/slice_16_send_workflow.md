@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-02
 **Branch:** claude/audit-worksheet-stability-nIwtF → dev
-**Reference:** design/estimate_system_execution_plan_r02.md, docs/claude/slice_15_document_snapshot_send_foundation.md
+**Reference:** design/estimate_system_execution_plan_r02.md, docs/slices/slice_15_document_snapshot_send_foundation.md
 
 ---
 
@@ -60,7 +60,7 @@ on application-layer computation.
 | DB migration `create_send_proposal_function` | New `send_proposal` Postgres function |
 | `src/app/actions/document-actions.ts` | Added `sendProposal` server action |
 | `src/components/patterns/proposal/ProposalBuilderOrchestrator.tsx` | Removed `lockProposal` import + `handleLock`; added `sendProposal` + `useRouter` + `handleSend`; "Mark as sent" → "Send proposal" |
-| `docs/claude/slice_16_send_workflow.md` | This file |
+| `docs/slices/slice_16_send_workflow.md` | This file |
 
 `lockProposal` remains in `proposal-actions.ts` (not deleted) but is no longer imported
 or called from any UI path.

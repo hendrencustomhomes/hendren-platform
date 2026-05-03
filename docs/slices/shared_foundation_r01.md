@@ -131,7 +131,7 @@ Applied via adjacent-file stitch strategy. Four targeted changes to `src/compone
 3. Catalog dropdown label changed to `Optional catalog link`
 4. Desktop `unit_price` cell displays formatted USD when not active; raw numeric when editing
 
-Full details in `docs/claude/pricing_worksheet_stitch.md`.
+Full details in `docs/slices/pricing_worksheet_stitch.md`.
 
 ### Docs folder cleanup
 

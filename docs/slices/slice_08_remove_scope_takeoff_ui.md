@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-01
 **Branch:** dev
-**Reference:** design/estimate_system_execution_plan_r02.md, docs/claude/slice_07_bind_worksheet_report.md
+**Reference:** design/estimate_system_execution_plan_r02.md, docs/slices/slice_07_bind_worksheet_report.md
 
 ---
 

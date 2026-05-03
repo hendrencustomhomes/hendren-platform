@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-02
 **Branch:** claude/audit-worksheet-stability-nIwtF → dev
-**Reference:** design/estimate_system_execution_plan_r02.md, docs/claude/slice_13_proposal_preview.md
+**Reference:** design/estimate_system_execution_plan_r02.md, docs/slices/slice_13_proposal_preview.md
 
 ---
 
