@@ -12,6 +12,7 @@ import {
 import { ESTIMATE_SELECT } from '@/lib/estimateTypes'
 import type { Estimate } from '@/lib/estimateTypes'
 import type { ProposalSnapshotJson, ProposalDocStatus } from '@/lib/proposalSnapshot'
+import { validateEstimateForSend } from '@/lib/estimateValidation'
 
 async function requireUser() {
   const supabase = await createClient()
@@ -179,6 +180,12 @@ export async function sendProposal(
   }
 
   const worksheetRows = (rowsRaw ?? []) as any
+
+  // Block send if the estimate has missing prices or quantities.
+  const validation = validateEstimateForSend(worksheetRows)
+  if (!validation.isValid) {
+    return { error: validation.errors.join(' · ') }
+  }
 
   // Proposal is draft (unlocked) — always reconcile
   let structure: ProposalStructureJson
