@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/utils/supabase/server'
 import { getCurrentPricingAccess } from '@/app/actions/pricing-access-actions'
+import { isEstimateEditable } from '@/lib/estimateTypes'
 import type { JobWorksheetRow } from '@/components/patterns/estimate/JobWorksheetTableAdapter'
 import type { PricingHeader, PricingRow } from '@/lib/pricing/types'
 
@@ -127,10 +128,11 @@ export async function linkRowToPricing(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  // Round 1: fetch pricing row and worksheet item in parallel
+  // Round 1: fetch pricing row, worksheet item, and estimate status in parallel
   const [
     { data: pricingRow, error: pricingError },
     { data: worksheetItem, error: itemError },
+    { data: estimate, error: estimateError },
   ] = await Promise.all([
     auth.supabase
       .from('pricing_rows')
@@ -144,6 +146,11 @@ export async function linkRowToPricing(
       .eq('id', rowId)
       .eq('estimate_id', estimateId)
       .single(),
+    auth.supabase
+      .from('estimates')
+      .select('status, locked_at')
+      .eq('id', estimateId)
+      .single(),
   ])
 
   if (pricingError || !pricingRow) {
@@ -151,6 +158,12 @@ export async function linkRowToPricing(
   }
   if (itemError || !worksheetItem) {
     return { error: itemError?.message ?? 'Worksheet item not found' }
+  }
+  if (estimateError || !estimate) {
+    return { error: estimateError?.message ?? 'Estimate not found' }
+  }
+  if (!isEstimateEditable(estimate)) {
+    return { error: 'Estimate is locked and cannot be modified' }
   }
 
   // Verify worksheet item belongs to this job
@@ -225,16 +238,32 @@ export async function unlinkRowFromPricing(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  // Verify worksheet item belongs to this job before modifying
-  const { data: worksheetItem, error: itemError } = await auth.supabase
-    .from('job_worksheet_items')
-    .select('job_id')
-    .eq('id', rowId)
-    .eq('estimate_id', estimateId)
-    .single()
+  // Verify worksheet item belongs to this job and estimate is editable in parallel
+  const [
+    { data: worksheetItem, error: itemError },
+    { data: estimate, error: estimateError },
+  ] = await Promise.all([
+    auth.supabase
+      .from('job_worksheet_items')
+      .select('job_id')
+      .eq('id', rowId)
+      .eq('estimate_id', estimateId)
+      .single(),
+    auth.supabase
+      .from('estimates')
+      .select('status, locked_at')
+      .eq('id', estimateId)
+      .single(),
+  ])
 
   if (itemError || !worksheetItem) {
     return { error: itemError?.message ?? 'Worksheet item not found' }
+  }
+  if (estimateError || !estimate) {
+    return { error: estimateError?.message ?? 'Estimate not found' }
+  }
+  if (!isEstimateEditable(estimate)) {
+    return { error: 'Estimate is locked and cannot be modified' }
   }
 
   if ((worksheetItem as any).job_id !== jobId) {

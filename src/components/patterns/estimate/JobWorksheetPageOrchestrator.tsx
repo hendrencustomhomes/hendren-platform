@@ -214,6 +214,7 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, activeEst
         <JobWorksheetTableAdapter
           jobId={jobId}
           activeEstimateId={activeEstimateId}
+          isEditable={!isLocked}
           rows={localRows}
           activeCell={activeCell}
           activeDraft={activeDraft}

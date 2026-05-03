@@ -2,7 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import JobWorksheetPageOrchestrator from '@/components/patterns/estimate/JobWorksheetPageOrchestrator'
 import type { Estimate } from '@/lib/estimateTypes'
-import { ESTIMATE_SELECT } from '@/lib/estimateTypes'
+import { ESTIMATE_SELECT, isEstimateEditable } from '@/lib/estimateTypes'
 
 export default async function JobWorksheetPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -68,7 +68,7 @@ export default async function JobWorksheetPage({ params }: { params: Promise<{ i
     console.error('job_worksheet_items load failed:', rowsError)
   }
 
-  const isLocked = !!(activeEstimate as any)?.locked_at
+  const isLocked = !activeEstimate || !isEstimateEditable(activeEstimate)
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh', color: 'var(--text)', fontFamily: 'system-ui,-apple-system,sans-serif' }}>

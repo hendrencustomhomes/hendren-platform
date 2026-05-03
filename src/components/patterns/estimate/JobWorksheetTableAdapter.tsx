@@ -146,6 +146,7 @@ function getColumns(
 type AdapterProps = {
   jobId: string
   activeEstimateId: string
+  isEditable?: boolean
   rows: JobWorksheetRow[]
   activeCell: WorksheetActiveCell<JobWorksheetEditableCellKey> | null
   activeDraft: WorksheetCellDraftValue
@@ -159,7 +160,7 @@ type AdapterProps = {
 }
 
 export function JobWorksheetTableAdapter(props: AdapterProps) {
-  const { rows, jobId, activeEstimateId } = props
+  const { rows, jobId, activeEstimateId, isEditable = true } = props
 
   const [linkModalRowId, setLinkModalRowId] = useState<string | null>(null)
   const [pendingPriceEdit, setPendingPriceEdit] = useState<{ rowId: string; value: string } | null>(null)
@@ -239,7 +240,7 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
         columns={columns}
         rows={rows}
         getRowId={(row:JobWorksheetRow)=>row.id}
-        canManage
+        canManage={isEditable}
         cellRefs={interaction.cellRefs}
         activeCell={props.activeCell}
         activeDraft={props.activeDraft}

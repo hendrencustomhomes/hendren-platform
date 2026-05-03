@@ -17,3 +17,9 @@ export type Estimate = {
 
 export const ESTIMATE_SELECT =
   'id, job_id, title, status, is_change_order, parent_estimate_id, created_by, created_at, updated_at, locked_at, locked_by'
+
+// Single source of truth for estimate mutability.
+// draft and active estimates are editable; approved, archived, and proposal-locked estimates are not.
+export function isEstimateEditable(estimate: Pick<Estimate, 'status' | 'locked_at'>): boolean {
+  return (estimate.status === 'draft' || estimate.status === 'active') && !estimate.locked_at
+}

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/utils/supabase/server'
 import type { Estimate } from '@/lib/estimateTypes'
-import { ESTIMATE_SELECT } from '@/lib/estimateTypes'
+import { ESTIMATE_SELECT, isEstimateEditable } from '@/lib/estimateTypes'
 import { parseImportCsv } from '@/lib/worksheetCsv'
 
 async function requireUser() {
@@ -226,6 +226,15 @@ export async function renameEstimate(
   if ('error' in auth) return { error: 'Not authenticated' }
 
   if (!title.trim()) return { error: 'Name cannot be empty' }
+
+  const { data: estimate, error: fetchError } = await auth.supabase
+    .from('estimates')
+    .select('status, locked_at')
+    .eq('id', estimateId)
+    .single()
+
+  if (fetchError || !estimate) return { error: fetchError?.message ?? 'Estimate not found' }
+  if (!isEstimateEditable(estimate)) return { error: 'Estimate is locked and cannot be modified' }
 
   const { error } = await auth.supabase
     .from('estimates')
