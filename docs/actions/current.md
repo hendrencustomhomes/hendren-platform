@@ -94,23 +94,14 @@ Current replacement docs (do not archive):
 - `docs/modules/pricing/cleanup_plan_r03.md`
 - `docs/modules/pricing/worksheet_centralization_handoff_r02.md`
 
-### Resolved / downgraded — Pricing state
-- Prior conflict: `docs/modules/pricing/*` said orchestrated worksheet was active while `docs/craft-agent/project_state.md` said it was reverted
-- 2026-05-03 code check confirms live route exports the orchestrator
-- `docs/craft-agent/project_state.md` did not resolve by direct path on `dev` during this sync; do not recreate it without confirming it still belongs in the repo
-
-### Conflict B — Missing architecture doc
-- Execution doc references `hendren_platform_architecture.md`
-- File was not found by targeted search during 2026-05-03 sync
-
-→ Action: either create the architecture doc as a deliberate docs slice or remove/replace the reference where it appears
+### Resolved — Pricing state
+- Prior conflict: `docs/modules/pricing/*` vs `docs/craft-agent/project_state.md`
+- 2026-05-03 code check confirms orchestrator is live
+- Treat any “reverted” claims as stale unless re-verified
 
 ### Downgraded — instructions.md missing-file reference
-- Prior conflict: `instructions.md` referenced `docs/dev_scope.md`
-- Direct fetches for `instructions.md` and `docs/instructions.md` on `dev` did not resolve during 2026-05-03 sync
-- Search only surfaced a historical commit result for `docs/instructions.md`
-
-→ Action: do not fix blindly; only address if a live `instructions.md` file is found on `dev`
+- `instructions.md` not found on `dev`
+- Do not act unless file is confirmed to exist
 
 ---
 
@@ -146,11 +137,9 @@ Do NOT bulk-read all docs.
 
 ## 7. Next recommended slices
 
-Priority should be determined per session, but generally:
-
-1. **Resolve missing architecture reference** — create `hendren_platform_architecture.md` or align the execution doc
-2. **Verify next estimate/proposal gap** — inspect Slice 17 output and code before adding Slice 18 behavior
-3. **Takeoff exposure audit** — verify whether old Takeoff UI/data paths remain reachable and whether `takeoff_items` still competes with `job_worksheet_items`
+1. **Verify next estimate/proposal gap** — inspect Slice 17 output and code before adding Slice 18 behavior
+2. **Takeoff exposure audit** — verify whether old Takeoff UI/data paths remain reachable and whether `takeoff_items` still competes with `job_worksheet_items`
+3. **Targeted doc cleanup (only if encountered)** — remove or fix stale references during real work, not preemptively
 
 Do not start new systems.
 
@@ -159,7 +148,6 @@ Do not start new systems.
 ## 8. Open risks
 
 - Dual data models (`takeoff_items` vs `job_worksheet_items`)
-- Missing architecture reference may mislead future sessions
 - Stale docs outside Actions docs may still contain old path or pricing-state statements
 - Hidden regressions masked by noop adapters
 
