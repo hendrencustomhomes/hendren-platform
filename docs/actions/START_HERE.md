@@ -101,6 +101,14 @@ Handoff must include:
 - next step
 - what NOT to touch
 
+### REQUIRED OUTPUT FOR USER (COPY BLOCK)
+
+When the user says "handoff", you MUST include a copyable block for the next session opener. Provide it exactly as written below, with no changes, additions, or commentary:
+
+Fresh sync on dev. Read docs/actions/START_HERE.md, then docs/actions/current.md, then follow the read list. Summarize state and next 1–3 slices.
+
+Do not paraphrase. Do not wrap in quotes. Provide it as a clean, copyable block.
+
 ---
 
 ## 9. Scope of Actions docs
@@ -215,7 +223,7 @@ Create next:
 
 Use this:
 
-"Fresh sync on dev. Read docs/actions/START_HERE.md, then docs/actions/current.md, then follow the read list. Summarize state and next 1–3 slices."
+Fresh sync on dev. Read docs/actions/START_HERE.md, then docs/actions/current.md, then follow the read list. Summarize state and next 1–3 slices.
 
 ---
 
