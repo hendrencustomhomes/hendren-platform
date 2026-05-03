@@ -11,6 +11,19 @@ You are working in the Hendren Platform repo.
 
 Branch target: dev
 
+---
+
+REQUIRED FIRST STEP (DO NOT SKIP)
+
+Synchronize with latest dev:
+- git fetch origin
+- git checkout dev
+- git pull origin dev
+
+Ensure working tree reflects latest remote state before continuing.
+
+---
+
 Start by reading:
 1. docs/actions/START_HERE.md
 2. docs/actions/current.md
