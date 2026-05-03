@@ -1,0 +1,79 @@
+name: Run Slice
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'Slice prompt (full instructions, including commit message)'
+        required: true
+        type: string
+      branch:
+        description: 'Branch to operate on'
+        required: false
+        default: 'dev'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  run-slice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install repo dependencies
+        run: npm ci
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Configure git as Claude
+        run: |
+          git config user.name "Claude"
+          git config user.email "noreply@anthropic.com"
+
+      - name: Write prompt to file
+        env:
+          PROMPT: ${{ github.event.inputs.prompt }}
+        run: |
+          mkdir -p .agent
+          printf '%s' "$PROMPT" > .agent/prompt.md
+          echo "--- prompt preview ---"
+          head -20 .agent/prompt.md
+          echo "--- (truncated) ---"
+
+      - name: Run Claude Code
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          claude -p "$(cat .agent/prompt.md)" \
+            --dangerously-skip-permissions \
+            --output-format text \
+            2>&1 | tee .agent/run.log
+
+      - name: Push if commits were made
+        run: |
+          if [ -n "$(git log origin/${{ github.event.inputs.branch }}..HEAD --oneline 2>/dev/null)" ]; then
+            git push origin HEAD:${{ github.event.inputs.branch }}
+          else
+            echo "No new commits to push."
+          fi
+
+      - name: Upload run log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-run-log
+          path: .agent/run.log
