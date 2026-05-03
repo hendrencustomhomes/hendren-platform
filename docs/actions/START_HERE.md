@@ -201,11 +201,15 @@ Before proposing structural or architectural changes:
 
 ---
 
-## 15. Claude Code prompt requirement
+## 15. Claude prompt requirements
 
 All Claude Code prompts MUST use:
 
 `docs/actions/templates/claude_code_prompt.md`
+
+All Claude Chat / SQL / DB prompts MUST use:
+
+`docs/actions/templates/claude_chat_sql_prompt.md`
 
 No ad-hoc prompt formats.
 
