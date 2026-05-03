@@ -2,6 +2,8 @@
 
 Use this template when asking Claude Code to execute a bounded implementation slice.
 
+Actions GPT must resolve operating context before writing the prompt. Claude Code should receive only the context needed to execute the slice.
+
 ---
 
 ## Prompt
@@ -24,10 +26,12 @@ Ensure working tree reflects latest remote state before continuing.
 
 ---
 
-Start by reading:
-1. docs/actions/START_HERE.md
-2. docs/actions/current.md
-3. [ADD ONLY THE ACTIVE MODULE DOCS FOR THIS SLICE]
+Context already resolved by Actions GPT.
+Do not read general Actions docs unless explicitly listed below.
+
+Read only:
+1. [ADD ONLY DOCS NEEDED TO EXECUTE THIS SLICE]
+2. [ADD ONLY TARGET MODULE FILES/DOCS IF KNOWN]
 
 ---
 
@@ -117,11 +121,12 @@ Commit:
 
 Before generating a Claude Code prompt:
 
-1. Fresh-sync against `docs/actions/current.md`.
+1. Fresh-sync against `docs/actions/START_HERE.md` and `docs/actions/current.md`.
 2. Verify the active docs and files still exist on `dev`.
 3. Name the smallest useful slice.
 4. Include exact files whenever possible.
 5. Include explicit stop conditions.
+6. Do not include general Actions docs in Claude prompts unless directly needed for implementation.
 
 Do not send Claude Code a broad platform prompt.
 Do not ask Claude Code to plan multiple phases at once.
