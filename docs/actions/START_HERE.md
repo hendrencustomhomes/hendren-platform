@@ -142,7 +142,27 @@ If the file is too large or risky to safely rewrite, stop and report instead of 
 
 ---
 
-## 13. Next required file
+## 13. Design standard (non-negotiable)
+
+All file writes and edits must conform to:
+
+- `docs/design/module_structure`
+- `docs/design/module_design_strategy_r02.md` (for worksheet-family work)
+
+Do not introduce:
+- god components
+- duplicated logic or styling
+- multiple owners of the same concern
+- module logic inside shared UI
+
+Prefer:
+- small, single-responsibility files
+- composition and layered reuse
+- shared primitives and patterns over duplication
+
+---
+
+## 14. Next required file
 
 Create next:
 
@@ -150,7 +170,7 @@ Create next:
 
 ---
 
-## 14. Fresh chat opener
+## 15. Fresh chat opener
 
 Use this:
 
@@ -158,6 +178,6 @@ Use this:
 
 ---
 
-## 15. Directive
+## 16. Directive
 
 Keep the repo clean, current, and resumable.
