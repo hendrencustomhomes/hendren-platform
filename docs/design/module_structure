@@ -321,6 +321,61 @@ Route-local interaction and orchestration hooks.
 Route-local formatting, mapping, selectors, validation helpers, and constants.
 No core business logic.
 
+## Cross-Module Permission Semantics
+
+The permission matrix is a cross-module domain pattern. Its meaning must be consistent across every module that uses `view`, `manage`, and `assign` permissions.
+
+### Permission level meanings
+
+- `view` means the user can see module records and related read-only module context.
+- `manage` means the user can create, edit, update, and otherwise do the module work they are allowed to perform.
+- `assign` means the user can assign module work to another internal user.
+
+`assign` is workflow assignment authority only. It is not approval authority, send authority, lock authority, signoff authority, financial authority, or finalization authority.
+
+### Assignment workflow meaning
+
+When a user has `assign` permission for a module, they may assign module work to another internal user with the details needed to complete that work.
+
+Example:
+
+```text
+Mike has assign permission for Estimates.
+Mike assigns an estimate to John.
+John receives a notification with the necessary estimate details.
+John uses manage permission for Estimates to fill out or edit the estimate.
+```
+
+The assignee still needs the relevant `manage` permission to perform edits or mutations. Assignment does not grant edit rights by itself.
+
+### Approval and finalization boundaries
+
+Actions that approve, send, lock, sign, invoice, or otherwise finalize business state must not rely on `assign` as their permission gate.
+
+Those actions require their own explicit business rules, status rules, or future permission concepts. Do not overload `assign` to mean "can finalize."
+
+### Ownership
+
+Permission checks and permission-level semantics belong in shared permission domain code:
+
+```text
+src/lib/permissions/
+```
+
+Assignment/task semantics, assignment payloads, assignee context, and notification handoff belong in shared workflow or assignment domain code when implemented:
+
+```text
+src/lib/workflow/
+```
+
+or a narrower domain folder such as:
+
+```text
+src/lib/workflow/assignments/
+```
+
+Do not re-define these semantics separately inside individual modules, route files, UI components, or worksheet adapters.
+
 ## Worksheet-Family Pattern
 
 Certain modules share a spreadsheet-like interaction model where scan speed, repeated entry, keyboard flow, and high-density comparison are central.
