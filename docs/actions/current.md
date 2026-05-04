@@ -18,25 +18,28 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 ## 2. Last verified completed work
 
-Latest completed work: **Slice 30 — Stage Estimate Server Action**
+Latest completed work: **Slice 31 — Stage Flow Tightened to Active-Only with Unstage and Doc Correction**
 
 Recent completed slices/work:
-- **Slice 28 — set_active_estimate RPC audit**
 - **Architecture rewrite — permission model and estimate status**
 - **Slice 29 — archive and restore behavior alignment**
 - **DB enum update — estimate_status values appended**
 - **Slice 30 — stage estimate server action**
+- **Slice 31 — stage/unstage UI and doc correction**
 
 Reports:
-- `docs/actions/slices/slice_28_set_active_estimate_rpc_audit.md`
 - `docs/actions/architecture/permission_status_rewrite.md`
 - `docs/actions/slices/slice_29_archive_restore_fix.md`
 - `docs/actions/slices/slice_30_stage_estimate_action.md`
+- `docs/actions/slices/slice_31_stage_unstage_ui.md`
 
 Verified files after latest work:
 - `src/app/actions/estimate-actions.ts`
+- `src/components/patterns/estimate/EstimateSelector.tsx`
+- `docs/actions/slices/slice_30_stage_estimate_action.md`
+- `docs/actions/slices/slice_31_stage_unstage_ui.md`
 
-Note: `docs/actions/slices/slice_30_stage_estimate_action.md` says the enum migration was deferred, but the DB enum was applied separately after that report. Current DB enum values are confirmed as: `draft`, `active`, `approved`, `archived`, `staged`, `sent`, `signed`, `rejected`, `voided`.
+Note: `docs/actions/slices/slice_30_stage_estimate_action.md` originally said the enum migration was deferred, but the DB enum was applied separately and the report now has a post-slice correction. Current DB enum values are confirmed as: `draft`, `active`, `approved`, `archived`, `staged`, `sent`, `signed`, `rejected`, `voided`.
 
 ---
 
@@ -80,7 +83,7 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 - `EstimateSelector.tsx` exposes Archive for active estimates and uses inline confirmation copy: `Are you sure?` with `[No] [Yes]`, Yes highlighted
 - `restoreEstimate` server action restores `archived` → `draft` and requires `edit`
 - `stageEstimate` server action transitions `active` → `staged` only, requires `edit`, and rejects locked estimates
-- `unstageEstimate` server action transitions `staged` → `active` (via `set_active_estimate` RPC), requires `edit`, and rejects locked estimates
+- `unstageEstimate` server action transitions `staged` → `active` via `set_active_estimate` RPC, requires `edit`, and rejects locked estimates
 - Lifecycle forward path: `draft` → `active` → `staged` → `sent`
 - Reverse path: `staged` → `active` (unstage); `archived` → `draft` (restore)
 - `EstimateSelector.tsx` exposes Stage for active estimates; Unstage for staged estimates; Archive (with confirmation) for all non-staged non-archived estimates
@@ -131,6 +134,7 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 
 - No pricing resolution logic
 - `stageEstimate` (active → staged) and `unstageEstimate` (staged → active) are wired in `EstimateSelector.tsx`
+- `unstageEstimate` currently uses `set_active_estimate`; Slice 31 flagged that the RPC may have internal status assumptions. If runtime testing shows it rejects staged estimates, create a dedicated `unstage_estimate` RPC or adjust the DB function.
 - `rejected` status is defined in TypeScript and DB but no reject action exists yet
 - `sent`, `signed`, `rejected`, and `voided` statuses exist on `estimates.status`, but send/sign/void paths still primarily mutate `proposal_structures` and/or `proposal_documents`
 - `createProposalSnapshot` and `sendProposal` still create/store `snapshot_json`; target architecture says estimate is durable truth and proposal artifacts must not become competing source of truth
@@ -154,7 +158,7 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 
 ## 6. Summary
 
-The permission/status foundation, archive/restore behavior, DB enum, and staging server action are now aligned:
+The permission/status foundation, archive/restore behavior, DB enum, and staging flow are now aligned:
 
 - Three-level permission model: `view` / `edit` / `manage`
 - Existing DB mapping: `can_view` / `can_manage` / `can_assign`
@@ -163,7 +167,7 @@ The permission/status foundation, archive/restore behavior, DB enum, and staging
 - Server and UI allow archiving draft/active estimates, including active estimates
 - Archive confirmation is implemented with minimal inline UI
 - Archived estimates restore to `draft`, not `active`
-- `stageEstimate` transitions `active` → `staged` (not `draft` → `staged`)
+- `stageEstimate` transitions `active` → `staged` only
 - `unstageEstimate` transitions `staged` → `active` via the `set_active_estimate` RPC
 - Stage/Unstage buttons are wired in `EstimateSelector.tsx`
 
