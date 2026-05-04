@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/utils/supabase/server'
 import type { Estimate } from '@/lib/estimateTypes'
-import { ESTIMATE_SELECT, isEstimateEditable } from '@/lib/estimateTypes'
+import { ESTIMATE_SELECT, isEstimateEditable, NON_ARCHIVABLE_STATUSES } from '@/lib/estimateTypes'
 import { parseImportCsv } from '@/lib/worksheetCsv'
 import { requireModuleAccess } from '@/lib/access-control-server'
 
@@ -44,7 +44,7 @@ export async function createEstimate(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
   if (permGuard) return permGuard
 
   const { data, error } = await auth.supabase
@@ -65,7 +65,7 @@ export async function setActiveEstimate(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
   if (permGuard) return permGuard
 
   const { error } = await auth.supabase.rpc('set_active_estimate', {
@@ -85,7 +85,7 @@ export async function archiveEstimate(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
   if (permGuard) return permGuard
 
   const { data: estimate, error: fetchError } = await auth.supabase
@@ -95,8 +95,8 @@ export async function archiveEstimate(
     .single()
 
   if (fetchError || !estimate) return { error: fetchError?.message ?? 'Estimate not found' }
-  if (estimate.status === 'active') {
-    return { error: 'Cannot archive the active estimate. Set another estimate as active first.' }
+  if (NON_ARCHIVABLE_STATUSES.includes(estimate.status)) {
+    return { error: `Cannot archive an estimate with status '${estimate.status}'.` }
   }
 
   const { error } = await auth.supabase
@@ -117,7 +117,7 @@ export async function duplicateEstimate(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
   if (permGuard) return permGuard
 
   const [
@@ -203,7 +203,7 @@ export async function importEstimate(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
   if (permGuard) return permGuard
 
   // Import always creates a new draft estimate — it is never locked by definition.
@@ -244,7 +244,7 @@ export async function renameEstimate(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
   if (permGuard) return permGuard
 
   if (!title.trim()) return { error: 'Name cannot be empty' }

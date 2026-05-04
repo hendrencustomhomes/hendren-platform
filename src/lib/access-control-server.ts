@@ -24,6 +24,15 @@ import {
 // ---------------------------------------------------------------------------
 // Per-action permission guard
 // ---------------------------------------------------------------------------
+// Permission level semantics (maps to DB columns):
+//   view   = read access            (DB: can_view)
+//   edit   = build/mutate work      (DB: can_manage)
+//   manage = workflow authority     (DB: can_assign)
+//
+// Hierarchy (enforced by normalizePermissionState):
+//   manage satisfies edit + view
+//   edit   satisfies view
+//
 // Returns null when access is granted; { error } when denied.
 // Admin users (is_admin = true in internal_access) bypass all permission checks.
 // For non-admins, resolves the effective permission from user_permission_snapshots,
@@ -32,7 +41,7 @@ import {
 export async function requireModuleAccess(
   profileId: string,
   rowKey: PermissionRowKey,
-  level: 'view' | 'manage',
+  level: 'view' | 'edit' | 'manage',
 ): Promise<{ error: string } | null> {
   const admin = createAdminClient()
 
@@ -69,7 +78,7 @@ export async function requireModuleAccess(
 
   if (snapshotError) return { error: snapshotError.message }
 
-  let perms: { canView: boolean; canManage: boolean }
+  let perms: { canView: boolean; canManage: boolean; canAssign: boolean }
 
   if (snapshot) {
     perms = normalizePermissionState(rowKey, snapshot)
@@ -85,14 +94,20 @@ export async function requireModuleAccess(
     if (templateError) return { error: templateError.message }
     perms = normalizePermissionState(rowKey, templatePerm ?? { canView: false, canManage: false, canAssign: false })
   } else {
-    perms = { canView: false, canManage: false }
+    perms = { canView: false, canManage: false, canAssign: false }
   }
 
+  // level 'view'   → DB can_view   (canView)
+  // level 'edit'   → DB can_manage (canManage) — satisfied by canAssign too via normalizePermissionState
+  // level 'manage' → DB can_assign (canAssign)
   if (level === 'view' && !perms.canView) {
-    return { error: 'You do not have permission to view estimates' }
+    return { error: `You do not have permission to view ${rowKey}` }
   }
-  if (level === 'manage' && !perms.canManage) {
-    return { error: 'You do not have permission to manage estimates' }
+  if (level === 'edit' && !perms.canManage) {
+    return { error: `You do not have permission to edit ${rowKey}` }
+  }
+  if (level === 'manage' && !perms.canAssign) {
+    return { error: `You do not have permission to manage ${rowKey}` }
   }
 
   return null

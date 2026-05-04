@@ -20,7 +20,11 @@ type ActionResult = { error: string } | { success: true } | { estimate: Estimate
 const STATUS_STYLE: Record<EstimateStatus, { bg: string; color: string }> = {
   active:   { bg: '#dcfce7', color: '#15803d' },
   draft:    { bg: '#f1f5f9', color: '#475569' },
-  approved: { bg: '#dbeafe', color: '#1d4ed8' },
+  staged:   { bg: '#fef9c3', color: '#854d0e' },
+  sent:     { bg: '#dbeafe', color: '#1d4ed8' },
+  signed:   { bg: '#d1fae5', color: '#065f46' },
+  rejected: { bg: '#fee2e2', color: '#991b1b' },
+  voided:   { bg: '#f3f4f6', color: '#6b7280' },
   archived: { bg: '#f3f4f6', color: '#9ca3af' },
 }
 

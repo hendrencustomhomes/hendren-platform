@@ -44,7 +44,7 @@ export async function persistWorksheetRow(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
   if (permGuard) return permGuard
 
   const guard = await requireEditableEstimate(auth.supabase, estimateId)
@@ -68,7 +68,7 @@ export async function createWorksheetRow(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
   if (permGuard) return permGuard
 
   const guard = await requireEditableEstimate(auth.supabase, input.estimate_id)
@@ -93,7 +93,7 @@ export async function restoreWorksheetRows(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
   if (permGuard) return permGuard
 
   const guard = await requireEditableEstimate(auth.supabase, estimateId)
@@ -115,7 +115,7 @@ export async function deleteWorksheetRow(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
   if (permGuard) return permGuard
 
   const guard = await requireEditableEstimate(auth.supabase, estimateId)
@@ -140,7 +140,7 @@ export async function persistWorksheetSortOrders(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
   if (permGuard) return permGuard
 
   const guard = await requireEditableEstimate(auth.supabase, estimateId)

@@ -33,7 +33,7 @@ export async function createProposalSnapshot(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
-  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
   if (permGuard) return permGuard
 
   const { data: job } = await auth.supabase

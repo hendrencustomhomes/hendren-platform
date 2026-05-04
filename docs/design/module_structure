@@ -323,58 +323,55 @@ No core business logic.
 
 ## Cross-Module Permission Semantics
 
-The permission matrix is a cross-module domain pattern. Its meaning must be consistent across every module that uses `view`, `manage`, and `assign` permissions.
+The permission matrix is a cross-module domain pattern. Its meaning must be consistent across every module that uses `view`, `edit`, and `manage` permissions.
 
 ### Permission level meanings
 
-- `view` means the user can see module records and related read-only module context.
-- `manage` means the user can create, edit, update, and otherwise do the module work they are allowed to perform.
-- `assign` means the user can assign module work to another internal user.
+- `view` means the user can see module records and related read-only context.
+- `edit` means the user can create, build, update, and mutate active working records within the module.
+- `manage` means the user has workflow authority: they can stage, send, sign, reject, void, and otherwise finalize business state transitions.
 
-`assign` is workflow assignment authority only. It is not approval authority, send authority, lock authority, signoff authority, financial authority, or finalization authority.
+`manage` includes `edit`. `edit` includes `view`.
 
-### Assignment workflow meaning
+### DB column mapping
 
-When a user has `assign` permission for a module, they may assign module work to another internal user with the details needed to complete that work.
-
-Example:
+The permission levels map to DB columns as follows:
 
 ```text
-Mike has assign permission for Estimates.
-Mike assigns an estimate to John.
-John receives a notification with the necessary estimate details.
-John uses manage permission for Estimates to fill out or edit the estimate.
+view   → can_view
+edit   → can_manage
+manage → can_assign
 ```
 
-The assignee still needs the relevant `manage` permission to perform edits or mutations. Assignment does not grant edit rights by itself.
+This mapping is fixed and must not be changed without a migration. The code semantic (`view` / `edit` / `manage`) is authoritative. DB column names are legacy identifiers.
 
-### Approval and finalization boundaries
+### Hierarchy
 
-Actions that approve, send, lock, sign, invoice, or otherwise finalize business state must not rely on `assign` as their permission gate.
+```text
+manage satisfies edit + view
+edit   satisfies view
+```
 
-Those actions require their own explicit business rules, status rules, or future permission concepts. Do not overload `assign` to mean "can finalize."
+A user with `manage` permission can perform all `edit` and `view` actions without needing separate `edit` or `view` grants. A user with `edit` permission can perform all `view` actions.
+
+### Boundary between edit and manage
+
+Actions that stage, send, lock, sign, reject, void, or otherwise finalize or irreversibly transition business state require `manage` permission.
+
+Actions that create, update, duplicate, import, rename, archive editable records, and mutate active working content require `edit` permission.
+
+Read-only queries require `view` permission.
 
 ### Ownership
 
 Permission checks and permission-level semantics belong in shared permission domain code:
 
 ```text
-src/lib/permissions/
+src/lib/access-control.ts       (core types and normalization)
+src/lib/access-control-server.ts (server-side guard: requireModuleAccess)
 ```
 
-Assignment/task semantics, assignment payloads, assignee context, and notification handoff belong in shared workflow or assignment domain code when implemented:
-
-```text
-src/lib/workflow/
-```
-
-or a narrower domain folder such as:
-
-```text
-src/lib/workflow/assignments/
-```
-
-Do not re-define these semantics separately inside individual modules, route files, UI components, or worksheet adapters.
+Do not re-define permission semantics inside individual modules, route files, UI components, or worksheet adapters.
 
 ## Worksheet-Family Pattern
 
