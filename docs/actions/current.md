@@ -20,7 +20,7 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 Latest completed work: **permission and estimate status architecture rewrite**
 
-Recent completed slices:
+Recent completed slices/work:
 - **Slice 26 — proposal and document permission guards**
 - **Slice 27 — lockProposal resolution**
 - **Slice 28 — set_active_estimate RPC audit**
@@ -32,44 +32,54 @@ Reports:
 - `docs/actions/slices/slice_28_set_active_estimate_rpc_audit.md`
 - `docs/actions/architecture/permission_status_rewrite.md`
 
+Verified files after rewrite:
+- `src/lib/access-control-server.ts`
+- `src/lib/estimateTypes.ts`
+- `src/app/actions/estimate-actions.ts`
+- `src/app/actions/worksheet-item-actions.ts`
+- `src/app/actions/proposal-actions.ts`
+- `src/app/actions/document-actions.ts`
+- `src/components/patterns/estimate/EstimateSelector.tsx`
+
 ---
 
 ## 3. Current platform state (verified)
 
 ### Permission model
 
-Three levels, backed by DB columns:
+Three levels, backed by existing DB columns:
 
-| Code level | DB column   | Meaning                                      |
-|------------|-------------|----------------------------------------------|
-| `view`     | `can_view`  | Read access                                  |
-| `edit`     | `can_manage`| Build/mutate active work                     |
-| `manage`   | `can_assign`| Workflow authority: stage/send/sign/void/reject |
+| Code level | DB column    | Meaning                                            |
+|------------|--------------|----------------------------------------------------|
+| `view`     | `can_view`   | Read access                                       |
+| `edit`     | `can_manage` | Build/mutate active work                          |
+| `manage`   | `can_assign` | Workflow authority: send/sign/void/reject/finalize |
 
 Hierarchy: `manage` satisfies `edit` + `view`. `edit` satisfies `view`.
 
 Guard: `requireModuleAccess(profileId, rowKey, 'view' | 'edit' | 'manage')` in `src/lib/access-control-server.ts`.
 
-Admin bypass: `is_admin = true` in `internal_access` → skips all checks.
+Admin bypass: `is_admin = true` in `internal_access` skips all row-level permission checks.
 
 ### Estimate status lifecycle
 
 | Status     | Editable | Archivable | Notes                                      |
 |------------|----------|------------|--------------------------------------------|
-| `draft`    | ✓        | ✓          | Default new estimate state                 |
-| `active`   | ✓        | ✓          | Selected working estimate for a job        |
-| `staged`   | ✗        | ✗          | Locked for management review/send          |
-| `sent`     | ✗        | ✗          | Proposal sent; permanently locked          |
-| `signed`   | ✗        | ✗          | Client accepted; permanently locked        |
-| `rejected` | ✗        | ✗          | Rejected; locked; may duplicate manually   |
-| `voided`   | ✗        | ✗          | Canceled; locked; may duplicate manually   |
-| `archived` | ✗        | —          | Hidden/recoverable; restores to `draft`    |
+| `draft`    | yes      | yes        | Default new estimate state                 |
+| `active`   | yes      | yes        | Selected working estimate for a job        |
+| `staged`   | no       | no         | Locked for management review/send          |
+| `sent`     | no       | no         | Proposal sent; permanently locked          |
+| `signed`   | no       | no         | Client accepted; permanently locked        |
+| `rejected` | no       | no         | Rejected; locked; may duplicate manually   |
+| `voided`   | no       | no         | Canceled; locked; may duplicate manually   |
+| `archived` | no       | n/a        | Hidden/recoverable; should restore to draft |
 
 ### Estimate / Proposal
 
 - End-to-end pipeline exists
-- Estimate editability enforced via `isEstimateEditable()` — draft + active + !locked_at
-- Active estimate can be archived without requiring another active estimate first
+- Estimate editability enforced via `isEstimateEditable()` — `draft` + `active` + `!locked_at`
+- Server-side archive guard allows only `draft` / `active`; staged/sent/signed/rejected/voided cannot be archived
+- Server-side archive no longer requires another active estimate before archiving the active estimate
 - Worksheet mutations protected at both app (`edit` guard) + RLS layers
 - Health indicators visible (non-blocking)
 - Send validation enforced server-side
@@ -105,40 +115,53 @@ Admin bypass: `is_admin = true` in `internal_access` → skips all checks.
 - RLS enforced for worksheet mutation safety
 - `send_proposal` RPC runs as SECURITY DEFINER; `sendProposal` applies `manage` guard before invoking it
 - `set_active_estimate` RPC verified SECURITY INVOKER; RLS applies inside the function
+- DB enum migration is still required before new estimate statuses can be written directly to `estimates.status`
 
 ---
 
 ## 4. Known gaps (verified)
 
 - No pricing resolution logic
-- `staged` status is defined in the type but no staging action exists yet
-- `rejected` status is defined in the type but no reject action exists yet
-- Archived estimates restore via `setActiveEstimate` (sets to `active`); a dedicated `restoreEstimate` action setting status to `draft` is deferred
-- `unlockProposal` is a non-atomic dual-write path; lower risk than the deleted `lockProposal`, but worth future atomicity review
-- `requireModuleAccess` adds 3–4 admin-client queries per guarded call; caching/batching may be needed later
+- `staged` status is defined in TypeScript but no staging action exists yet
+- `rejected` status is defined in TypeScript but no reject action exists yet
+- DB enum migration is required before writing `staged`, `sent`, `signed`, `rejected`, or `voided` to `estimates.status`
+- `EstimateSelector.tsx` still hides Archive for the active estimate even though the server action now allows active → archived
+- Archive confirmation UX is not implemented; target copy is `Are you sure?` with `[No] [Yes]`, and Yes highlighted
+- Archived estimates currently restore via `setActiveEstimate` (sets to `active`); target behavior is a dedicated `restoreEstimate` action setting `archived` → `draft`
+- `createProposalSnapshot` and `sendProposal` still create/store `snapshot_json`; target architecture says estimate is durable truth and proposal artifacts must not become competing source of truth
+- `unlockProposal` is a non-atomic dual-write path and also conflicts with permanent-lock direction for sent estimates; likely should be removed or redesigned after void/duplicate flow exists
 - `pricing-access-actions.ts` does not use `requireModuleAccess` and does not check `is_admin`; inconsistency with estimate/proposal paths
 
 ---
 
-## 5. Next recommended slices
+## 5. Next recommended work
 
-1. **Staging action** — add `stageEstimate` server action (transitions draft/active → staged; requires `edit`)
-2. **Reject action** — add `rejectEstimate` server action (transitions staged/sent → rejected; requires `manage`)
-3. **Restore action** — add `restoreEstimate` server action (transitions archived → draft; replaces current setActiveEstimate workaround)
-4. **Pricing resolution logic** — resolve pricing source rows into estimate lines
-5. **unlockProposal atomicity** — evaluate making the dual-write atomic
+1. **Estimate archive / restore UX cleanup**
+   - Show Archive for active estimates when server allows it
+   - Add confirmation modal/copy: `Are you sure?` / `[No] [Yes]`
+   - Add `restoreEstimate` server action: `archived` → `draft`
+   - Update archived UI to call `restoreEstimate`, not `setActiveEstimate`
+
+2. **DB enum + staging action**
+   - Add migration for new estimate statuses
+   - Add `stageEstimate` server action: `draft|active` → `staged`, requires `edit`
+   - Ensure staged is locked/non-editable and cannot be archived
+
+3. **Reject / void / permanent-lock flow**
+   - Add reject flow requiring `manage`
+   - Reconcile or remove unlock behavior so sent estimates are not silently editable again
+   - Preserve manual duplicate path for rejected/voided estimates
 
 ---
 
 ## 6. Summary
 
-The Estimate → Proposal pipeline now has:
+The permission and status architecture rewrite is landed and verified at the core guard/action/type level:
 
-- Aligned editability enforcement (app + RLS)
-- Three-level permission model (view / edit / manage) with correct DB column mapping
-- Full status lifecycle defined (draft → active → staged → sent → signed / rejected / voided / archived)
-- Permission enforcement across all estimate, worksheet, proposal, document, and send actions
-- Archive guard: only draft/active may be archived; active may archive without a replacement
-- `lockProposal` removed; `sendProposal` is the canonical atomic send path
+- Three-level permission model: `view` / `edit` / `manage`
+- Existing DB mapping: `can_view` / `can_manage` / `can_assign`
+- `manage` includes `edit`; `edit` includes `view`
+- Estimate lifecycle type now includes draft, active, staged, sent, signed, rejected, voided, archived
+- Server-side archive logic allows only draft/active and permits archiving active estimates without replacement
 
-The permission and status foundation is complete. The next meaningful work is implementing the remaining lifecycle actions (staging, rejection, restore) before adding broader business behavior.
+The next meaningful work is UI/server cleanup around archive/restore, then DB enum + staging, then reject/void/permanent-lock behavior.
