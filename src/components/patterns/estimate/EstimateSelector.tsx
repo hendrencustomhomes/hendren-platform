@@ -6,6 +6,7 @@ import {
   createEstimate,
   setActiveEstimate,
   archiveEstimate,
+  restoreEstimate,
   duplicateEstimate,
   renameEstimate,
 } from '@/app/actions/estimate-actions'
@@ -41,7 +42,7 @@ function Btn({ children, onClick, disabled, variant = 'default' }: {
   children: ReactNode
   onClick: () => void
   disabled?: boolean
-  variant?: 'default' | 'danger'
+  variant?: 'default' | 'danger' | 'primary'
 }) {
   return (
     <button
@@ -51,8 +52,9 @@ function Btn({ children, onClick, disabled, variant = 'default' }: {
       style={{
         fontSize: 11, padding: '2px 8px',
         border: '1px solid var(--border)', borderRadius: 4,
-        background: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
-        color: variant === 'danger' ? '#dc2626' : 'var(--text)',
+        background: variant === 'primary' ? 'var(--blue, #2563eb)' : 'none',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        color: variant === 'danger' ? '#dc2626' : variant === 'primary' ? '#fff' : 'var(--text)',
         fontWeight: 600, opacity: disabled ? 0.4 : 1,
       }}
     >
@@ -66,6 +68,7 @@ export function EstimateSelector({ jobId, estimates }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
   const [flashError, setFlashError] = useState<string | null>(null)
+  const [confirmArchiveId, setConfirmArchiveId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -176,14 +179,22 @@ export function EstimateSelector({ jobId, estimates }: Props) {
                   </span>
                 )}
                 <StatusBadge status={est.status} />
-                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                  {est.status !== 'active' && (
-                    <Btn onClick={() => act(() => setActiveEstimate(est.id, jobId))} disabled={isPending}>Use</Btn>
-                  )}
-                  <Btn onClick={() => startRename(est)} disabled={isPending}>Rename</Btn>
-                  <Btn onClick={() => act(() => duplicateEstimate(est.id, jobId))} disabled={isPending}>Copy</Btn>
-                  {est.status !== 'active' && (
-                    <Btn onClick={() => act(() => archiveEstimate(est.id, jobId))} disabled={isPending} variant="danger">Archive</Btn>
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center' }}>
+                  {confirmArchiveId === est.id ? (
+                    <>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Are you sure?</span>
+                      <Btn onClick={() => setConfirmArchiveId(null)} disabled={isPending}>No</Btn>
+                      <Btn onClick={() => { setConfirmArchiveId(null); act(() => archiveEstimate(est.id, jobId)) }} disabled={isPending} variant="primary">Yes</Btn>
+                    </>
+                  ) : (
+                    <>
+                      {est.status !== 'active' && (
+                        <Btn onClick={() => act(() => setActiveEstimate(est.id, jobId))} disabled={isPending}>Use</Btn>
+                      )}
+                      <Btn onClick={() => startRename(est)} disabled={isPending}>Rename</Btn>
+                      <Btn onClick={() => act(() => duplicateEstimate(est.id, jobId))} disabled={isPending}>Copy</Btn>
+                      <Btn onClick={() => setConfirmArchiveId(est.id)} disabled={isPending} variant="danger">Archive</Btn>
+                    </>
                   )}
                 </div>
               </div>
@@ -201,7 +212,7 @@ export function EstimateSelector({ jobId, estimates }: Props) {
                     <span style={{ flex: 1, fontSize: 12, color: 'var(--text-muted)' }}>{est.title}</span>
                     <StatusBadge status={est.status} />
                     <div style={{ display: 'flex', gap: 4 }}>
-                      <Btn onClick={() => act(() => setActiveEstimate(est.id, jobId))} disabled={isPending}>Restore</Btn>
+                      <Btn onClick={() => act(() => restoreEstimate(est.id, jobId))} disabled={isPending}>Restore</Btn>
                       <Btn onClick={() => act(() => duplicateEstimate(est.id, jobId))} disabled={isPending}>Copy</Btn>
                     </div>
                   </div>

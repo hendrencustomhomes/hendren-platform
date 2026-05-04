@@ -236,6 +236,38 @@ export async function importEstimate(
   return { estimateId: newEstimate.id }
 }
 
+export async function restoreEstimate(
+  estimateId: string,
+  jobId: string,
+): Promise<{ success: true } | { error: string }> {
+  const auth = await requireUser()
+  if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
+  if (permGuard) return permGuard
+
+  const { data: estimate, error: fetchError } = await auth.supabase
+    .from('estimates')
+    .select('status')
+    .eq('id', estimateId)
+    .single()
+
+  if (fetchError || !estimate) return { error: fetchError?.message ?? 'Estimate not found' }
+  if (estimate.status !== 'archived') {
+    return { error: `Cannot restore an estimate with status '${estimate.status}'. Only archived estimates can be restored.` }
+  }
+
+  const { error } = await auth.supabase
+    .from('estimates')
+    .update({ status: 'draft', updated_at: new Date().toISOString() })
+    .eq('id', estimateId)
+    .eq('job_id', jobId)
+
+  if (error) return { error: error.message }
+  revalidateWorksheet(jobId)
+  return { success: true }
+}
+
 export async function renameEstimate(
   estimateId: string,
   title: string,
