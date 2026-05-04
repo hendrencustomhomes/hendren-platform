@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { isEstimateEditable } from '@/lib/estimateTypes'
+import { requireModuleAccess } from '@/lib/access-control-server'
 import type { JobWorksheetRow } from '@/components/patterns/estimate/JobWorksheetTableAdapter'
 import type {
   CreateJobWorksheetRowInput,
@@ -43,6 +44,9 @@ export async function persistWorksheetRow(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
+
   const guard = await requireEditableEstimate(auth.supabase, estimateId)
   if (guard) return guard
 
@@ -63,6 +67,9 @@ export async function createWorksheetRow(
 ): Promise<JobWorksheetRow | { error: string }> {
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
 
   const guard = await requireEditableEstimate(auth.supabase, input.estimate_id)
   if (guard) return guard
@@ -86,6 +93,9 @@ export async function restoreWorksheetRows(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
+
   const guard = await requireEditableEstimate(auth.supabase, estimateId)
   if (guard) return guard
 
@@ -104,6 +114,9 @@ export async function deleteWorksheetRow(
 ): Promise<{ success: true } | { error: string }> {
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
 
   const guard = await requireEditableEstimate(auth.supabase, estimateId)
   if (guard) return guard
@@ -126,6 +139,9 @@ export async function persistWorksheetSortOrders(
 
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
 
   const guard = await requireEditableEstimate(auth.supabase, estimateId)
   if (guard) return guard

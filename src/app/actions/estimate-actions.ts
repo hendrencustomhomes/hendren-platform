@@ -5,6 +5,7 @@ import { createClient } from '@/utils/supabase/server'
 import type { Estimate } from '@/lib/estimateTypes'
 import { ESTIMATE_SELECT, isEstimateEditable } from '@/lib/estimateTypes'
 import { parseImportCsv } from '@/lib/worksheetCsv'
+import { requireModuleAccess } from '@/lib/access-control-server'
 
 async function requireUser() {
   const supabase = await createClient()
@@ -23,6 +24,9 @@ export async function getEstimatesForJob(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'view')
+  if (permGuard) return permGuard
+
   const { data, error } = await auth.supabase
     .from('estimates')
     .select(ESTIMATE_SELECT)
@@ -39,6 +43,9 @@ export async function createEstimate(
 ): Promise<{ estimate: Estimate } | { error: string }> {
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
 
   const { data, error } = await auth.supabase
     .from('estimates')
@@ -58,6 +65,9 @@ export async function setActiveEstimate(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
+
   const { error } = await auth.supabase.rpc('set_active_estimate', {
     p_estimate_id: estimateId,
     p_job_id: jobId,
@@ -74,6 +84,9 @@ export async function archiveEstimate(
 ): Promise<{ success: true } | { error: string }> {
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
 
   const { data: estimate, error: fetchError } = await auth.supabase
     .from('estimates')
@@ -103,6 +116,9 @@ export async function duplicateEstimate(
 ): Promise<{ estimate: Estimate } | { error: string }> {
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
 
   const [
     { data: source, error: fetchError },
@@ -187,6 +203,9 @@ export async function importEstimate(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
+
   // Import always creates a new draft estimate — it is never locked by definition.
   // (Locking applies to existing estimates, not freshly created ones.)
   const { data: newEstimate, error: createError } = await auth.supabase
@@ -224,6 +243,9 @@ export async function renameEstimate(
 ): Promise<{ success: true } | { error: string }> {
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
 
   if (!title.trim()) return { error: 'Name cannot be empty' }
 

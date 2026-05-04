@@ -21,6 +21,83 @@ import {
   type WorkflowRoleRecord,
 } from './access-control'
 
+// ---------------------------------------------------------------------------
+// Per-action permission guard
+// ---------------------------------------------------------------------------
+// Returns null when access is granted; { error } when denied.
+// Admin users (is_admin = true in internal_access) bypass all permission checks.
+// For non-admins, resolves the effective permission from user_permission_snapshots,
+// with fallback to template_permissions when no snapshot row exists for the user.
+// A user with no permission record at all is denied.
+export async function requireModuleAccess(
+  profileId: string,
+  rowKey: PermissionRowKey,
+  level: 'view' | 'manage',
+): Promise<{ error: string } | null> {
+  const admin = createAdminClient()
+
+  // 1. Verify the user is an active internal user; collect admin flag and template id.
+  const { data: access, error: accessError } = await admin
+    .from('internal_access')
+    .select('is_admin, is_active, permission_template_id')
+    .eq('profile_id', profileId)
+    .maybeSingle()
+
+  if (accessError) return { error: accessError.message }
+  if (!access?.is_active) return { error: 'Internal user access required' }
+
+  // 2. Admins bypass all row-level permission checks.
+  if (access.is_admin) return null
+
+  // 3. Resolve the permission_row id for the given key.
+  const { data: permRow, error: permRowError } = await admin
+    .from('permission_rows')
+    .select('id')
+    .eq('key', rowKey)
+    .maybeSingle()
+
+  if (permRowError) return { error: permRowError.message }
+  if (!permRow?.id) return { error: `Permission row '${rowKey}' not found` }
+
+  // 4. Check user_permission_snapshots first.
+  const { data: snapshot, error: snapshotError } = await admin
+    .from('user_permission_snapshots')
+    .select('can_view, can_manage, can_assign')
+    .eq('profile_id', profileId)
+    .eq('permission_row_id', permRow.id)
+    .maybeSingle()
+
+  if (snapshotError) return { error: snapshotError.message }
+
+  let perms: { canView: boolean; canManage: boolean }
+
+  if (snapshot) {
+    perms = normalizePermissionState(rowKey, snapshot)
+  } else if (access.permission_template_id) {
+    // Fall back to the user's assigned template when no personal snapshot exists.
+    const { data: templatePerm, error: templateError } = await admin
+      .from('template_permissions')
+      .select('can_view, can_manage, can_assign')
+      .eq('permission_template_id', access.permission_template_id)
+      .eq('permission_row_id', permRow.id)
+      .maybeSingle()
+
+    if (templateError) return { error: templateError.message }
+    perms = normalizePermissionState(rowKey, templatePerm ?? { canView: false, canManage: false, canAssign: false })
+  } else {
+    perms = { canView: false, canManage: false }
+  }
+
+  if (level === 'view' && !perms.canView) {
+    return { error: 'You do not have permission to view estimates' }
+  }
+  if (level === 'manage' && !perms.canManage) {
+    return { error: 'You do not have permission to manage estimates' }
+  }
+
+  return null
+}
+
 function mapTemplateRecord(record: any): PermissionTemplateRecord | null {
   const key = getNormalizedKey(record)
   if (!isPermissionTemplateKey(key)) return null
