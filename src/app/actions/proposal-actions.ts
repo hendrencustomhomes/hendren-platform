@@ -79,60 +79,6 @@ export async function saveProposalStructure(
   return { success: true }
 }
 
-// Lock the proposal (draft → sent) and lock the related estimate.
-export async function lockProposal(
-  estimateId: string,
-  jobId: string,
-): Promise<{ success: true } | { error: string }> {
-  const auth = await requireUser()
-  if ('error' in auth) return { error: 'Not authenticated' }
-
-  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
-  if (permGuard) return permGuard
-
-  const { data: existing, error: fetchErr } = await auth.supabase
-    .from('proposal_structures')
-    .select('proposal_status')
-    .eq('estimate_id', estimateId)
-    .maybeSingle()
-
-  if (fetchErr) return { error: fetchErr.message }
-
-  const currentStatus = (existing?.proposal_status ?? 'draft') as ProposalStatus
-  if (currentStatus !== 'draft') {
-    return { error: `Cannot lock: proposal is already '${currentStatus}'.` }
-  }
-
-  const now = new Date().toISOString()
-
-  const { error: lockEstimateErr } = await auth.supabase
-    .from('estimates')
-    .update({ locked_at: now, locked_by: auth.user.id, locked_reason: 'proposal_sent' })
-    .eq('id', estimateId)
-
-  if (lockEstimateErr) return { error: lockEstimateErr.message }
-
-  const { error: lockProposalErr } = await auth.supabase
-    .from('proposal_structures')
-    .upsert(
-      {
-        estimate_id: estimateId,
-        proposal_status: 'sent',
-        locked_at: now,
-        locked_by: auth.user.id,
-        locked_reason: 'proposal_sent',
-        updated_at: now,
-      },
-      { onConflict: 'estimate_id' },
-    )
-
-  if (lockProposalErr) return { error: lockProposalErr.message }
-
-  revalidateProposal(jobId)
-  revalidatePath(`/jobs/${jobId}/worksheet`)
-  return { success: true }
-}
-
 // Unlock the proposal (sent → draft) and unlock the related estimate.
 // Only allowed when status is 'sent'. Signed proposals cannot be unlocked.
 export async function unlockProposal(
