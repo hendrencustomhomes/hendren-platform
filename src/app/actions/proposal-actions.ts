@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/utils/supabase/server'
 import type { ProposalStructureJson, ProposalStatus } from '@/lib/proposalStructure'
+import { requireModuleAccess } from '@/lib/access-control-server'
 
 async function requireUser() {
   const supabase = await createClient()
@@ -28,6 +29,9 @@ export async function getProposalStructure(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'view')
+  if (permGuard) return permGuard
+
   const { data, error } = await auth.supabase
     .from('proposal_structures')
     .select('structure_json, proposal_status, locked_at')
@@ -47,6 +51,9 @@ export async function saveProposalStructure(
 ): Promise<{ success: true } | { error: string }> {
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
 
   // Block structure saves on locked proposals (app-layer enforcement)
   const { data: existing } = await auth.supabase
@@ -79,6 +86,9 @@ export async function lockProposal(
 ): Promise<{ success: true } | { error: string }> {
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
 
   const { data: existing, error: fetchErr } = await auth.supabase
     .from('proposal_structures')
@@ -132,6 +142,9 @@ export async function unlockProposal(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
+
   const { data: existing, error: fetchErr } = await auth.supabase
     .from('proposal_structures')
     .select('proposal_status')
@@ -183,6 +196,9 @@ export async function signProposal(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
+
   const { data: existing, error: fetchErr } = await auth.supabase
     .from('proposal_structures')
     .select('proposal_status')
@@ -216,6 +232,9 @@ export async function voidProposal(
 ): Promise<{ success: true } | { error: string }> {
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
 
   const { data: existing, error: fetchErr } = await auth.supabase
     .from('proposal_structures')

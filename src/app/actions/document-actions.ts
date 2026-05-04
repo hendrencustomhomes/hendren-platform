@@ -13,6 +13,7 @@ import { ESTIMATE_SELECT } from '@/lib/estimateTypes'
 import type { Estimate } from '@/lib/estimateTypes'
 import type { ProposalSnapshotJson, ProposalDocStatus } from '@/lib/proposalSnapshot'
 import { validateEstimateForSend } from '@/lib/estimateValidation'
+import { requireModuleAccess } from '@/lib/access-control-server'
 
 async function requireUser() {
   const supabase = await createClient()
@@ -31,6 +32,9 @@ export async function createProposalSnapshot(
 ): Promise<{ documentId: string } | { error: string }> {
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
 
   const { data: job } = await auth.supabase
     .from('jobs')
@@ -142,6 +146,9 @@ export async function sendProposal(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
+
   const { data: job } = await auth.supabase
     .from('jobs')
     .select('job_name')
@@ -248,6 +255,9 @@ export async function voidProposalDocument(
 ): Promise<{ success: true } | { error: string }> {
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
 
   const { data: doc, error: fetchErr } = await auth.supabase
     .from('proposal_documents')
