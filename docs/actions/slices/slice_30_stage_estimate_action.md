@@ -53,7 +53,27 @@ This migration is intentionally deferred. No code currently calls `stageEstimate
 
 ## 5. Intentionally Not Changed
 
-- SQL migration — deferred; see DB migration debt above
-- No UI wired to `stageEstimate` — UI is a future slice
+- SQL migration — deferred; see DB migration debt above (note: DB enum was applied separately after this report; see current.md)
 - `EstimateStatus` type — already includes `'staged'` from the architecture rewrite (Slice 28)
 - No changes to any other actions, components, or guards
+
+---
+
+## 6. Post-Slice Correction (applied in Slice 31)
+
+The allowed transition documented above — `draft or active → staged` — was incorrect as implemented and as intended.
+
+**Correction:** Staging is restricted to **active estimates only**.
+
+```
+active → staged   ✓
+draft  → staged   ✗  (never allowed)
+```
+
+The rationale: staging represents locking the working estimate for management review before sending. Only the job's currently active estimate is meaningful to stage. A draft estimate has not been selected as the working estimate and should not be stageable.
+
+The `stageEstimate` guard was updated in Slice 31 to enforce `status === 'active'` only.
+
+**Unstage flow introduced in Slice 31:**
+
+`unstageEstimate` was added as the reverse transition: `staged → active`. It uses the `set_active_estimate` RPC to atomically promote the estimate back to active and demote any currently active estimate for the same job. Requires `edit` permission; rejects locked estimates.

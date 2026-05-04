@@ -285,19 +285,54 @@ export async function stageEstimate(
     .single()
 
   if (fetchError || !estimate) return { error: fetchError?.message ?? 'Estimate not found' }
-  if (estimate.status !== 'draft' && estimate.status !== 'active') {
-    return { error: `Cannot stage an estimate with status '${estimate.status}'. Only draft or active estimates can be staged.` }
+  if (estimate.status !== 'active') {
+    return { error: `Cannot stage an estimate with status '${estimate.status}'. Only the active estimate can be staged.` }
   }
   if (estimate.locked_at) {
     return { error: 'Cannot stage a locked estimate.' }
   }
 
-  // NOTE: 'staged' must be added to the DB estimate_status enum before this write will succeed at runtime.
   const { error } = await auth.supabase
     .from('estimates')
     .update({ status: 'staged', updated_at: new Date().toISOString() })
     .eq('id', estimateId)
     .eq('job_id', jobId)
+
+  if (error) return { error: error.message }
+  revalidateWorksheet(jobId)
+  return { success: true }
+}
+
+export async function unstageEstimate(
+  estimateId: string,
+  jobId: string,
+): Promise<{ success: true } | { error: string }> {
+  const auth = await requireUser()
+  if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
+  if (permGuard) return permGuard
+
+  const { data: estimate, error: fetchError } = await auth.supabase
+    .from('estimates')
+    .select('status, locked_at')
+    .eq('id', estimateId)
+    .single()
+
+  if (fetchError || !estimate) return { error: fetchError?.message ?? 'Estimate not found' }
+  if (estimate.status !== 'staged') {
+    return { error: `Cannot unstage an estimate with status '${estimate.status}'. Only staged estimates can be unstaged.` }
+  }
+  if (estimate.locked_at) {
+    return { error: 'Cannot unstage a locked estimate.' }
+  }
+
+  // Use set_active_estimate RPC to atomically promote this estimate to active
+  // and demote any currently active estimate for the same job.
+  const { error } = await auth.supabase.rpc('set_active_estimate', {
+    p_estimate_id: estimateId,
+    p_job_id: jobId,
+  })
 
   if (error) return { error: error.message }
   revalidateWorksheet(jobId)

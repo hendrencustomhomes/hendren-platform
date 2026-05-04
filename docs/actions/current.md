@@ -79,7 +79,11 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 - Active estimates can be archived without requiring another active estimate first
 - `EstimateSelector.tsx` exposes Archive for active estimates and uses inline confirmation copy: `Are you sure?` with `[No] [Yes]`, Yes highlighted
 - `restoreEstimate` server action restores `archived` → `draft` and requires `edit`
-- `stageEstimate` server action transitions `draft|active` → `staged`, requires `edit`, and rejects locked estimates
+- `stageEstimate` server action transitions `active` → `staged` only, requires `edit`, and rejects locked estimates
+- `unstageEstimate` server action transitions `staged` → `active` (via `set_active_estimate` RPC), requires `edit`, and rejects locked estimates
+- Lifecycle forward path: `draft` → `active` → `staged` → `sent`
+- Reverse path: `staged` → `active` (unstage); `archived` → `draft` (restore)
+- `EstimateSelector.tsx` exposes Stage for active estimates; Unstage for staged estimates; Archive (with confirmation) for all non-staged non-archived estimates
 - Archived estimate Restore UI calls `restoreEstimate`, not `setActiveEstimate`
 - Worksheet mutations protected at both app (`edit` guard) + RLS layers
 - Health indicators visible (non-blocking)
@@ -96,6 +100,7 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 | `archiveEstimate`         | estimate-actions.ts        | `edit`   |
 | `restoreEstimate`         | estimate-actions.ts        | `edit`   |
 | `stageEstimate`           | estimate-actions.ts        | `edit`   |
+| `unstageEstimate`         | estimate-actions.ts        | `edit`   |
 | `duplicateEstimate`       | estimate-actions.ts        | `edit`   |
 | `importEstimate`          | estimate-actions.ts        | `edit`   |
 | `renameEstimate`          | estimate-actions.ts        | `edit`   |
@@ -125,7 +130,7 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 ## 4. Known gaps (verified)
 
 - No pricing resolution logic
-- `stageEstimate` exists server-side but no UI calls it yet
+- `stageEstimate` (active → staged) and `unstageEstimate` (staged → active) are wired in `EstimateSelector.tsx`
 - `rejected` status is defined in TypeScript and DB but no reject action exists yet
 - `sent`, `signed`, `rejected`, and `voided` statuses exist on `estimates.status`, but send/sign/void paths still primarily mutate `proposal_structures` and/or `proposal_documents`
 - `createProposalSnapshot` and `sendProposal` still create/store `snapshot_json`; target architecture says estimate is durable truth and proposal artifacts must not become competing source of truth
@@ -136,17 +141,12 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 
 ## 5. Next recommended work
 
-1. **Stage UI wiring**
-   - Add a bounded UI path to call `stageEstimate`
-   - Only show Stage for `draft` / `active`
-   - Make staged visibly non-editable and not archivable
-
-2. **Reject / void / permanent-lock flow**
+1. **Reject / void / permanent-lock flow**
    - Add reject flow requiring `manage`
    - Reconcile or remove unlock behavior so sent estimates are not silently editable again
    - Preserve manual duplicate path for rejected/voided estimates
 
-3. **Proposal artifact source-of-truth cleanup**
+2. **Proposal artifact source-of-truth cleanup**
    - Ensure proposal documents are audit/output artifacts only
    - Prevent `snapshot_json` from becoming competing authoritative estimate truth
 
@@ -163,6 +163,8 @@ The permission/status foundation, archive/restore behavior, DB enum, and staging
 - Server and UI allow archiving draft/active estimates, including active estimates
 - Archive confirmation is implemented with minimal inline UI
 - Archived estimates restore to `draft`, not `active`
-- `stageEstimate` exists server-side and can write `staged`
+- `stageEstimate` transitions `active` → `staged` (not `draft` → `staged`)
+- `unstageEstimate` transitions `staged` → `active` via the `set_active_estimate` RPC
+- Stage/Unstage buttons are wired in `EstimateSelector.tsx`
 
-The next meaningful work is wiring staging into the UI, then reject/void/permanent-lock behavior.
+The next meaningful work is reject/void/permanent-lock behavior.

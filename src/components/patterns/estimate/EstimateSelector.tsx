@@ -7,6 +7,8 @@ import {
   setActiveEstimate,
   archiveEstimate,
   restoreEstimate,
+  stageEstimate,
+  unstageEstimate,
   duplicateEstimate,
   renameEstimate,
 } from '@/app/actions/estimate-actions'
@@ -186,10 +188,18 @@ export function EstimateSelector({ jobId, estimates }: Props) {
                       <Btn onClick={() => setConfirmArchiveId(null)} disabled={isPending}>No</Btn>
                       <Btn onClick={() => { setConfirmArchiveId(null); act(() => archiveEstimate(est.id, jobId)) }} disabled={isPending} variant="primary">Yes</Btn>
                     </>
+                  ) : est.status === 'staged' ? (
+                    <>
+                      <Btn onClick={() => act(() => unstageEstimate(est.id, jobId))} disabled={isPending}>Unstage</Btn>
+                      <Btn onClick={() => act(() => duplicateEstimate(est.id, jobId))} disabled={isPending}>Copy</Btn>
+                    </>
                   ) : (
                     <>
                       {est.status !== 'active' && (
                         <Btn onClick={() => act(() => setActiveEstimate(est.id, jobId))} disabled={isPending}>Use</Btn>
+                      )}
+                      {est.status === 'active' && (
+                        <Btn onClick={() => act(() => stageEstimate(est.id, jobId))} disabled={isPending}>Stage</Btn>
                       )}
                       <Btn onClick={() => startRename(est)} disabled={isPending}>Rename</Btn>
                       <Btn onClick={() => act(() => duplicateEstimate(est.id, jobId))} disabled={isPending}>Copy</Btn>
