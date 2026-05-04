@@ -1,32 +1,26 @@
-# Handoff — 2026-05-03 (Slices 21–23 Safety Completion)
+# Handoff — 2026-05-04 (Slices 25–28 Infrastructure Completion)
 
 ---
 
 ## What changed this session
 
-### 1. Slice 21 — RLS enforcement
-- Database-level protection added for `job_worksheet_items`
-- Mutations now blocked at DB level unless estimate is editable
-- Closed direct Supabase bypass risk
+### Slice 25 — RLS / service-role audit
+- Identified all mutation paths
+- Confirmed where RLS applies vs bypasses
+- Flagged SECURITY DEFINER risk on `send_proposal`
 
-### 2. Slice 22 — Estimate health indicators
-- Added read-only worksheet health summary (`EstimateHealthSummary`)
-- Surfaces:
-  - unpriced rows
-  - missing quantity
-  - linked rows
-  - excluded rows
-- Visibility only — no blocking behavior
+### Slice 26 — proposal/document permission guards
+- Added `requireModuleAccess` to all proposal and document actions
+- Closed critical permission gap before SECURITY DEFINER RPC
 
-### 3. Slice 23 — Send validation guardrails
-- Introduced `validateEstimateForSend` in `src/lib/estimateValidation.ts`
-- Integrated into `sendProposal` in `document-actions.ts`
-- Blocks send when:
-  - rows are unpriced
-  - quantity is missing
-  - line items have zero/missing unit price
-- Errors returned and surfaced through existing UI
-- No UI redesign required
+### Slice 27 — lockProposal resolution
+- Deleted unused, non-atomic `lockProposal`
+- Removed redundant mutation path
+
+### Slice 28 — set_active_estimate RPC audit
+- Verified DB function is **SECURITY INVOKER**
+- Confirmed RLS applies inside function
+- No additional guards required
 
 ---
 
@@ -34,59 +28,60 @@
 
 The Estimate → Proposal → Send pipeline is now:
 
-### Fully protected at three levels
+### Fully enforced across all layers
 
 1. **Application layer**
-   - `isEstimateEditable()` enforced across mutations
+   - `requireModuleAccess` enforces permission levels
+   - `isEstimateEditable()` enforces state
 
 2. **Database layer**
-   - RLS enforces editability for worksheet mutations
+   - RLS protects worksheet and estimate mutations
+   - `set_active_estimate` respects RLS (SECURITY INVOKER)
 
-3. **Send layer**
-   - Server-side validation blocks unsafe proposal sends
+3. **Privileged operations**
+   - `sendProposal` guarded before SECURITY DEFINER RPC
+   - No unguarded mutation paths remain
 
-### Visibility layer
-- Worksheet health indicators expose issues before send
-
-System is now **functionally complete and materially safe for real-world use**, with remaining risk concentrated in privileged paths and secondary flows.
+### Structural cleanup
+- Dead mutation path (`lockProposal`) removed
+- All active paths are canonical and consistent
 
 ---
 
-## Remaining risks
+## Remaining gaps
 
-- `lockProposal` is not validated (not currently user-facing)
-- RLS is not forced (service-role bypass possible)
-- Service-role usage has not been audited
-- Estimate approval/status lifecycle is incomplete
-- Pricing resolution is still manual
+- Estimate approval/status transition model not defined
+- Pricing resolution logic not implemented
+- `unlockProposal` remains non-atomic (acceptable for now)
+- Permission helper may need caching optimization later
 
 ---
 
 ## Next step (locked)
 
-### Slice: RLS hardening / service-role audit
+### Slice 29 — estimate approval/status transition design
 
 Scope:
-- Identify all server actions and API paths using service role
-- Confirm no user-driven mutations bypass RLS
-- Evaluate whether RLS should be forced (`ALTER TABLE ... FORCE ROW LEVEL SECURITY`)
-- Ensure proposal send path cannot be bypassed via alternate actions
+- Define estimate lifecycle states (draft / active / sent / signed / etc.)
+- Define transitions and constraints
+- Align estimate + proposal state coupling
+- Define which actions control transitions
 
 Follow-up:
-- Estimate approval/status flow
 - Pricing resolution logic
 
 ---
 
 ## What NOT to touch
 
-- Do NOT rebuild worksheet system
-- Do NOT redesign proposal builder UI
-- Do NOT introduce pricing automation yet
-- Do NOT refactor validation into a new system
+- Do NOT modify RLS policies
+- Do NOT modify DB functions
+- Do NOT introduce new permission systems
+- Do NOT change proposal send flow
+- Do NOT refactor worksheet system
 
 ---
 
 ## current.md updated?
 
-Yes — updated to reflect Slices 21–23 and corrected system state
+Yes — updated to reflect Slice 28 and completed infrastructure track
