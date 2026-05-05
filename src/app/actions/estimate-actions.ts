@@ -68,6 +68,18 @@ export async function setActiveEstimate(
   const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
   if (permGuard) return permGuard
 
+  const { data: stagedOther } = await auth.supabase
+    .from('estimates')
+    .select('id')
+    .eq('job_id', jobId)
+    .eq('status', 'staged')
+    .neq('id', estimateId)
+    .limit(1)
+
+  if (stagedOther && stagedOther.length > 0) {
+    return { error: 'Cannot activate another estimate while one is staged.' }
+  }
+
   const { error } = await auth.supabase.rpc('set_active_estimate', {
     p_estimate_id: estimateId,
     p_job_id: jobId,

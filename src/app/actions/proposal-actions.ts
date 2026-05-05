@@ -79,61 +79,6 @@ export async function saveProposalStructure(
   return { success: true }
 }
 
-// Unlock the proposal (sent → draft) and unlock the related estimate.
-// Only allowed when status is 'sent'. Signed proposals cannot be unlocked.
-export async function unlockProposal(
-  estimateId: string,
-  jobId: string,
-): Promise<{ success: true } | { error: string }> {
-  const auth = await requireUser()
-  if ('error' in auth) return { error: 'Not authenticated' }
-
-  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
-  if (permGuard) return permGuard
-
-  const { data: existing, error: fetchErr } = await auth.supabase
-    .from('proposal_structures')
-    .select('proposal_status')
-    .eq('estimate_id', estimateId)
-    .maybeSingle()
-
-  if (fetchErr) return { error: fetchErr.message }
-
-  const currentStatus = (existing?.proposal_status ?? 'draft') as ProposalStatus
-  if (currentStatus === 'signed') {
-    return { error: 'A signed proposal cannot be unlocked.' }
-  }
-  if (currentStatus !== 'sent') {
-    return { error: `Cannot unlock: proposal status is '${currentStatus}'.` }
-  }
-
-  const now = new Date().toISOString()
-
-  const { error: unlockEstimateErr } = await auth.supabase
-    .from('estimates')
-    .update({ locked_at: null, locked_by: null, locked_reason: null })
-    .eq('id', estimateId)
-
-  if (unlockEstimateErr) return { error: unlockEstimateErr.message }
-
-  const { error: unlockProposalErr } = await auth.supabase
-    .from('proposal_structures')
-    .update({
-      proposal_status: 'draft',
-      locked_at: null,
-      locked_by: null,
-      locked_reason: null,
-      updated_at: now,
-    })
-    .eq('estimate_id', estimateId)
-
-  if (unlockProposalErr) return { error: unlockProposalErr.message }
-
-  revalidateProposal(jobId)
-  revalidatePath(`/jobs/${jobId}/worksheet`)
-  return { success: true }
-}
-
 // Sign the proposal (sent → signed). Cannot be undone.
 export async function signProposal(
   estimateId: string,
@@ -211,6 +156,43 @@ export async function voidProposal(
       .update({ locked_at: null, locked_by: null, locked_reason: null })
       .eq('id', estimateId)
   }
+
+  revalidateProposal(jobId)
+  revalidatePath(`/jobs/${jobId}/worksheet`)
+  return { success: true }
+}
+
+// Reject the proposal (sent → rejected on estimates).
+// The proposal_structures record remains at 'sent' — ProposalStatus does not include 'rejected'.
+// Estimates is the authoritative status source; rejection is an estimate-lifecycle event.
+export async function rejectProposal(
+  estimateId: string,
+  jobId: string,
+): Promise<{ success: true } | { error: string }> {
+  const auth = await requireUser()
+  if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'manage')
+  if (permGuard) return permGuard
+
+  const { data: estimate, error: fetchErr } = await auth.supabase
+    .from('estimates')
+    .select('status')
+    .eq('id', estimateId)
+    .single()
+
+  if (fetchErr || !estimate) return { error: fetchErr?.message ?? 'Estimate not found' }
+  if (estimate.status !== 'sent') {
+    return { error: `Cannot reject: estimate status is '${estimate.status}'. Only sent estimates can be rejected.` }
+  }
+
+  const { error } = await auth.supabase
+    .from('estimates')
+    .update({ status: 'rejected', updated_at: new Date().toISOString() })
+    .eq('id', estimateId)
+    .eq('job_id', jobId)
+
+  if (error) return { error: error.message }
 
   revalidateProposal(jobId)
   revalidatePath(`/jobs/${jobId}/worksheet`)

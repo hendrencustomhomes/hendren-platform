@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
 import {
   saveProposalStructure,
-  unlockProposal,
   signProposal,
   voidProposal,
 } from '@/app/actions/proposal-actions'
@@ -141,14 +140,6 @@ export default function ProposalBuilderOrchestrator({
     })
   }
 
-  function handleUnlock() {
-    setActionError(null)
-    startTransition(async () => {
-      const result = await unlockProposal(estimateId, jobId)
-      if ('error' in result) setActionError(result.error)
-    })
-  }
-
   function handleSign() {
     setActionError(null)
     startTransition(async () => {
@@ -241,13 +232,6 @@ export default function ProposalBuilderOrchestrator({
               </button>
             )}
 
-            {/* Unlock: sent → draft (only when sent, not signed) */}
-            {proposalStatus === 'sent' && (
-              <button type="button" onClick={handleUnlock} disabled={isPending} style={btnStyle}>
-                Unlock
-              </button>
-            )}
-
             {/* Sign: sent → signed */}
             {proposalStatus === 'sent' && (
               <button type="button" onClick={handleSign} disabled={isPending} style={btnStyle}>
@@ -280,8 +264,7 @@ export default function ProposalBuilderOrchestrator({
             color: '#92400e',
           }}>
             This proposal is locked. Worksheet edits and structure changes are blocked.
-            {proposalStatus === 'sent' && ' Click "Unlock" to revert to draft.'}
-            {proposalStatus === 'signed' && ' A signed proposal cannot be unlocked — duplicate the estimate to create a new draft.'}
+            {proposalStatus === 'signed' && ' A signed proposal is permanent — duplicate the estimate to start a new one.'}
           </div>
         )}
 

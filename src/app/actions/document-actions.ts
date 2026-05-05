@@ -163,8 +163,8 @@ export async function sendProposal(
     .order('created_at', { ascending: true })
 
   const estimates = (estimatesRaw ?? []) as Estimate[]
-  const activeEstimate = estimates.find((e) => e.id === estimateId && e.status === 'active') ?? null
-  if (!activeEstimate) return { error: 'No active estimate found' }
+  const stagedEstimate = estimates.find((e) => e.id === estimateId && e.status === 'staged') ?? null
+  if (!stagedEstimate) return { error: 'Only a staged estimate can be sent' }
 
   // Load worksheet rows and proposal structure in one round-trip
   const [{ data: rowsRaw }, { data: structureRecord }] = await Promise.all([
@@ -209,7 +209,7 @@ export async function sendProposal(
     captured_at: new Date().toISOString(),
     proposal_status: 'sent',
     job_name: job.job_name || '',
-    estimate_title: activeEstimate.title,
+    estimate_title: stagedEstimate.title,
     grand_total: summary.grandTotal,
     sections: summary.sections.map((section) => ({
       id: section.id,
@@ -239,6 +239,16 @@ export async function sendProposal(
   })
 
   if (rpcErr) return { error: rpcErr.message }
+
+  // The send_proposal RPC sets locked_at on the estimate but does not update estimates.status.
+  // Update it to 'sent' here so the estimate lifecycle reflects the final state.
+  const { error: statusErr } = await auth.supabase
+    .from('estimates')
+    .update({ status: 'sent', updated_at: new Date().toISOString() })
+    .eq('id', estimateId)
+    .eq('job_id', jobId)
+
+  if (statusErr) return { error: statusErr.message }
 
   revalidatePath(`/jobs/${jobId}/proposal`)
   revalidatePath(`/jobs/${jobId}/proposal/builder`)

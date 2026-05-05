@@ -18,26 +18,27 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 ## 2. Last verified completed work
 
-Latest completed work: **Slice 31 — Stage Flow Tightened to Active-Only with Unstage and Doc Correction**
+Latest completed work: **Slice 32 — Reject and Permanent Lock**
 
 Recent completed slices/work:
-- **Architecture rewrite — permission model and estimate status**
 - **Slice 29 — archive and restore behavior alignment**
 - **DB enum update — estimate_status values appended**
 - **Slice 30 — stage estimate server action**
 - **Slice 31 — stage/unstage UI and doc correction**
+- **Slice 32 — reject and permanent lock**
 
 Reports:
-- `docs/actions/architecture/permission_status_rewrite.md`
 - `docs/actions/slices/slice_29_archive_restore_fix.md`
 - `docs/actions/slices/slice_30_stage_estimate_action.md`
 - `docs/actions/slices/slice_31_stage_unstage_ui.md`
+- `docs/actions/slices/slice_32_reject_and_lock.md`
 
 Verified files after latest work:
 - `src/app/actions/estimate-actions.ts`
+- `src/app/actions/proposal-actions.ts`
+- `src/app/actions/document-actions.ts`
 - `src/components/patterns/estimate/EstimateSelector.tsx`
-- `docs/actions/slices/slice_30_stage_estimate_action.md`
-- `docs/actions/slices/slice_31_stage_unstage_ui.md`
+- `src/components/patterns/proposal/ProposalBuilderOrchestrator.tsx`
 
 Note: `docs/actions/slices/slice_30_stage_estimate_action.md` originally said the enum migration was deferred, but the DB enum was applied separately and the report now has a post-slice correction. Current DB enum values are confirmed as: `draft`, `active`, `approved`, `archived`, `staged`, `sent`, `signed`, `rejected`, `voided`.
 
@@ -84,14 +85,18 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 - `restoreEstimate` server action restores `archived` → `draft` and requires `edit`
 - `stageEstimate` server action transitions `active` → `staged` only, requires `edit`, and rejects locked estimates
 - `unstageEstimate` server action transitions `staged` → `active` via `set_active_estimate` RPC, requires `edit`, and rejects locked estimates
-- Lifecycle forward path: `draft` → `active` → `staged` → `sent`
+- Lifecycle forward path: `draft` → `active` → `staged` → `sent` → `rejected` (or `signed` / `voided`)
 - Reverse path: `staged` → `active` (unstage); `archived` → `draft` (restore)
-- `EstimateSelector.tsx` exposes Stage for active estimates; Unstage for staged estimates; Archive (with confirmation) for all non-staged non-archived estimates
+- `setActiveEstimate` is blocked if any other estimate for the same job is staged
+- `EstimateSelector.tsx` exposes Stage for active estimates; Unstage for staged estimates; Archive (with confirmation) for all non-staged non-archived estimates; Copy-only for rejected
 - Archived estimate Restore UI calls `restoreEstimate`, not `setActiveEstimate`
+- `sendProposal` requires `staged` status; RPC sets `locked_at`; action then sets `estimates.status = 'sent'`
+- `rejectProposal` server action transitions `sent` → `rejected` on estimates; `proposal_structures` remains at `sent`; requires `manage`
+- `unlockProposal` removed; sent proposals cannot be reverted to draft
 - Worksheet mutations protected at both app (`edit` guard) + RLS layers
 - Health indicators visible (non-blocking)
 - Send validation enforced server-side
-- `lockProposal` deleted; canonical send path is currently `sendProposal` via atomic `send_proposal` RPC
+- Canonical send path is `sendProposal` via `send_proposal` RPC (SECURITY DEFINER)
 
 ### Action permission guards
 
@@ -114,7 +119,7 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 | `persistWorksheetSortOrders` | worksheet-item-actions.ts | `edit` |
 | `getProposalStructure`    | proposal-actions.ts        | `view`   |
 | `saveProposalStructure`   | proposal-actions.ts        | `edit`   |
-| `unlockProposal`          | proposal-actions.ts        | `manage` |
+| `rejectProposal`          | proposal-actions.ts        | `manage` |
 | `signProposal`            | proposal-actions.ts        | `manage` |
 | `voidProposal`            | proposal-actions.ts        | `manage` |
 | `createProposalSnapshot`  | document-actions.ts        | `edit`   |
@@ -133,24 +138,18 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 ## 4. Known gaps (verified)
 
 - No pricing resolution logic
-- `stageEstimate` (active → staged) and `unstageEstimate` (staged → active) are wired in `EstimateSelector.tsx`
-- `unstageEstimate` currently uses `set_active_estimate`; Slice 31 flagged that the RPC may have internal status assumptions. If runtime testing shows it rejects staged estimates, create a dedicated `unstage_estimate` RPC or adjust the DB function.
-- `rejected` status is defined in TypeScript and DB but no reject action exists yet
-- `sent`, `signed`, `rejected`, and `voided` statuses exist on `estimates.status`, but send/sign/void paths still primarily mutate `proposal_structures` and/or `proposal_documents`
+- `unstageEstimate` uses `set_active_estimate` RPC; if the RPC has internal status guards that reject staged estimates, a dedicated `unstage_estimate` RPC will be needed
+- `estimates.status = 'sent'` is set by `sendProposal` after the RPC; if that UPDATE fails after the RPC commits, the estimate remains `staged` with `locked_at` set — a consistency gap that would require the `send_proposal` RPC to own the status write
+- `createProposalSnapshot` still checks `status === 'active'`; it does not support staged estimates and would need updating if used from the staged proposal flow
 - `createProposalSnapshot` and `sendProposal` still create/store `snapshot_json`; target architecture says estimate is durable truth and proposal artifacts must not become competing source of truth
-- `unlockProposal` is a non-atomic dual-write path and conflicts with permanent-lock direction for sent estimates; likely should be removed or redesigned after void/duplicate flow exists
+- `rejectProposal` only updates `estimates.status`; `proposal_structures.proposal_status` remains `sent` (ProposalStatus does not include 'rejected'); future UI may need to check `estimates.status` for rejected state
 - `pricing-access-actions.ts` does not use `requireModuleAccess` and does not check `is_admin`; inconsistency with estimate/proposal paths
 
 ---
 
 ## 5. Next recommended work
 
-1. **Reject / void / permanent-lock flow**
-   - Add reject flow requiring `manage`
-   - Reconcile or remove unlock behavior so sent estimates are not silently editable again
-   - Preserve manual duplicate path for rejected/voided estimates
-
-2. **Proposal artifact source-of-truth cleanup**
+1. **Proposal artifact source-of-truth cleanup**
    - Ensure proposal documents are audit/output artifacts only
    - Prevent `snapshot_json` from becoming competing authoritative estimate truth
 
@@ -167,8 +166,11 @@ The permission/status foundation, archive/restore behavior, DB enum, and staging
 - Server and UI allow archiving draft/active estimates, including active estimates
 - Archive confirmation is implemented with minimal inline UI
 - Archived estimates restore to `draft`, not `active`
-- `stageEstimate` transitions `active` → `staged` only
+- `stageEstimate` transitions `active` → `staged` only; `setActiveEstimate` blocked while staged estimate exists
 - `unstageEstimate` transitions `staged` → `active` via the `set_active_estimate` RPC
-- Stage/Unstage buttons are wired in `EstimateSelector.tsx`
+- Stage/Unstage buttons are wired in `EstimateSelector.tsx`; rejected estimates show Copy only
+- `sendProposal` requires staged status; sets `estimates.status = 'sent'` after RPC
+- `rejectProposal` transitions `sent` → `rejected` on estimates, requires `manage`
+- `unlockProposal` removed; sent proposals are permanently locked
 
-The next meaningful work is reject/void/permanent-lock behavior.
+The next meaningful work is proposal artifact source-of-truth cleanup and the void/sign flow alignment with estimate status.

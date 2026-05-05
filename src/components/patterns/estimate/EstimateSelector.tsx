@@ -193,6 +193,8 @@ export function EstimateSelector({ jobId, estimates }: Props) {
                       <Btn onClick={() => act(() => unstageEstimate(est.id, jobId))} disabled={isPending}>Unstage</Btn>
                       <Btn onClick={() => act(() => duplicateEstimate(est.id, jobId))} disabled={isPending}>Copy</Btn>
                     </>
+                  ) : est.status === 'rejected' ? (
+                    <Btn onClick={() => act(() => duplicateEstimate(est.id, jobId))} disabled={isPending}>Copy</Btn>
                   ) : (
                     <>
                       {est.status !== 'active' && (
