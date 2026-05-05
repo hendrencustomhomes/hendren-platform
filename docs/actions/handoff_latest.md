@@ -1,110 +1,88 @@
-# Handoff — 2026-05-05 (Slices 29–33 Pipeline Completion + SQL Process Correction)
+# Handoff — 2026-05-05 (Through Slice 38)
 
 ---
 
-## What changed this session
+## What changed
 
-### Slice 29 — archive and restore alignment
-- Allowed archiving of active estimates
-- Fixed restore to return archived → draft
-- Added confirmation UX
+Latest completed slice: **Slice 38 — Pricing Permission Alignment**
 
-### Slice 30 — stage estimate (server)
-- Introduced `staged` lifecycle state
-- Server-side transition implemented
-
-### Slice 31 — stage/unstage UI + lifecycle correction
-- Restricted staging to active only
-- Added `unstageEstimate` (staged → active)
-- Wired Stage/Unstage into UI
-
-### Slice 32 — reject + permanent lock
-- Removed `unlockProposal`
-- Added `rejectProposal`
-- Enforced send requires staged
-- Blocked active switching when staged exists
-
-### Slice 33 — send RPC atomic fix
-- `send_proposal` now atomically:
-  - enforces staged
-  - locks estimate
-  - sets `estimates.status = sent`
-  - updates proposal_structures
-  - inserts snapshot
-- Removed app-layer post-RPC status update
-
-### Process correction — SQL handling
-- Identified incorrect behavior: repo migration file was created
-- Deleted migration file
-- Updated system rules:
-  - SQL changes are Supabase-direct
-  - Repo migrations are forbidden unless explicitly requested
-- Updated templates and START_HERE to enforce rule
+Recent confirmed state:
+- Slice reports now live in module directories under `docs/modules/`.
+- SQL/schema/RPC/RLS/enum changes are Supabase-direct and must not be committed as repo migration files unless explicitly requested.
+- `is_admin` remains a SQL/admin-only superuser flag. Feature code must not check it directly; feature authorization must route through `requireModuleAccess`.
+- `getCurrentPricingAccess` now delegates permission checks to `requireModuleAccess`, so pricing access inherits shared admin bypass, snapshot resolution, and template fallback.
 
 ---
 
 ## Current state
 
-The Estimate → Proposal → Send pipeline is now fully enforced and consistent:
+Primary track: **Estimate → Proposal → Send pipeline**
+
+Lifecycle:
 
 ```text
-draft → active → staged → sent → rejected / signed / voided → archived
+draft → active → staged → sent → rejected / signed / voided
+archived restores to draft
 ```
 
-### Guarantees
-
-- **Staging gate enforced** (UI + server + DB)
-- **Send is atomic at DB layer** (no partial state)
-- **Sent is permanently locked** (no unlock path)
-- **Single active estimate enforced** (blocked when staged exists)
-- **Archive/restore behaves correctly**
-- **Permissions fully aligned (view/edit/manage)**
-
-### Data truth
-
-- Estimate = authoritative truth
-- Proposal = formatted view + snapshot artifact
-- DB enforces critical transitions (not just app)
+Current guarantees:
+- Permission model is `view` / `edit` / `manage`.
+- Existing DB columns still map as `can_view` / `can_manage` / `can_assign`.
+- `manage` includes `edit`; `edit` includes `view`.
+- `sendProposal` requires `staged` and uses the atomic `send_proposal` RPC.
+- Sent estimates are permanently locked; no unlock path remains.
+- `signProposal` and `voidProposal` update both proposal structure and estimate status.
+- `rejectProposal` updates estimate status only; proposal structure intentionally remains `sent`.
+- `snapshot_json` is documented as a write-once audit artifact, not authoritative truth.
+- `createProposalSnapshot` supports `active` and `staged` estimates only.
+- Pricing access is now routed through the shared guard.
 
 ---
 
-## Remaining gaps
+## Known gaps
 
-- `snapshot_json` still duplicates estimate data (not yet de-authoritized)
-- `createProposalSnapshot` only supports active (not staged)
-- `rejectProposal` does not update proposal_structures
-- `void/sign` not fully aligned with estimate.status
-- Pricing resolution logic not implemented
+- Permission naming is semantically awkward at the DB/code boundary: `can_manage` currently means `edit`, and `can_assign` currently means `manage`.
+- `unlinkRowFromPricing` has no pricing permission check; only `isEstimateEditable` currently protects it.
+- `unstageEstimate` uses `set_active_estimate`; if that RPC later rejects staged estimates internally, a dedicated `unstage_estimate` RPC will be needed.
+- `SnapshotCreateButton` UI only surfaces on the preview page when an active estimate exists; staged-flow snapshot button wiring is not implemented.
+- UI components that read only `proposal_structures.proposal_status` will show `sent` for rejected proposals; UI that needs rejected state must read `estimates.status`.
+- Pricing resolution logic is not implemented.
 
 ---
 
-## Next step (locked)
+## Next step
 
-### Slice 34 — proposal artifact truth cleanup
+### Slice 39 — Permission matrix naming alignment audit
 
-Scope:
-- Ensure proposal_documents are output-only artifacts
-- Remove any logic treating snapshot_json as authoritative
-- Align all reads to estimate + worksheet
+Goal:
+- Audit all current `can_manage` / `can_assign` usage before any rename.
+- Identify DB columns, query selects, inserts/updates, TypeScript types, UI labels, RPC/RLS dependencies, and compatibility risks.
+- Do **not** rename yet.
 
-Follow-up:
-- Void/sign alignment with estimate status
+Expected report path:
+
+```text
+docs/modules/platform/slice_39_permission_naming_audit.md
+```
+
+Follow-up likely after audit:
+- Decide whether to keep compatibility mapping or perform SQL-direct DB rename.
+- Add pricing permission guard to `unlinkRowFromPricing` after naming alignment is settled.
 
 ---
 
 ## What NOT to touch
 
-- Do NOT reintroduce repo migration files
-- Do NOT modify DB functions without SQL prompt
-- Do NOT loosen staged → send requirement
-- Do NOT add unlock paths
-- Do NOT refactor worksheet system
+- Do NOT rename permission columns before the audit is complete.
+- Do NOT create repo migration files.
+- Do NOT bypass `requireModuleAccess` in feature code.
+- Do NOT add direct `is_admin` checks in feature code.
+- Do NOT loosen staged → send requirements.
+- Do NOT reintroduce unlock paths.
+- Do NOT treat `snapshot_json` as authoritative estimate truth.
 
 ---
 
 ## current.md updated?
 
-Yes — updated to reflect:
-- Slice 33 completion
-- atomic send behavior
-- SQL process rule
+No update was needed during this handoff. `docs/actions/current.md` already reflected Slice 38 and the next permission naming audit.
