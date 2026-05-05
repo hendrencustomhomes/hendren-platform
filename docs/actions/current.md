@@ -18,15 +18,16 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 ## 2. Last verified completed work
 
-Latest completed work: **Slice 33 — Send RPC Atomic Status Cleanup**
+Latest completed work: **Slice 33 — Send RPC Atomic Status Cleanup + SQL process correction**
 
 Recent completed slices/work:
 - **Slice 29 — archive and restore behavior alignment**
-- **DB enum update — estimate_status values appended**
+- **DB enum update — estimate_status values appended** (applied directly in Supabase)
 - **Slice 30 — stage estimate server action**
 - **Slice 31 — stage/unstage UI and doc correction**
 - **Slice 32 — reject and permanent lock**
 - **Slice 33 — send RPC atomic status cleanup**
+- **Process correction — SQL changes are Supabase-direct; repo migration files are forbidden unless explicitly requested**
 
 Reports:
 - `docs/actions/slices/slice_29_archive_restore_fix.md`
@@ -36,17 +37,31 @@ Reports:
 - `docs/actions/slices/slice_33_send_rpc_atomic_status_cleanup.md`
 
 Verified files after latest work:
-- `src/app/actions/estimate-actions.ts`
-- `src/app/actions/proposal-actions.ts`
+- `docs/actions/START_HERE.md`
+- `docs/actions/templates/claude_chat_sql_prompt.md`
+- `docs/actions/templates/claude_code_prompt.md`
+- `docs/actions/current.md`
 - `src/app/actions/document-actions.ts`
-- `src/components/patterns/estimate/EstimateSelector.tsx`
-- `src/components/patterns/proposal/ProposalBuilderOrchestrator.tsx`
+- `docs/actions/slices/slice_33_send_rpc_atomic_status_cleanup.md`
 
 Note: `docs/actions/slices/slice_30_stage_estimate_action.md` originally said the enum migration was deferred, but the DB enum was applied separately and the report now has a post-slice correction. Current DB enum values are confirmed as: `draft`, `active`, `approved`, `archived`, `staged`, `sent`, `signed`, `rejected`, `voided`.
 
 ---
 
 ## 3. Current platform state (verified)
+
+### SQL / DB process rule
+
+SQL / schema / RPC / RLS / enum changes are made directly in Supabase through Claude Chat or another SQL-focused tool.
+
+Do NOT create, modify, or commit files under `supabase/migrations/` unless the user explicitly asks for repo migration files.
+
+This rule is now recorded in:
+- `docs/actions/START_HERE.md`
+- `docs/actions/templates/claude_chat_sql_prompt.md`
+
+The mistakenly committed Slice 33 migration file was removed from `dev`:
+- `supabase/migrations/20260505001007_make_send_proposal_set_estimate_sent.sql` is confirmed absent.
 
 ### Permission model
 
@@ -132,7 +147,7 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 
 - RLS enforced for worksheet mutation safety
 - `estimate_status` DB enum now accepts all TypeScript lifecycle values, plus legacy `approved`
-- `send_proposal` RPC runs as SECURITY DEFINER; `sendProposal` applies `manage` guard before invoking it; RPC now atomically sets `estimates.status = 'sent'` and enforces `staged` precondition at the DB layer (migration `20260505001007`)
+- `send_proposal` RPC runs as SECURITY DEFINER; `sendProposal` applies `manage` guard before invoking it; RPC now atomically sets `estimates.status = 'sent'` and enforces `staged` precondition at the DB layer (Supabase-direct change version `20260505001007`)
 - `set_active_estimate` RPC verified SECURITY INVOKER; RLS applies inside the function
 
 ---
@@ -141,7 +156,6 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 
 - No pricing resolution logic
 - `unstageEstimate` uses `set_active_estimate` RPC; if the RPC has internal status guards that reject staged estimates, a dedicated `unstage_estimate` RPC will be needed
-- `estimates.status = 'sent'` is set atomically inside the `send_proposal` RPC (migration `20260505001007`); the prior consistency gap (RPC commits but app-layer UPDATE fails) is resolved
 - `createProposalSnapshot` still checks `status === 'active'`; it does not support staged estimates and would need updating if used from the staged proposal flow
 - `createProposalSnapshot` and `sendProposal` still create/store `snapshot_json`; target architecture says estimate is durable truth and proposal artifacts must not become competing source of truth
 - `rejectProposal` only updates `estimates.status`; `proposal_structures.proposal_status` remains `sent` (ProposalStatus does not include 'rejected'); future UI may need to check `estimates.status` for rejected state
@@ -154,6 +168,10 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 1. **Proposal artifact source-of-truth cleanup**
    - Ensure proposal documents are audit/output artifacts only
    - Prevent `snapshot_json` from becoming competing authoritative estimate truth
+
+2. **Void/sign flow alignment with estimate status**
+   - Align `voidProposal` and `signProposal` with `estimates.status`
+   - Ensure void does not unlock sent estimates
 
 ---
 
@@ -174,5 +192,6 @@ The permission/status foundation, archive/restore behavior, DB enum, and staging
 - `sendProposal` requires staged status; `send_proposal` RPC atomically sets `estimates.status = 'sent'` inside the same transaction that locks the estimate, transitions the proposal, and inserts the snapshot
 - `rejectProposal` transitions `sent` → `rejected` on estimates, requires `manage`
 - `unlockProposal` removed; sent proposals are permanently locked
+- SQL changes are applied directly in Supabase, not committed as repo migration files unless explicitly requested
 
 The next meaningful work is proposal artifact source-of-truth cleanup and the void/sign flow alignment with estimate status.
