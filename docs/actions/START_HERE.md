@@ -144,16 +144,18 @@ If a conflict affects implementation direction:
 ## 11. Tool roles
 
 Actions GPT = planner + truth manager
-Claude Code = executor
-Claude Chat = SQL / DB
+Claude Code = repo/code executor
+Claude Chat = SQL / DB executor
 
 ---
 
 ## 12. Database rule
 
-- Schema changes = migrations only
-- No casual DDL
-- Reads are fine
+- SQL / schema / RPC / RLS / enum changes are made directly in Supabase through Claude Chat or another SQL-focused tool.
+- Do NOT create, modify, or commit files under `supabase/migrations/` unless the user explicitly asks for repo migration files.
+- Claude Code prompts must not include SQL migration-file creation by default.
+- If DB state changes outside the repo, update `docs/actions/current.md` and any relevant reports/docs to record the live DB truth.
+- Reads are fine.
 
 ---
 
