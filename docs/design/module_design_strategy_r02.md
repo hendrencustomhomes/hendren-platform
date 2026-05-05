@@ -79,6 +79,75 @@ Rules:
 
 ---
 
+## Pricing Resolution Model (New — REQUIRED)
+
+Worksheet rows may exist in one of the following states:
+
+- **Manual** (no pricing link)
+- **Linked (live)** — values resolve from pricing source
+- **Linked (overridden)** — source retained, but one or more fields overridden
+- **Detached** (optional) — previously linked, now independent
+
+### Source of Truth Rules
+
+For each pricing field (starting with unit cost):
+
+```text
+IF overridden → use override
+ELSE IF linked → use pricing source
+ELSE → use manual value
+```
+
+These rules must be enforced in a centralized resolver, not spread across UI.
+
+### Link Behavior Rules
+
+- Linking is **live by default** — source changes propagate
+- Overrides do **not break the link**
+- Overrides are tracked per-field (not per-row)
+- Source changes must never silently overwrite overrides
+
+### Change Handling
+
+When pricing source changes:
+- linked rows update automatically if not overridden
+- overridden rows retain override but must surface mismatch
+
+### UI Principles
+
+- Minimal UI: icons over text where intuitive
+- No persistent badges for normal states
+- Surface detail on hover/click only
+
+State indicators:
+- linked → chain icon
+- overridden → chain + pencil
+- source changed → subtle dot indicator
+- detached → broken chain
+
+### Architectural Rules
+
+- Resolution logic lives in module state layer (not UI)
+- Shared UI must not contain pricing logic
+- Adapter maps resolved values to table display
+- Persistence stores both source reference and override metadata
+
+### Data Model Direction
+
+Prefer explicit columns over JSON for V1:
+
+- source reference (pricing row id)
+- base/source value
+- override value
+- override flag
+
+This ensures:
+- queryability
+- debuggability
+- constraint enforcement
+
+---
+
 ## Pricing Source Rules (Added)
 
 - `catalog_sku` = identity
