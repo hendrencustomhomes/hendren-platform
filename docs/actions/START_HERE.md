@@ -111,7 +111,45 @@ Do not paraphrase. Do not wrap in quotes. Provide it as a clean, copyable block.
 
 ---
 
-## 9. Scope of Actions docs
+## 9. Slice report location
+
+Slice reports must be written to the correct module directory under `docs/modules/`.
+
+Do NOT write slice reports to:
+- `docs/actions/slices/`
+- `docs/slices/`
+- `docs/audits/`
+- `docs/archive/`
+- any other legacy slice/audit/archive directory
+
+Required module destinations:
+
+| Work type | Report directory |
+|-----------|------------------|
+| Estimate, proposal, worksheet-in-estimate, send pipeline | `docs/modules/estimate/` |
+| Pricing, catalog, pricing sources | `docs/modules/pricing/` |
+| Cross-cutting platform, permissions, shared foundation, worksheet engine audits, repo-wide bugfixes | `docs/modules/platform/` |
+
+Estimate and proposal are the same module. A proposal is an output artifact of the estimate pipeline, so proposal-side slice reports belong in `docs/modules/estimate/`.
+
+File naming remains:
+
+`slice_##_<short_name>.md`
+
+Examples:
+- `docs/modules/estimate/slice_34_void_sign_alignment.md`
+- `docs/modules/pricing/slice_12_catalog_identity_cleanup.md`
+- `docs/modules/platform/slice_12_permission_guard_fix.md`
+
+If unsure which module applies:
+- default to `docs/modules/estimate/` unless the work is clearly pricing/catalog or platform-level infrastructure
+- record the reasoning in the slice report
+
+This rule overrides any older instruction or template reference that points to `docs/actions/slices/` or another legacy report directory.
+
+---
+
+## 10. Scope of Actions docs
 
 These files are **ChatGPT operating memory only**.
 
@@ -125,7 +163,7 @@ They do NOT replace module specs.
 
 ---
 
-## 10. Conflict handling
+## 11. Conflict handling
 
 If docs disagree:
 
@@ -141,7 +179,7 @@ If a conflict affects implementation direction:
 
 ---
 
-## 11. Tool roles
+## 12. Tool roles
 
 Actions GPT = planner + truth manager
 Claude Code = repo/code executor
@@ -149,7 +187,7 @@ Claude Chat = SQL / DB executor
 
 ---
 
-## 12. Database rule
+## 13. Database rule
 
 - SQL / schema / RPC / RLS / enum changes are made directly in Supabase through Claude Chat or another SQL-focused tool.
 - Do NOT create, modify, or commit files under `supabase/migrations/` unless the user explicitly asks for repo migration files.
@@ -159,7 +197,7 @@ Claude Chat = SQL / DB executor
 
 ---
 
-## 13. File write safety
+## 14. File write safety
 
 Before modifying any existing repo file, ChatGPT must read the full current file from `dev`.
 
@@ -173,7 +211,7 @@ If the file is too large or risky to safely rewrite, stop and report instead of 
 
 ---
 
-## 14. Design standard (non-negotiable)
+## 15. Design standard (non-negotiable)
 
 All file writes and edits must conform to:
 
@@ -203,7 +241,7 @@ Before proposing structural or architectural changes:
 
 ---
 
-## 15. Claude prompt requirements
+## 16. Claude prompt requirements
 
 All Claude Code prompts MUST use:
 
@@ -213,11 +251,13 @@ All Claude Chat / SQL / DB prompts MUST use:
 
 `docs/actions/templates/claude_chat_sql_prompt.md`
 
+Claude Code prompts must include an explicit module-correct slice report path from Section 9. Do not use legacy report directories.
+
 No ad-hoc prompt formats.
 
 ---
 
-## 16. Next required file
+## 17. Next required file
 
 Create next:
 
@@ -225,7 +265,7 @@ Create next:
 
 ---
 
-## 17. Fresh chat opener
+## 18. Fresh chat opener
 
 Use this:
 
@@ -233,6 +273,6 @@ Fresh sync on dev. Read docs/actions/START_HERE.md, then docs/actions/current.md
 
 ---
 
-## 18. Directive
+## 19. Directive
 
 Keep the repo clean, current, and resumable.
