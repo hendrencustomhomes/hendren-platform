@@ -79,7 +79,7 @@ export async function saveProposalStructure(
   return { success: true }
 }
 
-// Sign the proposal (sent → signed). Cannot be undone.
+// Sign the proposal (sent → signed on both proposal_structures and estimates). Cannot be undone.
 export async function signProposal(
   estimateId: string,
   jobId: string,
@@ -103,20 +103,29 @@ export async function signProposal(
     return { error: `Cannot sign: proposal must be 'sent' first (currently '${currentStatus}').` }
   }
 
-  const { error } = await auth.supabase
+  const now = new Date().toISOString()
+
+  const { error: proposalErr } = await auth.supabase
     .from('proposal_structures')
-    .update({ proposal_status: 'signed', updated_at: new Date().toISOString() })
+    .update({ proposal_status: 'signed', updated_at: now })
     .eq('estimate_id', estimateId)
 
-  if (error) return { error: error.message }
+  if (proposalErr) return { error: proposalErr.message }
+
+  const { error: estimateErr } = await auth.supabase
+    .from('estimates')
+    .update({ status: 'signed', updated_at: now })
+    .eq('id', estimateId)
+
+  if (estimateErr) return { error: estimateErr.message }
 
   revalidateProposal(jobId)
+  revalidatePath(`/jobs/${jobId}/worksheet`)
   return { success: true }
 }
 
-// Void the proposal (sent or signed → voided).
-// If voided from 'sent', also unlocks the estimate.
-// If voided from 'signed', estimate stays locked (signed is irreversible).
+// Void the proposal (sent or signed → voided on both proposal_structures and estimates).
+// Estimates remain locked; voided is a terminal locked state.
 export async function voidProposal(
   estimateId: string,
   jobId: string,
@@ -149,13 +158,12 @@ export async function voidProposal(
 
   if (voidErr) return { error: voidErr.message }
 
-  // Only unlock the estimate if voided from 'sent' (signed lock is permanent)
-  if (currentStatus === 'sent') {
-    await auth.supabase
-      .from('estimates')
-      .update({ locked_at: null, locked_by: null, locked_reason: null })
-      .eq('id', estimateId)
-  }
+  const { error: estimateErr } = await auth.supabase
+    .from('estimates')
+    .update({ status: 'voided', updated_at: now })
+    .eq('id', estimateId)
+
+  if (estimateErr) return { error: estimateErr.message }
 
   revalidateProposal(jobId)
   revalidatePath(`/jobs/${jobId}/worksheet`)
