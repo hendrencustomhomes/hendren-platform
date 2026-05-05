@@ -28,13 +28,14 @@ Recent completed slices/work:
 - **Slice 32 — reject and permanent lock**
 - **Slice 33 — send RPC atomic status cleanup**
 - **Process correction — SQL changes are Supabase-direct; repo migration files are forbidden unless explicitly requested**
+- **Doc restructure — slice reports now live in module directories under `docs/modules/`**
 
 Reports:
-- `docs/actions/slices/slice_29_archive_restore_fix.md`
-- `docs/actions/slices/slice_30_stage_estimate_action.md`
-- `docs/actions/slices/slice_31_stage_unstage_ui.md`
-- `docs/actions/slices/slice_32_reject_and_lock.md`
-- `docs/actions/slices/slice_33_send_rpc_atomic_status_cleanup.md`
+- `docs/modules/estimate/slice_29_archive_restore_fix.md`
+- `docs/modules/estimate/slice_30_stage_estimate_action.md`
+- `docs/modules/estimate/slice_31_stage_unstage_ui.md`
+- `docs/modules/estimate/slice_32_reject_and_lock.md`
+- `docs/modules/estimate/slice_33_send_rpc_atomic_status_cleanup.md`
 
 Verified files after latest work:
 - `docs/actions/START_HERE.md`
@@ -42,9 +43,9 @@ Verified files after latest work:
 - `docs/actions/templates/claude_code_prompt.md`
 - `docs/actions/current.md`
 - `src/app/actions/document-actions.ts`
-- `docs/actions/slices/slice_33_send_rpc_atomic_status_cleanup.md`
+- `docs/modules/estimate/slice_33_send_rpc_atomic_status_cleanup.md`
 
-Note: `docs/actions/slices/slice_30_stage_estimate_action.md` originally said the enum migration was deferred, but the DB enum was applied separately and the report now has a post-slice correction. Current DB enum values are confirmed as: `draft`, `active`, `approved`, `archived`, `staged`, `sent`, `signed`, `rejected`, `voided`.
+Note: `docs/modules/estimate/slice_30_stage_estimate_action.md` originally said the enum migration was deferred, but the DB enum was applied separately and the report now has a post-slice correction. Current DB enum values are confirmed as: `draft`, `active`, `approved`, `archived`, `staged`, `sent`, `signed`, `rejected`, `voided`.
 
 ---
 
@@ -62,6 +63,19 @@ This rule is now recorded in:
 
 The mistakenly committed Slice 33 migration file was removed from `dev`:
 - `supabase/migrations/20260505001007_make_send_proposal_set_estimate_sent.sql` is confirmed absent.
+
+### Slice report location rule
+
+Slice reports must be written to module directories under `docs/modules/`, not legacy slice/audit/archive paths.
+
+Current mapping:
+- Estimate / proposal / worksheet-in-estimate / send pipeline → `docs/modules/estimate/`
+- Pricing / catalog / pricing sources → `docs/modules/pricing/`
+- Cross-cutting platform / permissions / shared foundation / worksheet engine audits / repo-wide bugfixes → `docs/modules/platform/`
+
+This rule is recorded in:
+- `docs/actions/START_HERE.md`
+- `docs/actions/templates/claude_code_prompt.md`
 
 ### Permission model
 
@@ -177,7 +191,7 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 
 ## 6. Summary
 
-The permission/status foundation, archive/restore behavior, DB enum, and staging flow are now aligned:
+The permission/status foundation, archive/restore behavior, DB enum, staging flow, and documentation report paths are now aligned:
 
 - Three-level permission model: `view` / `edit` / `manage`
 - Existing DB mapping: `can_view` / `can_manage` / `can_assign`
@@ -193,5 +207,6 @@ The permission/status foundation, archive/restore behavior, DB enum, and staging
 - `rejectProposal` transitions `sent` → `rejected` on estimates, requires `manage`
 - `unlockProposal` removed; sent proposals are permanently locked
 - SQL changes are applied directly in Supabase, not committed as repo migration files unless explicitly requested
+- Slice reports are written to module directories under `docs/modules/`, not legacy slice/audit/archive paths
 
 The next meaningful work is proposal artifact source-of-truth cleanup and the void/sign flow alignment with estimate status.
