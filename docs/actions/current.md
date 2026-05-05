@@ -18,7 +18,7 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 ## 2. Last verified completed work
 
-Latest completed work: **Slice 37 — Rejected Proposal Status Asymmetry**
+Latest completed slice: **Slice 37 — Rejected Proposal Status Asymmetry**
 
 Recent completed slices/work:
 - **Slice 29 — archive and restore behavior alignment**
@@ -33,6 +33,7 @@ Recent completed slices/work:
 - **Slice 35 — `snapshot_json` usage audited and constrained as write-once audit output only**
 - **Slice 36 — `createProposalSnapshot` eligibility widened to include staged estimates**
 - **Slice 37 — rejected proposal status asymmetry documented as intentional design**
+- **Design update — `is_admin` retained as SQL/admin-only superuser flag; feature code must route through `requireModuleAccess`**
 
 Reports:
 - `docs/modules/estimate/slice_29_archive_restore_fix.md`
@@ -50,6 +51,7 @@ Verified files after latest work:
 - `docs/actions/templates/claude_chat_sql_prompt.md`
 - `docs/actions/templates/claude_code_prompt.md`
 - `docs/actions/current.md`
+- `docs/design/module_structure`
 - `src/app/actions/document-actions.ts`
 - `src/app/actions/proposal-actions.ts`
 - `src/lib/proposalSnapshot.ts`
@@ -102,7 +104,15 @@ Hierarchy: `manage` satisfies `edit` + `view`. `edit` satisfies `view`.
 
 Guard: `requireModuleAccess(profileId, rowKey, 'view' | 'edit' | 'manage')` in `src/lib/access-control-server.ts`.
 
-Admin bypass: `is_admin = true` in `internal_access` skips all row-level permission checks.
+Admin/superuser policy:
+- `is_admin = true` in `internal_access` is retained as a SQL/admin-assigned superuser flag
+- feature code must not check `is_admin` directly
+- all feature authorization must route through `requireModuleAccess`
+- any admin bypass must live only inside the shared access-control layer
+- there must be no normal UI for assigning or removing `is_admin`
+
+This policy is recorded in:
+- `docs/design/module_structure`
 
 ### Estimate status lifecycle
 
@@ -186,7 +196,8 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 
 - No pricing resolution logic
 - `unstageEstimate` uses `set_active_estimate` RPC; if the RPC has internal status guards that reject staged estimates, a dedicated `unstage_estimate` RPC will be needed
-- `pricing-access-actions.ts` does not use `requireModuleAccess` and does not check `is_admin`; inconsistency with estimate/proposal paths
+- Permission naming is semantically awkward at the DB/code boundary: current matrix columns use `can_view`, `can_manage`, `can_assign`, while code semantics are `view`, `edit`, `manage`
+- `pricing-access-actions.ts` does not use `requireModuleAccess`; inconsistency with estimate/proposal paths
 - `SnapshotCreateButton` UI only surfaces on the preview page when an active estimate exists; staged-flow snapshot button wiring not yet implemented
 - UI components that read only `proposal_structures.proposal_status` will show `sent` for rejected proposals; any UI that needs rejected state must read `estimates.status`
 
@@ -194,23 +205,25 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 
 ## 5. Next recommended work
 
-1. **`pricing-access-actions.ts` permission guard alignment**
-   - Does not use `requireModuleAccess` and does not check `is_admin`
-   - Inconsistent with estimate/proposal permission paths; assess and align
+1. **Permission matrix naming alignment**
+   - Rename semantic permission fields so `canManage` becomes `canEdit` and `canAssign` becomes `canManage`
+   - Keep DB migration/change separate and SQL-direct if physical DB columns are renamed
+   - Avoid breaking the `view` / `edit` / `manage` behavior contract
 
-2. **Staged snapshot UI wiring**
-   - `createProposalSnapshot` now supports staged estimates, but the UI still only surfaces snapshot creation from the active preview flow
-   - Add a staged-safe UI entry only if it does not confuse canonical send behavior
+2. **`pricing-access-actions.ts` permission guard alignment**
+   - Does not use `requireModuleAccess`
+   - Inconsistent with estimate/proposal permission paths; assess and align after permission naming is settled
 
 ---
 
 ## 6. Summary
 
-The permission/status foundation, archive/restore behavior, DB enum, staging flow, sign/void transitions, rejection asymmetry decision, snapshot audit-artifact contract, and documentation report paths are now aligned:
+The permission/status foundation, archive/restore behavior, DB enum, staging flow, sign/void transitions, rejection asymmetry decision, snapshot audit-artifact contract, admin superuser policy, and documentation report paths are now aligned:
 
 - Three-level permission model: `view` / `edit` / `manage`
-- Existing DB mapping: `can_view` / `can_manage` / `can_assign`
+- Existing DB mapping: `can_view` / `can_manage` / `can_assign`, though naming is now flagged for cleanup
 - `manage` includes `edit`; `edit` includes `view`
+- `is_admin` remains as SQL/admin-only superuser access inside the shared guard, not feature code
 - DB and TypeScript lifecycle statuses now include draft, active, staged, sent, signed, rejected, voided, archived
 - Server and UI allow archiving draft/active estimates, including active estimates
 - Archive confirmation is implemented with minimal inline UI
@@ -228,4 +241,4 @@ The permission/status foundation, archive/restore behavior, DB enum, staging flo
 - SQL changes are applied directly in Supabase, not committed as repo migration files unless explicitly requested
 - Slice reports are written to module directories under `docs/modules/`, not legacy slice/audit/archive paths
 
-The next meaningful work is `pricing-access-actions.ts` permission guard consistency, followed by staged snapshot UI wiring if still desired.
+The next meaningful work is permission matrix naming alignment, then pricing access guard consistency.
