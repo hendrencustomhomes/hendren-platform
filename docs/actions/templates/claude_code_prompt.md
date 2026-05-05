@@ -63,7 +63,7 @@ Expected files to inspect:
 Expected files to modify:
 - [FILE]
 - [FILE]
-- [SLICE REPORT PATH]
+- [MODULE-CORRECT SLICE REPORT PATH UNDER docs/modules/]
 
 Files/modules not to touch:
 - [FILE OR MODULE]
@@ -91,8 +91,13 @@ STOP CONDITIONS
 ---
 
 Slice report:
-- Write a concise completion report to: [SLICE REPORT PATH]
-- Use `docs/actions/slices/slice_##_<short_name>.md` unless a different path is explicitly required.
+- Write a concise completion report to: [MODULE-CORRECT SLICE REPORT PATH UNDER docs/modules/]
+- Do NOT write reports to legacy directories such as `docs/actions/slices/`, `docs/slices/`, `docs/audits/`, or `docs/archive/`.
+- Use the module mapping in `docs/actions/START_HERE.md`:
+  - Estimate / proposal / worksheet-in-estimate / send pipeline → `docs/modules/estimate/`
+  - Pricing / catalog / pricing sources → `docs/modules/pricing/`
+  - Cross-cutting platform / permissions / shared foundation / worksheet engine audits / repo-wide bugfixes → `docs/modules/platform/`
+- File naming remains `slice_##_<short_name>.md`.
 - Create the parent folder if needed.
 - The report must include:
   1. Slice name
@@ -145,7 +150,8 @@ Before generating a Claude Code prompt:
 4. Include exact files whenever possible.
 5. Include explicit stop conditions.
 6. Do not include general Actions docs in Claude prompts unless directly needed for implementation.
-7. Use a deterministic slice report path, preferably `docs/actions/slices/slice_##_<short_name>.md`.
+7. Use a deterministic module-correct slice report path under `docs/modules/`.
+8. Never use legacy report directories such as `docs/actions/slices/`, `docs/slices/`, `docs/audits/`, or `docs/archive/`.
 
 Do not send Claude Code a broad platform prompt.
 Do not ask Claude Code to plan multiple phases at once.
