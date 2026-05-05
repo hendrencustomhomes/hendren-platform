@@ -362,6 +362,16 @@ Actions that create, update, duplicate, import, rename, archive editable records
 
 Read-only queries require `view` permission.
 
+### Admin / superuser access
+
+`is_admin` remains valid only as a SQL/admin-assigned superuser flag.
+
+Feature code must not check `is_admin` directly. All feature authorization must go through `requireModuleAccess` so the permission matrix remains the single normal enforcement path.
+
+If `is_admin = true`, the bypass happens only inside the shared access-control layer.
+
+There must be no normal UI for assigning or removing `is_admin`. Superuser assignment and removal are database/admin operations only, performed directly through SQL or another trusted DB administration path.
+
 ### Ownership
 
 Permission checks and permission-level semantics belong in shared permission domain code:
