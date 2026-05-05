@@ -243,6 +243,13 @@ Before proposing structural or architectural changes:
 
 ## 16. Claude prompt requirements
 
+Before drafting any Claude prompt, classify the work by execution target:
+
+1. If the task includes SQL, schema, RPC, RLS, enum, trigger, policy, data backfill, storage bucket, or direct Supabase state changes → use the Claude Chat / SQL template first.
+2. If the task includes both DB work and repo/code work → split it into separate prompts: SQL / DB first, Claude Code second.
+3. If the task is repo/code/docs-only with no DB state change → use the Claude Code template.
+4. If unsure whether DB state changes are required → stop and ask or write the SQL inspection prompt first; do not default to Claude Code.
+
 All Claude Code prompts MUST use:
 
 `docs/actions/templates/claude_code_prompt.md`
@@ -252,6 +259,8 @@ All Claude Chat / SQL / DB prompts MUST use:
 `docs/actions/templates/claude_chat_sql_prompt.md`
 
 Claude Code prompts must include an explicit module-correct slice report path from Section 9. Do not use legacy report directories.
+
+Claude Chat / SQL prompts must not ask for repo edits, commits, or migration files unless the user explicitly requests repo migrations.
 
 No ad-hoc prompt formats.
 
