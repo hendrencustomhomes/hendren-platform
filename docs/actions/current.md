@@ -18,7 +18,7 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 ## 2. Last verified completed work
 
-Latest completed slice: **Slice 39B — Permission Repo Transition**
+Latest completed work: **Slice 39C — Permission SQL Cleanup** (Supabase-direct DB change; repo report file not yet committed)
 
 Recent completed slices/work:
 - **Slice 29 — archive and restore behavior alignment**
@@ -35,7 +35,8 @@ Recent completed slices/work:
 - **Slice 37 — rejected proposal status asymmetry documented as intentional design**
 - **Slice 38 — pricing access now delegates to `requireModuleAccess`; admin bypass inherited from shared guard**
 - **Slice 39A — Supabase additive permission columns applied directly in DB**
-- **Slice 39B — repo permission reads transitioned to new columns; permission writes dual-write through one mapper; pricing unlink guard added**
+- **Slice 39B — repo permission reads transitioned to transitional new columns; permission writes dual-write through one mapper; pricing unlink guard added**
+- **Slice 39C — Supabase permission SQL cleanup dropped legacy permission columns/constraints and renamed `can_manage_next` to `can_manage`**
 - **Design update — `is_admin` retained as SQL/admin-only superuser flag; feature code must route through `requireModuleAccess`**
 - **Process update — Claude prompt selection now requires DB-vs-code classification before drafting**
 
@@ -51,6 +52,9 @@ Reports:
 - `docs/modules/estimate/slice_37_reject_status_asymmetry.md`
 - `docs/modules/pricing/slice_38_pricing_permission_alignment.md`
 - `docs/modules/platform/slice_39b_permission_repo_transition.md`
+
+Missing report to create next:
+- `docs/modules/platform/slice_39c_permission_sql_cleanup.md`
 
 Verified files after latest work:
 - `docs/actions/START_HERE.md`
@@ -107,13 +111,13 @@ This rule is recorded in:
 
 ### Permission model
 
-Three levels, currently in a DB transition state:
+Three levels, DB cleanup complete but repo cleanup still pending:
 
-| Code level | Current repo-read DB column | Legacy DB column still dual-written | Meaning |
-|------------|-----------------------------|-------------------------------------|---------|
-| `view`     | `can_view`                  | n/a                                 | Read access |
-| `edit`     | `can_edit`                  | `can_manage`                        | Build/mutate active work |
-| `manage`   | `can_manage_next`           | `can_assign`                        | Workflow authority: send/sign/void/reject/finalize |
+| Code level | Final DB column | Meaning |
+|------------|-----------------|---------|
+| `view`     | `can_view`      | Read access |
+| `edit`     | `can_edit`      | Build/mutate active work |
+| `manage`   | `can_manage`    | Workflow authority: send/sign/void/reject/finalize |
 
 Hierarchy: `manage` satisfies `edit` + `view`. `edit` satisfies `view`.
 
@@ -121,12 +125,10 @@ Guard: `requireModuleAccess(profileId, rowKey, 'view' | 'edit' | 'manage')` in `
 
 Transition status:
 - Slice 39A added `can_edit` and `can_manage_next` to `template_permissions` and `user_permission_snapshots`, then backfilled them from legacy `can_manage` and `can_assign`
-- Slice 39B switched `requireModuleAccess` reads to `can_view`, `can_edit`, and `can_manage_next`
-- `normalizePermissionState` accepts camelCase, legacy snake_case, and new snake_case fields during transition
-- `toPermissionDbColumns` in `src/lib/access-control-server.ts` is the single dual-write mapper for permission writes
-- `saveUserAccessModel` and `saveTemplatePermissionMatrix` use `toPermissionDbColumns`
-- Legacy columns `can_manage` and `can_assign` still exist and are still dual-written
-- Final cleanup is not complete until SQL drops legacy constraints/columns and renames `can_manage_next` to `can_manage`
+- Slice 39B switched repo reads to `can_view`, `can_edit`, and transitional `can_manage_next`, and centralized dual-writes in `toPermissionDbColumns`
+- Slice 39C completed Supabase cleanup: legacy `can_assign` and legacy edit-level `can_manage` were dropped; `can_manage_next` was renamed to final `can_manage`; final constraints now enforce `can_edit` requires `can_view` and `can_manage` requires `can_edit` + `can_view`
+- Current DB columns on both `template_permissions` and `user_permission_snapshots` are now exactly `can_view`, `can_edit`, `can_manage`
+- Repo code is stale until Slice 39D removes references to `can_manage_next`, `can_assign`, and legacy dual-write scaffolding
 
 Admin/superuser policy:
 - `is_admin = true` in `internal_access` is retained as a SQL/admin-assigned superuser flag
@@ -142,7 +144,7 @@ Pricing access alignment:
 - `getCurrentPricingAccess` delegates to `requireModuleAccess` for `view`, `edit`, and `manage`
 - return shape remains `{ canView, canManage, canAssign, error? }` for caller compatibility
 - admin bypass and template/snapshot fallback are inherited from the shared guard
-- `unlinkRowFromPricing` now checks `requireModuleAccess(auth.user.id, 'estimates', 'edit')` before unlinking pricing from an estimate worksheet row
+- `unlinkRowFromPricing` checks `requireModuleAccess(auth.user.id, 'estimates', 'edit')` before unlinking pricing from an estimate worksheet row
 
 ### Estimate status lifecycle
 
@@ -225,9 +227,9 @@ Pricing access alignment:
 
 ## 4. Known gaps (verified)
 
-- Permission column rename cleanup is incomplete: legacy `can_manage` and `can_assign` still exist and are dual-written; `can_manage_next` still needs final SQL rename to `can_manage`
-- Final cleanup must drop/replace old legacy CHECK constraints that reference old names, drop legacy columns, rename `can_manage_next`, and add final clean constraints
-- After SQL cleanup, repo must update `access-control-server.ts` select strings and `toPermissionDbColumns`, and eventually remove legacy input support from `normalizePermissionState`
+- Repo permission cleanup is now required after SQL cleanup: `access-control-server.ts` still selects/writes transitional or legacy columns that no longer exist in live DB
+- `docs/modules/platform/slice_39c_permission_sql_cleanup.md` is missing from repo and should be created from the completed SQL report
+- `schema_current.sql`, if present/used, may be stale and should be located before assuming it is authoritative
 - No pricing resolution logic
 - `unstageEstimate` uses `set_active_estimate` RPC; if the RPC has internal status guards that reject staged estimates, a dedicated `unstage_estimate` RPC will be needed
 - `SnapshotCreateButton` UI only surfaces on the preview page when an active estimate exists; staged-flow snapshot button wiring not yet implemented
@@ -237,37 +239,37 @@ Pricing access alignment:
 
 ## 5. Next recommended work
 
-1. **Slice 39C — Permission SQL cleanup**
-   - Use Claude Chat / SQL template, not Claude Code
-   - Inspect current live DB columns/constraints first
-   - Drop old legacy CHECK constraints
-   - Drop legacy `can_assign`
-   - Drop legacy edit-level `can_manage`
-   - Rename `can_manage_next` → `can_manage`
-   - Add final clean constraints for `can_edit` and final `can_manage`
-   - Verify row counts, data preservation, constraints, and absence of legacy columns
-
-2. **Slice 39D — Repo cleanup after SQL rename**
+1. **Slice 39D — Repo cleanup after SQL rename**
    - Use Claude Code template
+   - Verify live repo references with grep before editing: `can_manage_next`, `can_assign`, `can_edit`, `can_manage`, and `can_view`
    - Update `requireModuleAccess` SELECTs from `can_manage_next` to final `can_manage`
-   - Update `toPermissionDbColumns` to stop writing legacy columns and write final `can_manage`
-   - Remove legacy snake_case compatibility from `normalizePermissionState` if no callers still need it
-   - Update docs/report
+   - Update `toPermissionDbColumns` to write only final DB columns: `can_view`, `can_edit`, `can_manage`
+   - Remove all writes to dropped legacy columns `can_assign` and legacy edit-level `can_manage`
+   - Remove `can_manage_next` compatibility from `normalizePermissionState`
+   - Be careful: final `can_manage` now means workflow/manage authority, not edit
+   - Create `docs/modules/platform/slice_39c_permission_sql_cleanup.md` from the completed SQL report if still missing
+   - Write `docs/modules/platform/slice_39d_permission_repo_cleanup.md`
+   - Run TypeScript validation
+
+2. **Post-39D verification / docs cleanup**
+   - Confirm no repo references to `can_manage_next` or `can_assign` remain
+   - Locate and update `schema_current.sql` only if it exists and is part of repo truth
+   - Update `docs/design/module_structure` permission mapping if it still references transitional or legacy names
 
 ---
 
 ## 6. Summary
 
-The permission/status foundation, pricing access alignment, archive/restore behavior, DB enum, staging flow, sign/void transitions, rejection asymmetry decision, snapshot audit-artifact contract, admin superuser policy, and documentation report paths are aligned.
+The permission/status foundation, pricing access alignment, archive/restore behavior, DB enum, staging flow, sign/void transitions, rejection asymmetry decision, snapshot audit-artifact contract, admin superuser policy, and documentation report paths are aligned, with one urgent repo cleanup needed after the SQL rename.
 
 Current important truth:
 - Three-level permission model: `view` / `edit` / `manage`
-- Current repo-read DB mapping during transition: `can_view` / `can_edit` / `can_manage_next`
-- Legacy DB columns `can_manage` and `can_assign` still exist only for transition dual-write compatibility
-- `toPermissionDbColumns` is the single dual-write owner in `src/lib/access-control-server.ts`
-- `manage` includes `edit`; `edit` includes `view`
+- Final DB mapping after Slice 39C: `can_view` / `can_edit` / `can_manage`
+- Legacy DB columns `can_assign` and the old edit-level `can_manage` are gone from live DB
+- `can_manage_next` is gone from live DB and has been renamed to final `can_manage`
+- Repo code still needs Slice 39D to stop selecting/writing transitional or dropped columns
 - `getCurrentPricingAccess` delegates to `requireModuleAccess`, inheriting admin bypass and canonical permission resolution
-- `unlinkRowFromPricing` now requires estimate edit access before mutation
+- `unlinkRowFromPricing` requires estimate edit access before mutation
 - `is_admin` remains as SQL/admin-only superuser access inside the shared guard, not feature code
 - DB and TypeScript lifecycle statuses include draft, active, staged, sent, signed, rejected, voided, archived
 - Server and UI allow archiving draft/active estimates, including active estimates
@@ -284,4 +286,4 @@ Current important truth:
 - SQL changes are applied directly in Supabase, not committed as repo migration files unless explicitly requested
 - Slice reports are written to module directories under `docs/modules/`, not legacy slice/audit/archive paths
 
-The next meaningful work is Slice 39C SQL cleanup, followed by Slice 39D repo cleanup after the SQL rename.
+The next meaningful work is Slice 39D repo cleanup after the SQL rename.
