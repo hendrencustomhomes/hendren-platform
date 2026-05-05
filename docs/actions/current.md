@@ -18,7 +18,7 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 ## 2. Last verified completed work
 
-Latest completed work: **Slice 34 — Sign and Void Estimate Status Alignment**
+Latest completed work: **Slice 35 — Proposal Snapshot Audit-Artifact Constraints**
 
 Recent completed slices/work:
 - **Slice 29 — archive and restore behavior alignment**
@@ -30,6 +30,7 @@ Recent completed slices/work:
 - **Process correction — SQL changes are Supabase-direct; repo migration files are forbidden unless explicitly requested**
 - **Doc restructure — slice reports now live in module directories under `docs/modules/`**
 - **Slice 34 — sign/void proposal actions now align `estimates.status` and preserve permanent locks**
+- **Slice 35 — `snapshot_json` usage audited and constrained as write-once audit output only**
 
 Reports:
 - `docs/modules/estimate/slice_29_archive_restore_fix.md`
@@ -38,6 +39,7 @@ Reports:
 - `docs/modules/estimate/slice_32_reject_and_lock.md`
 - `docs/modules/estimate/slice_33_send_rpc_atomic_status_cleanup.md`
 - `docs/modules/estimate/slice_34_void_sign_status_alignment.md`
+- `docs/modules/estimate/slice_35_proposal_snapshot_constraints.md`
 
 Verified files after latest work:
 - `docs/actions/START_HERE.md`
@@ -46,7 +48,8 @@ Verified files after latest work:
 - `docs/actions/current.md`
 - `src/app/actions/document-actions.ts`
 - `src/app/actions/proposal-actions.ts`
-- `docs/modules/estimate/slice_34_void_sign_status_alignment.md`
+- `src/lib/proposalSnapshot.ts`
+- `docs/modules/estimate/slice_35_proposal_snapshot_constraints.md`
 
 Note: `docs/modules/estimate/slice_30_stage_estimate_action.md` originally said the enum migration was deferred, but the DB enum was applied separately and the report now has a post-slice correction. Current DB enum values are confirmed as: `draft`, `active`, `approved`, `archived`, `staged`, `sent`, `signed`, `rejected`, `voided`.
 
@@ -129,6 +132,7 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 - `voidProposal` transitions `proposal_structures.proposal_status = 'voided'` and `estimates.status = 'voided'`; requires `manage`; does not unlock the estimate
 - `rejectProposal` server action transitions `sent` → `rejected` on estimates; `proposal_structures` remains at `sent`; requires `manage`
 - `unlockProposal` removed; sent proposals cannot be reverted to draft
+- `snapshot_json` is explicitly documented as a write-once audit artifact only; it must not be read for status, scope, pricing, or other business decisions
 - Worksheet mutations protected at both app (`edit` guard) + RLS layers
 - Health indicators visible (non-blocking)
 - Send validation enforced server-side
@@ -176,7 +180,6 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 - No pricing resolution logic
 - `unstageEstimate` uses `set_active_estimate` RPC; if the RPC has internal status guards that reject staged estimates, a dedicated `unstage_estimate` RPC will be needed
 - `createProposalSnapshot` still checks `status === 'active'`; it does not support staged estimates and would need updating if used from the staged proposal flow
-- `createProposalSnapshot` and `sendProposal` still create/store `snapshot_json`; target architecture says estimate is durable truth and proposal artifacts must not become competing source of truth
 - `rejectProposal` only updates `estimates.status`; `proposal_structures.proposal_status` remains `sent` (ProposalStatus does not include 'rejected'); future UI may need to check `estimates.status` for rejected state
 - `pricing-access-actions.ts` does not use `requireModuleAccess` and does not check `is_admin`; inconsistency with estimate/proposal paths
 
@@ -184,15 +187,15 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 
 ## 5. Next recommended work
 
-1. **Proposal artifact source-of-truth cleanup**
-   - Ensure proposal documents are audit/output artifacts only
-   - Prevent `snapshot_json` from becoming competing authoritative estimate truth
+1. **Manual snapshot staged-flow consistency**
+   - Decide and implement whether `createProposalSnapshot` should support staged estimates
+   - Avoid widening business flows accidentally; keep send path canonical through `sendProposal`
 
 ---
 
 ## 6. Summary
 
-The permission/status foundation, archive/restore behavior, DB enum, staging flow, sign/void transitions, and documentation report paths are now aligned:
+The permission/status foundation, archive/restore behavior, DB enum, staging flow, sign/void transitions, snapshot audit-artifact contract, and documentation report paths are now aligned:
 
 - Three-level permission model: `view` / `edit` / `manage`
 - Existing DB mapping: `can_view` / `can_manage` / `can_assign`
@@ -208,8 +211,9 @@ The permission/status foundation, archive/restore behavior, DB enum, staging flo
 - `signProposal` transitions both proposal structure and estimate to signed
 - `voidProposal` transitions both proposal structure and estimate to voided and keeps the estimate locked
 - `rejectProposal` transitions `sent` → `rejected` on estimates, requires `manage`
+- `snapshot_json` is constrained by comments as a write-once audit artifact; live estimate truth remains in `estimates` and `job_worksheet_items`
 - `unlockProposal` removed; sent proposals are permanently locked
 - SQL changes are applied directly in Supabase, not committed as repo migration files unless explicitly requested
 - Slice reports are written to module directories under `docs/modules/`, not legacy slice/audit/archive paths
 
-The next meaningful work is proposal artifact source-of-truth cleanup.
+The next meaningful work is manual snapshot staged-flow consistency.
