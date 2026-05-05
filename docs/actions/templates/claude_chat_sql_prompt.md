@@ -31,8 +31,8 @@ Out of scope:
 
 Rules:
 - Use read-only SQL for inspection.
-- Use migrations for all schema writes.
-- Do not run raw DDL outside the approved migration path.
+- Apply all schema / RPC / enum changes directly in Supabase.
+- Do NOT create or rely on repo migration files unless explicitly requested.
 - Do not combine unrelated schema changes.
 - Do not make destructive changes unless explicitly authorized in this prompt.
 - Do not drop tables, columns, enum values, policies, or data without explicit approval.
@@ -40,26 +40,25 @@ Rules:
 - If RLS is involved, inspect existing policies before proposing changes.
 - Prefer additive changes unless the prompt explicitly authorizes cleanup/removal.
 
-Required inspection before migration:
+Required inspection before changes:
 - Confirm existing table/function/policy names.
 - Confirm existing columns and types.
 - Confirm row counts if destructive or migration-sensitive.
 - Confirm dependent views/functions/policies before changing objects.
 
-Migration requirements:
-- Migration name: [MIGRATION_NAME]
-- Include the SQL migration body.
-- Include rollback notes or explain why rollback is not safe/simple.
-- Include post-migration verification SQL.
+Documentation requirements:
+- Provide the SQL used/applied.
+- Provide rollback notes or explain why rollback is not safe/simple.
+- Provide post-change verification SQL.
 
 Validation:
-- Run read-only verification queries after migration.
+- Run read-only verification queries after changes.
 - Report exact results.
 - Identify any warnings or follow-up items.
 
 Required final report:
 1. Inspection findings
-2. Migration applied or proposed
+2. SQL applied or proposed
 3. Verification results
 4. Data safety notes
 5. Follow-up risks
@@ -89,7 +88,7 @@ Do not use this template for ordinary TypeScript-only work.
 
 If a database task also requires repo code changes, split it into two prompts:
 
-1. SQL / migration prompt
+1. SQL / DB prompt
 2. Claude Code implementation prompt
 
 Do not ask one assistant to perform an unbounded DB + app rewrite in one pass.
