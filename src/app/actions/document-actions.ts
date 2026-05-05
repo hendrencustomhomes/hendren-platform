@@ -228,8 +228,10 @@ export async function sendProposal(
     })),
   }
 
-  // Single atomic RPC: lock estimate + transition proposal to sent + insert snapshot.
-  // Any failure inside the Postgres function rolls back all three writes.
+  // Single atomic RPC: enforces staged status, locks estimate, sets estimates.status = 'sent',
+  // transitions proposal_structures to sent, and inserts the snapshot document.
+  // Any failure inside the Postgres function rolls back all writes.
+  // estimates.status = 'sent' is now set inside the RPC — no post-RPC status update needed.
   const { data: documentId, error: rpcErr } = await auth.supabase.rpc('send_proposal', {
     p_estimate_id:   estimateId,
     p_job_id:        jobId,
@@ -239,16 +241,6 @@ export async function sendProposal(
   })
 
   if (rpcErr) return { error: rpcErr.message }
-
-  // The send_proposal RPC sets locked_at on the estimate but does not update estimates.status.
-  // Update it to 'sent' here so the estimate lifecycle reflects the final state.
-  const { error: statusErr } = await auth.supabase
-    .from('estimates')
-    .update({ status: 'sent', updated_at: new Date().toISOString() })
-    .eq('id', estimateId)
-    .eq('job_id', jobId)
-
-  if (statusErr) return { error: statusErr.message }
 
   revalidatePath(`/jobs/${jobId}/proposal`)
   revalidatePath(`/jobs/${jobId}/proposal/builder`)

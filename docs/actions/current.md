@@ -2,7 +2,7 @@
 
 Status: authoritative current-state file for fresh sessions  
 Branch: `dev`  
-Last updated: 2026-05-04
+Last updated: 2026-05-05
 
 ---
 
@@ -18,7 +18,7 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 ## 2. Last verified completed work
 
-Latest completed work: **Slice 32 — Reject and Permanent Lock**
+Latest completed work: **Slice 33 — Send RPC Atomic Status Cleanup**
 
 Recent completed slices/work:
 - **Slice 29 — archive and restore behavior alignment**
@@ -26,12 +26,14 @@ Recent completed slices/work:
 - **Slice 30 — stage estimate server action**
 - **Slice 31 — stage/unstage UI and doc correction**
 - **Slice 32 — reject and permanent lock**
+- **Slice 33 — send RPC atomic status cleanup**
 
 Reports:
 - `docs/actions/slices/slice_29_archive_restore_fix.md`
 - `docs/actions/slices/slice_30_stage_estimate_action.md`
 - `docs/actions/slices/slice_31_stage_unstage_ui.md`
 - `docs/actions/slices/slice_32_reject_and_lock.md`
+- `docs/actions/slices/slice_33_send_rpc_atomic_status_cleanup.md`
 
 Verified files after latest work:
 - `src/app/actions/estimate-actions.ts`
@@ -90,7 +92,7 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 - `setActiveEstimate` is blocked if any other estimate for the same job is staged
 - `EstimateSelector.tsx` exposes Stage for active estimates; Unstage for staged estimates; Archive (with confirmation) for all non-staged non-archived estimates; Copy-only for rejected
 - Archived estimate Restore UI calls `restoreEstimate`, not `setActiveEstimate`
-- `sendProposal` requires `staged` status; RPC sets `locked_at`; action then sets `estimates.status = 'sent'`
+- `sendProposal` requires `staged` status; `send_proposal` RPC atomically sets `estimates.status = 'sent'`, `locked_at`, transitions `proposal_structures` to `sent`, and inserts the snapshot document — all in one Postgres transaction; no post-RPC status update in the app layer
 - `rejectProposal` server action transitions `sent` → `rejected` on estimates; `proposal_structures` remains at `sent`; requires `manage`
 - `unlockProposal` removed; sent proposals cannot be reverted to draft
 - Worksheet mutations protected at both app (`edit` guard) + RLS layers
@@ -130,7 +132,7 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 
 - RLS enforced for worksheet mutation safety
 - `estimate_status` DB enum now accepts all TypeScript lifecycle values, plus legacy `approved`
-- `send_proposal` RPC runs as SECURITY DEFINER; `sendProposal` applies `manage` guard before invoking it
+- `send_proposal` RPC runs as SECURITY DEFINER; `sendProposal` applies `manage` guard before invoking it; RPC now atomically sets `estimates.status = 'sent'` and enforces `staged` precondition at the DB layer (migration `20260505001007`)
 - `set_active_estimate` RPC verified SECURITY INVOKER; RLS applies inside the function
 
 ---
@@ -139,7 +141,7 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 
 - No pricing resolution logic
 - `unstageEstimate` uses `set_active_estimate` RPC; if the RPC has internal status guards that reject staged estimates, a dedicated `unstage_estimate` RPC will be needed
-- `estimates.status = 'sent'` is set by `sendProposal` after the RPC; if that UPDATE fails after the RPC commits, the estimate remains `staged` with `locked_at` set — a consistency gap that would require the `send_proposal` RPC to own the status write
+- `estimates.status = 'sent'` is set atomically inside the `send_proposal` RPC (migration `20260505001007`); the prior consistency gap (RPC commits but app-layer UPDATE fails) is resolved
 - `createProposalSnapshot` still checks `status === 'active'`; it does not support staged estimates and would need updating if used from the staged proposal flow
 - `createProposalSnapshot` and `sendProposal` still create/store `snapshot_json`; target architecture says estimate is durable truth and proposal artifacts must not become competing source of truth
 - `rejectProposal` only updates `estimates.status`; `proposal_structures.proposal_status` remains `sent` (ProposalStatus does not include 'rejected'); future UI may need to check `estimates.status` for rejected state
@@ -169,7 +171,7 @@ The permission/status foundation, archive/restore behavior, DB enum, and staging
 - `stageEstimate` transitions `active` → `staged` only; `setActiveEstimate` blocked while staged estimate exists
 - `unstageEstimate` transitions `staged` → `active` via the `set_active_estimate` RPC
 - Stage/Unstage buttons are wired in `EstimateSelector.tsx`; rejected estimates show Copy only
-- `sendProposal` requires staged status; sets `estimates.status = 'sent'` after RPC
+- `sendProposal` requires staged status; `send_proposal` RPC atomically sets `estimates.status = 'sent'` inside the same transaction that locks the estimate, transitions the proposal, and inserts the snapshot
 - `rejectProposal` transitions `sent` → `rejected` on estimates, requires `manage`
 - `unlockProposal` removed; sent proposals are permanently locked
 
