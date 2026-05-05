@@ -18,7 +18,7 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 ## 2. Last verified completed work
 
-Latest completed work: **Slice 33 — Send RPC Atomic Status Cleanup + SQL process correction**
+Latest completed work: **Slice 34 — Sign and Void Estimate Status Alignment**
 
 Recent completed slices/work:
 - **Slice 29 — archive and restore behavior alignment**
@@ -29,6 +29,7 @@ Recent completed slices/work:
 - **Slice 33 — send RPC atomic status cleanup**
 - **Process correction — SQL changes are Supabase-direct; repo migration files are forbidden unless explicitly requested**
 - **Doc restructure — slice reports now live in module directories under `docs/modules/`**
+- **Slice 34 — sign/void proposal actions now align `estimates.status` and preserve permanent locks**
 
 Reports:
 - `docs/modules/estimate/slice_29_archive_restore_fix.md`
@@ -36,6 +37,7 @@ Reports:
 - `docs/modules/estimate/slice_31_stage_unstage_ui.md`
 - `docs/modules/estimate/slice_32_reject_and_lock.md`
 - `docs/modules/estimate/slice_33_send_rpc_atomic_status_cleanup.md`
+- `docs/modules/estimate/slice_34_void_sign_status_alignment.md`
 
 Verified files after latest work:
 - `docs/actions/START_HERE.md`
@@ -43,7 +45,8 @@ Verified files after latest work:
 - `docs/actions/templates/claude_code_prompt.md`
 - `docs/actions/current.md`
 - `src/app/actions/document-actions.ts`
-- `docs/modules/estimate/slice_33_send_rpc_atomic_status_cleanup.md`
+- `src/app/actions/proposal-actions.ts`
+- `docs/modules/estimate/slice_34_void_sign_status_alignment.md`
 
 Note: `docs/modules/estimate/slice_30_stage_estimate_action.md` originally said the enum migration was deferred, but the DB enum was applied separately and the report now has a post-slice correction. Current DB enum values are confirmed as: `draft`, `active`, `approved`, `archived`, `staged`, `sent`, `signed`, `rejected`, `voided`.
 
@@ -122,6 +125,8 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
 - `EstimateSelector.tsx` exposes Stage for active estimates; Unstage for staged estimates; Archive (with confirmation) for all non-staged non-archived estimates; Copy-only for rejected
 - Archived estimate Restore UI calls `restoreEstimate`, not `setActiveEstimate`
 - `sendProposal` requires `staged` status; `send_proposal` RPC atomically sets `estimates.status = 'sent'`, `locked_at`, transitions `proposal_structures` to `sent`, and inserts the snapshot document — all in one Postgres transaction; no post-RPC status update in the app layer
+- `signProposal` transitions `proposal_structures.proposal_status = 'signed'` and `estimates.status = 'signed'`; requires `manage`
+- `voidProposal` transitions `proposal_structures.proposal_status = 'voided'` and `estimates.status = 'voided'`; requires `manage`; does not unlock the estimate
 - `rejectProposal` server action transitions `sent` → `rejected` on estimates; `proposal_structures` remains at `sent`; requires `manage`
 - `unlockProposal` removed; sent proposals cannot be reverted to draft
 - Worksheet mutations protected at both app (`edit` guard) + RLS layers
@@ -183,15 +188,11 @@ Admin bypass: `is_admin = true` in `internal_access` skips all row-level permiss
    - Ensure proposal documents are audit/output artifacts only
    - Prevent `snapshot_json` from becoming competing authoritative estimate truth
 
-2. **Void/sign flow alignment with estimate status**
-   - Align `voidProposal` and `signProposal` with `estimates.status`
-   - Ensure void does not unlock sent estimates
-
 ---
 
 ## 6. Summary
 
-The permission/status foundation, archive/restore behavior, DB enum, staging flow, and documentation report paths are now aligned:
+The permission/status foundation, archive/restore behavior, DB enum, staging flow, sign/void transitions, and documentation report paths are now aligned:
 
 - Three-level permission model: `view` / `edit` / `manage`
 - Existing DB mapping: `can_view` / `can_manage` / `can_assign`
@@ -204,9 +205,11 @@ The permission/status foundation, archive/restore behavior, DB enum, staging flo
 - `unstageEstimate` transitions `staged` → `active` via the `set_active_estimate` RPC
 - Stage/Unstage buttons are wired in `EstimateSelector.tsx`; rejected estimates show Copy only
 - `sendProposal` requires staged status; `send_proposal` RPC atomically sets `estimates.status = 'sent'` inside the same transaction that locks the estimate, transitions the proposal, and inserts the snapshot
+- `signProposal` transitions both proposal structure and estimate to signed
+- `voidProposal` transitions both proposal structure and estimate to voided and keeps the estimate locked
 - `rejectProposal` transitions `sent` → `rejected` on estimates, requires `manage`
 - `unlockProposal` removed; sent proposals are permanently locked
 - SQL changes are applied directly in Supabase, not committed as repo migration files unless explicitly requested
 - Slice reports are written to module directories under `docs/modules/`, not legacy slice/audit/archive paths
 
-The next meaningful work is proposal artifact source-of-truth cleanup and the void/sign flow alignment with estimate status.
+The next meaningful work is proposal artifact source-of-truth cleanup.
