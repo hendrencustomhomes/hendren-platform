@@ -9,6 +9,7 @@ import { useJobWorksheetPersistence } from './_hooks/useJobWorksheetPersistence'
 import { importEstimate } from '@/app/actions/estimate-actions'
 import type { Estimate } from '@/lib/estimateTypes'
 import { EstimateHealthSummary } from './EstimateHealthSummary'
+import { resolveUnitCost } from './_lib/unitCostResolver'
 
 type Props = {
   jobId: string
@@ -92,7 +93,7 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, activeEst
         csvEscape(row.description),
         csvEscape(row.quantity),
         csvEscape(row.unit),
-        csvEscape(row.unit_price),
+        csvEscape(resolveUnitCost(row)),
         csvEscape(row.location),
         csvEscape(row.notes),
         csvEscape(row.row_kind),

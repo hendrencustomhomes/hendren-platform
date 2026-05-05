@@ -1,10 +1,11 @@
 import type { JobWorksheetRow } from './JobWorksheetTableAdapter'
+import { resolveUnitCost } from './_lib/unitCostResolver'
 
 export const unitOptions = ['flat', 'ea', 'sqft', 'lnft', 'cuft'] as const
 
 export function rowTotal(row: JobWorksheetRow): number {
   const q = Number(row.quantity)
-  const p = Number(row.unit_price)
+  const p = Number(resolveUnitCost(row))
   return q && p ? q * p : 0
 }
 

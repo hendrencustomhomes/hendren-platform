@@ -6,6 +6,7 @@ import { parseNumber } from '@/lib/shared/numbers'
 import type { JobWorksheetEditableCellKey, JobWorksheetRow } from '../JobWorksheetTableAdapter'
 import type { CreateJobWorksheetRowInput, UpdateJobWorksheetRowPatch, WorksheetSortOrderUpdate } from './useJobWorksheetPersistence'
 import { unitOptions } from '../_worksheetFormatters'
+import { resolveUnitCost } from '../_lib/unitCostResolver'
 
 type UndoEntry =
   | {
@@ -78,8 +79,16 @@ function applyEditableCellValue(
       return { ...row, location: normalizeText(draftValue) }
     case 'quantity':
       return { ...row, quantity: row.row_kind === 'note' ? null : parseNumber(String(draftValue ?? '')) ?? 1 }
-    case 'unit_price':
-      return { ...row, unit_price: row.row_kind === 'note' ? null : parseNumber(String(draftValue ?? '')) }
+    case 'unit_price': {
+      if (row.row_kind === 'note') return row
+      const parsed = parseNumber(String(draftValue ?? '')) ?? null
+      if (row.pricing_source_row_id !== null) {
+        // Linked row: write an override, keep the link
+        return { ...row, unit_cost_override: parsed, unit_cost_is_overridden: true }
+      }
+      // Manual row: write to unit_cost_manual
+      return { ...row, unit_cost_manual: parsed }
+    }
     case 'unit':
       return { ...row, unit: row.row_kind === 'note' ? null : normalizeUnit(draftValue, row.unit) }
     case 'notes':
@@ -88,15 +97,18 @@ function applyEditableCellValue(
 }
 
 function buildPatch(row: JobWorksheetRow): UpdateJobWorksheetRowPatch {
+  const isNote = row.row_kind === 'note'
   const patch: UpdateJobWorksheetRowPatch = {
     description: row.description,
     location: row.location,
-    quantity: row.row_kind === 'note' ? null : row.quantity,
-    unit: row.row_kind === 'note' ? null : row.unit ?? 'ea',
-    unit_price: row.row_kind === 'note' ? null : row.unit_price,
+    quantity: isNote ? null : row.quantity,
+    unit: isNote ? null : row.unit ?? 'ea',
     notes: row.notes,
+    unit_cost_manual: isNote ? null : row.unit_cost_manual,
+    unit_cost_override: isNote ? null : row.unit_cost_override,
+    unit_cost_is_overridden: isNote ? false : row.unit_cost_is_overridden,
   }
-  // Only include link fields when they have been explicitly cleared (link-drop path)
+  // Only include link fields when they have been explicitly cleared (unlink path)
   if (row.pricing_source_row_id === null) patch.pricing_source_row_id = null
   if (row.pricing_header_id === null) patch.pricing_header_id = null
   return patch
@@ -115,7 +127,10 @@ function buildCreateInput(jobId: string, estimateId: string, row: JobWorksheetRo
     location: row.location,
     quantity: row.quantity ?? 1,
     unit: row.unit ?? 'ea',
-    unit_price: row.unit_price,
+    unit_cost_manual: row.unit_cost_manual,
+    unit_cost_source: null,
+    unit_cost_override: null,
+    unit_cost_is_overridden: false,
     notes: row.notes,
     scope_status: 'included',
     is_upgrade: false,
@@ -130,7 +145,9 @@ function areEditableFieldsEqual(a: JobWorksheetRow | null | undefined, b: JobWor
     (a.location ?? null) === (b.location ?? null) &&
     (a.quantity ?? null) === (b.quantity ?? null) &&
     (a.unit ?? null) === (b.unit ?? null) &&
-    (a.unit_price ?? null) === (b.unit_price ?? null) &&
+    (a.unit_cost_manual ?? null) === (b.unit_cost_manual ?? null) &&
+    (a.unit_cost_override ?? null) === (b.unit_cost_override ?? null) &&
+    a.unit_cost_is_overridden === b.unit_cost_is_overridden &&
     (a.notes ?? null) === (b.notes ?? null) &&
     (a.pricing_source_row_id ?? null) === (b.pricing_source_row_id ?? null) &&
     (a.pricing_header_id ?? null) === (b.pricing_header_id ?? null)
@@ -308,6 +325,10 @@ function createDraftRow(jobId: string, estimateId: string, sourceRow: JobWorkshe
     unit_price: null,
     total_price: null,
     pricing_type: 'unpriced',
+    unit_cost_manual: null,
+    unit_cost_source: null,
+    unit_cost_override: null,
+    unit_cost_is_overridden: false,
   }
 }
 
@@ -559,12 +580,7 @@ export function useJobWorksheetState(
     const row = getLocalRow(rowId)
     if (!row) return
 
-    let next = applyEditableCellValue(row, field, value)
-
-    // Manual unit_price edit on a linked row drops the link (UI shows confirm first)
-    if (field === 'unit_price' && row.pricing_source_row_id !== null) {
-      next = { ...next, pricing_source_row_id: null, pricing_header_id: null }
-    }
+    const next = applyEditableCellValue(row, field, value)
 
     if (areEditableFieldsEqual(row, next)) return
 

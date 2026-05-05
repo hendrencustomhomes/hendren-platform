@@ -7,6 +7,7 @@ import {
   currency,
   parentSubtotal,
 } from './_worksheetFormatters'
+import { resolveUnitCost } from './_lib/unitCostResolver'
 import { validationLabel } from './_worksheetValidation'
 
 type Props = {
@@ -38,7 +39,7 @@ export function JobWorksheetMobileView({ rows, commitCellValue, createDraftRowAf
             />
             <div style={{ display: 'grid', gridTemplateColumns: '0.7fr 1fr 0.9fr 1fr', gap: 6, marginTop: 4, alignItems: 'center' }}>
               <input value={row.quantity ?? ''} inputMode="decimal" onChange={(event) => commitCellValue(row.id, 'quantity', event.currentTarget.value)} style={{ minWidth: 0 }} />
-              <input value={currency(row.unit_price, true)} inputMode="decimal" onChange={(event) => commitCellValue(row.id, 'unit_price', event.currentTarget.value)} style={{ minWidth: 0 }} />
+              <input value={currency(resolveUnitCost(row), true)} inputMode="decimal" onChange={(event) => commitCellValue(row.id, 'unit_price', event.currentTarget.value)} style={{ minWidth: 0 }} />
               <input list="unit-options" value={row.unit ?? 'ea'} onChange={(event) => commitCellValue(row.id, 'unit', event.currentTarget.value)} style={{ minWidth: 0 }} />
               <div style={{ fontWeight: 700, textAlign: 'right' }}>{currency(rowTotal(row))}</div>
             </div>

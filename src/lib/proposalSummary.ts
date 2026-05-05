@@ -2,6 +2,7 @@
 
 import type { JobWorksheetRow } from '@/components/patterns/estimate/JobWorksheetTableAdapter'
 import { rowTotal } from '@/components/patterns/estimate/_worksheetFormatters'
+import { resolveUnitCost } from '@/components/patterns/estimate/_lib/unitCostResolver'
 
 export type ProposalLineItem = {
   id: string
@@ -62,7 +63,7 @@ export function buildProposalSummary(rows: JobWorksheetRow[]): ProposalSummary {
         description: child.description,
         quantity: child.quantity,
         unit: child.unit,
-        unit_price: child.unit_price,
+        unit_price: resolveUnitCost(child),
         location: child.location,
         notes: child.notes,
         lineTotal: rowTotal(child),

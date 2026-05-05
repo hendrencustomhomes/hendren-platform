@@ -27,6 +27,9 @@ const PRICING_HEADER_COLS =
 const PRICING_ROW_COLS =
   'id, pricing_header_id, catalog_sku, cost_code_id, source_sku, vendor_sku, description_snapshot, pricing_type, quantity, unit, unit_price, lead_days, notes, sort_order, is_active, created_at, updated_at'
 
+const WORKSHEET_COST_COLS =
+  'id, job_id, pricing_source_row_id, unit_cost_manual, unit_cost_source, unit_cost_override, unit_cost_is_overridden'
+
 // Returns active pricing headers the current user can see for the given job.
 // Price sheets are global; bids are scoped to the current job only.
 export async function getAvailablePricingHeaders(
@@ -143,7 +146,7 @@ export async function linkRowToPricing(
       .single(),
     auth.supabase
       .from('job_worksheet_items')
-      .select('unit, job_id')
+      .select('unit, job_id, unit_cost_manual')
       .eq('id', rowId)
       .eq('estimate_id', estimateId)
       .single(),
@@ -213,7 +216,9 @@ export async function linkRowToPricing(
     .update({
       pricing_source_row_id: pricingRowId,
       pricing_header_id: (pricingRow as any).pricing_header_id,
-      unit_price: (pricingRow as any).unit_price,
+      unit_cost_source: (pricingRow as any).unit_price,
+      unit_cost_override: null,
+      unit_cost_is_overridden: false,
       unit: coalescedUnit,
       catalog_sku: (pricingRow as any).catalog_sku,
       source_sku: (pricingRow as any).source_sku,
@@ -242,7 +247,80 @@ export async function unlinkRowFromPricing(
   const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
   if (permGuard) return permGuard
 
-  // Verify worksheet item belongs to this job and estimate is editable in parallel
+  // Fetch cost fields, job scoping, and estimate editability in parallel
+  const [
+    { data: worksheetItem, error: itemError },
+    { data: estimate, error: estimateError },
+  ] = await Promise.all([
+    auth.supabase
+      .from('job_worksheet_items')
+      .select(WORKSHEET_COST_COLS)
+      .eq('id', rowId)
+      .eq('estimate_id', estimateId)
+      .single(),
+    auth.supabase
+      .from('estimates')
+      .select('status, locked_at')
+      .eq('id', estimateId)
+      .single(),
+  ])
+
+  if (itemError || !worksheetItem) {
+    return { error: itemError?.message ?? 'Worksheet item not found' }
+  }
+  if (estimateError || !estimate) {
+    return { error: estimateError?.message ?? 'Estimate not found' }
+  }
+  if (!isEstimateEditable(estimate)) {
+    return { error: 'Estimate is locked and cannot be modified' }
+  }
+
+  if ((worksheetItem as any).job_id !== jobId) {
+    return { error: 'Worksheet item does not belong to this job' }
+  }
+
+  // Compute resolved cost before clearing source fields, then move it to unit_cost_manual
+  const item = worksheetItem as any
+  const resolvedCost: number | null = item.unit_cost_is_overridden
+    ? (item.unit_cost_override ?? null)
+    : item.pricing_source_row_id !== null
+      ? (item.unit_cost_source ?? null)
+      : (item.unit_cost_manual ?? null)
+
+  const { data: updated, error: updateError } = await auth.supabase
+    .from('job_worksheet_items')
+    .update({
+      pricing_source_row_id: null,
+      pricing_header_id: null,
+      unit_cost_manual: resolvedCost,
+      unit_cost_source: null,
+      unit_cost_override: null,
+      unit_cost_is_overridden: false,
+    })
+    .eq('id', rowId)
+    .eq('estimate_id', estimateId)
+    .select('*')
+    .single()
+
+  if (updateError || !updated) {
+    return { error: updateError?.message ?? 'Failed to unlink row from pricing' }
+  }
+
+  revalidateWorksheet(jobId)
+  return { row: updated as unknown as JobWorksheetRow }
+}
+
+export async function acceptPricingSource(
+  rowId: string,
+  estimateId: string,
+  jobId: string,
+): Promise<{ row: JobWorksheetRow } | { error: string }> {
+  const auth = await requireUser()
+  if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
+  if (permGuard) return permGuard
+
   const [
     { data: worksheetItem, error: itemError },
     { data: estimate, error: estimateError },
@@ -269,7 +347,6 @@ export async function unlinkRowFromPricing(
   if (!isEstimateEditable(estimate)) {
     return { error: 'Estimate is locked and cannot be modified' }
   }
-
   if ((worksheetItem as any).job_id !== jobId) {
     return { error: 'Worksheet item does not belong to this job' }
   }
@@ -277,8 +354,8 @@ export async function unlinkRowFromPricing(
   const { data: updated, error: updateError } = await auth.supabase
     .from('job_worksheet_items')
     .update({
-      pricing_source_row_id: null,
-      pricing_header_id: null,
+      unit_cost_override: null,
+      unit_cost_is_overridden: false,
     })
     .eq('id', rowId)
     .eq('estimate_id', estimateId)
@@ -286,7 +363,7 @@ export async function unlinkRowFromPricing(
     .single()
 
   if (updateError || !updated) {
-    return { error: updateError?.message ?? 'Failed to unlink row from pricing' }
+    return { error: updateError?.message ?? 'Failed to accept pricing source' }
   }
 
   revalidateWorksheet(jobId)

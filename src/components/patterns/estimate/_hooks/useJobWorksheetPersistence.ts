@@ -14,8 +14,10 @@ export type UpdateJobWorksheetRowPatch = {
   location: string | null
   quantity: number | string | null
   unit: string | null
-  unit_price: number | string | null
   notes: string | null
+  unit_cost_manual: number | null
+  unit_cost_override: number | null
+  unit_cost_is_overridden: boolean
   pricing_source_row_id?: string | null
   pricing_header_id?: string | null
 }
@@ -30,7 +32,10 @@ export type CreateJobWorksheetRowInput = {
   location: string | null
   quantity: number | string | null
   unit: string | null
-  unit_price: number | string | null
+  unit_cost_manual: number | null
+  unit_cost_source: number | null
+  unit_cost_override: number | null
+  unit_cost_is_overridden: boolean
   notes: string | null
   scope_status: 'included'
   is_upgrade: false

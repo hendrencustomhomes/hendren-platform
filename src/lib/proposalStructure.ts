@@ -2,6 +2,7 @@
 
 import type { JobWorksheetRow } from '@/components/patterns/estimate/JobWorksheetTableAdapter'
 import { rowTotal } from '@/components/patterns/estimate/_worksheetFormatters'
+import { resolveUnitCost } from '@/components/patterns/estimate/_lib/unitCostResolver'
 import type { ProposalLineItem, ProposalSection, ProposalSummary } from './proposalSummary'
 
 // ProposalStatus models proposal_structures.proposal_status — the document workflow state.
@@ -114,7 +115,7 @@ export function applyStructure(
         description: child.description,
         quantity: child.quantity,
         unit: child.unit,
-        unit_price: child.unit_price,
+        unit_price: resolveUnitCost(child),
         location: child.location,
         notes: child.notes,
         lineTotal: rowTotal(child),
@@ -161,7 +162,7 @@ export function applyStructure(
           description: sourceRow.description,
           quantity: sourceRow.quantity,
           unit: sourceRow.unit,
-          unit_price: sourceRow.unit_price,
+          unit_price: resolveUnitCost(sourceRow),
           location: sourceRow.location,
           notes: sourceRow.notes,
           lineTotal: rowTotal(sourceRow),

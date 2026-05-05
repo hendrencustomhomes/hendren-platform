@@ -23,7 +23,10 @@ export type WorksheetImportRow = {
   location: string | null
   quantity: number | null
   unit: string | null
-  unit_price: number | null
+  unit_cost_manual: number | null
+  unit_cost_source: null
+  unit_cost_override: null
+  unit_cost_is_overridden: false
   notes: string | null
   scope_status: 'included'
   is_upgrade: false
@@ -103,7 +106,7 @@ export function parseImportCsv(
     const quantity = rawQty !== '' ? (parseFloat(rawQty) || null) : null
 
     const rawPrice = get(raw, 'unit_price')
-    const unit_price = rawPrice !== '' ? (parseFloat(rawPrice) || null) : null
+    const unit_cost_manual = rawPrice !== '' ? (parseFloat(rawPrice) || null) : null
 
     const unit = get(raw, 'unit') || null
     const location = get(raw, 'location') || null
@@ -129,7 +132,10 @@ export function parseImportCsv(
       location,
       quantity,
       unit,
-      unit_price,
+      unit_cost_manual,
+      unit_cost_source: null,
+      unit_cost_override: null,
+      unit_cost_is_overridden: false,
       notes,
       scope_status: 'included',
       is_upgrade: false,

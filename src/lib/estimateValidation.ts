@@ -1,3 +1,5 @@
+import { resolveUnitCost } from '@/components/patterns/estimate/_lib/unitCostResolver'
+
 export type EstimateValidationResult = {
   isValid: boolean
   errors: string[]
@@ -8,7 +10,11 @@ type ValidatableRow = {
   row_kind: string
   pricing_type: string
   quantity: number | string | null | undefined
-  unit_price: number | string | null | undefined
+  pricing_source_row_id: string | null
+  unit_cost_manual: number | null
+  unit_cost_source: number | null
+  unit_cost_override: number | null
+  unit_cost_is_overridden: boolean
 }
 
 function n(count: number, singular: string, plural: string): string {
@@ -51,8 +57,8 @@ export function validateEstimateForSend(rows: ValidatableRow[]): EstimateValidat
     (r) => r.row_kind === 'line_item' && r.pricing_type !== 'unpriced',
   )
   const zeroPrice = lineItems.filter((r) => {
-    const p = Number(r.unit_price)
-    return r.unit_price == null || r.unit_price === '' || Number.isNaN(p) || p === 0
+    const p = resolveUnitCost(r)
+    return p == null || p === 0
   })
   if (zeroPrice.length > 0) {
     errors.push(

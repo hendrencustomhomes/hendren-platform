@@ -12,9 +12,10 @@ import {
   currency,
   getDepth,
 } from './_worksheetFormatters'
+import { resolveUnitCost } from './_lib/unitCostResolver'
 import { JobWorksheetMobileView } from './JobWorksheetMobileView'
 import { PricingLinkModal } from './PricingLinkModal'
-import { unlinkRowFromPricing } from '@/app/actions/worksheet-pricing-actions'
+import { unlinkRowFromPricing, acceptPricingSource } from '@/app/actions/worksheet-pricing-actions'
 
 export type JobWorksheetRowKind = 'line_item' | 'assembly' | 'note' | 'allowance'
 export type JobWorksheetPricingType = 'unit' | 'lump_sum' | 'allowance' | 'manual' | 'unpriced'
@@ -38,9 +39,15 @@ export type JobWorksheetRow = {
   pricing_header_id: string | null
   catalog_sku: string | null
   source_sku: string | null
+  // Legacy column — kept for snapshot compatibility. Do NOT use for resolution.
   unit_price: number | string | null
   total_price: number | string | null
   pricing_type: JobWorksheetPricingType
+  // Unit cost resolution fields
+  unit_cost_manual: number | null
+  unit_cost_source: number | null
+  unit_cost_override: number | null
+  unit_cost_is_overridden: boolean
 }
 
 export type JobWorksheetEditableCellKey =
@@ -89,11 +96,12 @@ function getColumns(
   commit: (rowId: string, field: JobWorksheetEditableCellKey, value: string) => void,
   onLinkRow: (rowId: string) => void,
   onUnlinkRow: (rowId: string) => void,
+  onAcceptSource: (rowId: string) => void,
 ): EditableDataTableColumn<JobWorksheetRow>[] {
   return [
     { key:'description',label:'Item',kind:'text',width:'300px',getValue:(row)=>row.description,getCellPaddingLeft:(row)=>8+getDepth(row,rowsById)*16 },
     { key:'quantity',label:'Qty',kind:'text',width:'90px',getValue:(row)=>String(row.quantity??'') },
-    { key:'unit_price',label:'Unit Price',kind:'text',width:'120px',getValue:(row)=>String(row.unit_price??''),formatEditableValue:(value,row,editing)=>currency(value,editing) },
+    { key:'unit_price',label:'Unit Price',kind:'text',width:'120px',getValue:(row)=>String(resolveUnitCost(row)??''),formatEditableValue:(value,row,editing)=>currency(value,editing) },
     {
       key:'pricing_source',
       label:'Source',
@@ -109,9 +117,9 @@ function getColumns(
       key:'actions',
       label:'',
       kind:'static',
-      width:'100px',
+      width:'120px',
       renderStaticCell:(row) => (
-        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             type="button"
             onClick={() => onLinkRow(row.id)}
@@ -128,6 +136,16 @@ function getColumns(
               style={{ fontSize: '11px', fontWeight: 600, padding: '2px 6px', border: '1px solid var(--border)', borderRadius: '4px', background: 'var(--surface)', cursor: 'pointer', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}
             >
               Unlink
+            </button>
+          )}
+          {row.unit_cost_is_overridden && (
+            <button
+              type="button"
+              onClick={() => onAcceptSource(row.id)}
+              title="Accept linked source price, discard override"
+              style={{ fontSize: '11px', fontWeight: 600, padding: '2px 6px', border: '1px solid var(--border)', borderRadius: '4px', background: 'var(--surface)', cursor: 'pointer', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}
+            >
+              Accept
             </button>
           )}
           <button
@@ -165,6 +183,7 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
   const [linkModalRowId, setLinkModalRowId] = useState<string | null>(null)
   const [pendingPriceEdit, setPendingPriceEdit] = useState<{ rowId: string; value: string } | null>(null)
   const [unlinkPending, startUnlinkTransition] = useTransition()
+  const [acceptPending, startAcceptTransition] = useTransition()
 
   const rowsById = useMemo<Map<string, JobWorksheetRow>>(
     () => new Map<string, JobWorksheetRow>(rows.map((row) => [row.id, row])),
@@ -179,7 +198,15 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
     })
   }
 
-  // Intercept unit_price commits on linked rows to show confirm dialog
+  function handleAcceptSource(rowId: string) {
+    startAcceptTransition(async () => {
+      const result = await acceptPricingSource(rowId, activeEstimateId, jobId)
+      if ('error' in result) return
+      props.forceUpdateRow(result.row)
+    })
+  }
+
+  // Intercept unit_price commits on linked rows to show confirm dialog before writing override
   function wrappedCommitCellValue(
     rowId: string,
     field: JobWorksheetEditableCellKey,
@@ -196,9 +223,9 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
   }
 
   const columns = useMemo(
-    () => getColumns(rowsById, props.deleteRow, props.commitCellValue, setLinkModalRowId, handleUnlinkRow),
+    () => getColumns(rowsById, props.deleteRow, props.commitCellValue, setLinkModalRowId, handleUnlinkRow, handleAcceptSource),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rowsById, props.deleteRow, props.commitCellValue, unlinkPending],
+    [rowsById, props.deleteRow, props.commitCellValue, unlinkPending, acceptPending],
   )
 
   const virt = useWorksheetVirtualization<JobWorksheetRow>({ rows, rowHeight:64, overscan:8, threshold:20, maxBodyHeight:560 })
@@ -299,9 +326,9 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
               gap: '14px',
             }}
           >
-            <div style={{ fontSize: '14px', fontWeight: 700 }}>Drop price link?</div>
+            <div style={{ fontSize: '14px', fontWeight: 700 }}>Override linked price?</div>
             <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              This will drop the link to the price source. The row will become manual-priced.
+              This will override the linked source price. The link is kept — use Accept to revert to the source price.
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button
