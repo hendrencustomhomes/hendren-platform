@@ -1,87 +1,110 @@
-# Handoff — 2026-05-04 (Slices 25–28 Infrastructure Completion)
+# Handoff — 2026-05-05 (Slices 29–33 Pipeline Completion + SQL Process Correction)
 
 ---
 
 ## What changed this session
 
-### Slice 25 — RLS / service-role audit
-- Identified all mutation paths
-- Confirmed where RLS applies vs bypasses
-- Flagged SECURITY DEFINER risk on `send_proposal`
+### Slice 29 — archive and restore alignment
+- Allowed archiving of active estimates
+- Fixed restore to return archived → draft
+- Added confirmation UX
 
-### Slice 26 — proposal/document permission guards
-- Added `requireModuleAccess` to all proposal and document actions
-- Closed critical permission gap before SECURITY DEFINER RPC
+### Slice 30 — stage estimate (server)
+- Introduced `staged` lifecycle state
+- Server-side transition implemented
 
-### Slice 27 — lockProposal resolution
-- Deleted unused, non-atomic `lockProposal`
-- Removed redundant mutation path
+### Slice 31 — stage/unstage UI + lifecycle correction
+- Restricted staging to active only
+- Added `unstageEstimate` (staged → active)
+- Wired Stage/Unstage into UI
 
-### Slice 28 — set_active_estimate RPC audit
-- Verified DB function is **SECURITY INVOKER**
-- Confirmed RLS applies inside function
-- No additional guards required
+### Slice 32 — reject + permanent lock
+- Removed `unlockProposal`
+- Added `rejectProposal`
+- Enforced send requires staged
+- Blocked active switching when staged exists
+
+### Slice 33 — send RPC atomic fix
+- `send_proposal` now atomically:
+  - enforces staged
+  - locks estimate
+  - sets `estimates.status = sent`
+  - updates proposal_structures
+  - inserts snapshot
+- Removed app-layer post-RPC status update
+
+### Process correction — SQL handling
+- Identified incorrect behavior: repo migration file was created
+- Deleted migration file
+- Updated system rules:
+  - SQL changes are Supabase-direct
+  - Repo migrations are forbidden unless explicitly requested
+- Updated templates and START_HERE to enforce rule
 
 ---
 
 ## Current state
 
-The Estimate → Proposal → Send pipeline is now:
+The Estimate → Proposal → Send pipeline is now fully enforced and consistent:
 
-### Fully enforced across all layers
+```text
+draft → active → staged → sent → rejected / signed / voided → archived
+```
 
-1. **Application layer**
-   - `requireModuleAccess` enforces permission levels
-   - `isEstimateEditable()` enforces state
+### Guarantees
 
-2. **Database layer**
-   - RLS protects worksheet and estimate mutations
-   - `set_active_estimate` respects RLS (SECURITY INVOKER)
+- **Staging gate enforced** (UI + server + DB)
+- **Send is atomic at DB layer** (no partial state)
+- **Sent is permanently locked** (no unlock path)
+- **Single active estimate enforced** (blocked when staged exists)
+- **Archive/restore behaves correctly**
+- **Permissions fully aligned (view/edit/manage)**
 
-3. **Privileged operations**
-   - `sendProposal` guarded before SECURITY DEFINER RPC
-   - No unguarded mutation paths remain
+### Data truth
 
-### Structural cleanup
-- Dead mutation path (`lockProposal`) removed
-- All active paths are canonical and consistent
+- Estimate = authoritative truth
+- Proposal = formatted view + snapshot artifact
+- DB enforces critical transitions (not just app)
 
 ---
 
 ## Remaining gaps
 
-- Estimate approval/status transition model not defined
+- `snapshot_json` still duplicates estimate data (not yet de-authoritized)
+- `createProposalSnapshot` only supports active (not staged)
+- `rejectProposal` does not update proposal_structures
+- `void/sign` not fully aligned with estimate.status
 - Pricing resolution logic not implemented
-- `unlockProposal` remains non-atomic (acceptable for now)
-- Permission helper may need caching optimization later
 
 ---
 
 ## Next step (locked)
 
-### Slice 29 — estimate approval/status transition design
+### Slice 34 — proposal artifact truth cleanup
 
 Scope:
-- Define estimate lifecycle states (draft / active / sent / signed / etc.)
-- Define transitions and constraints
-- Align estimate + proposal state coupling
-- Define which actions control transitions
+- Ensure proposal_documents are output-only artifacts
+- Remove any logic treating snapshot_json as authoritative
+- Align all reads to estimate + worksheet
 
 Follow-up:
-- Pricing resolution logic
+- Void/sign alignment with estimate status
 
 ---
 
 ## What NOT to touch
 
-- Do NOT modify RLS policies
-- Do NOT modify DB functions
-- Do NOT introduce new permission systems
-- Do NOT change proposal send flow
+- Do NOT reintroduce repo migration files
+- Do NOT modify DB functions without SQL prompt
+- Do NOT loosen staged → send requirement
+- Do NOT add unlock paths
 - Do NOT refactor worksheet system
 
 ---
 
 ## current.md updated?
 
-Yes — updated to reflect Slice 28 and completed infrastructure track
+Yes — updated to reflect:
+- Slice 33 completion
+- atomic send behavior
+- SQL process rule
