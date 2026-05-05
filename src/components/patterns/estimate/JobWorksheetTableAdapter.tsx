@@ -67,25 +67,54 @@ function isMobile() {
   return window.innerWidth < 768
 }
 
-function PricingSourceBadge({ row }: { row: JobWorksheetRow }) {
+function fmt(v: number | null): string {
+  return v != null ? `$${v.toFixed(2)}` : '—'
+}
+
+function LinkIcon() {
+  return (
+    <svg width={11} height={11} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }} aria-hidden="true">
+      <path d="M6.5 9.5a3.5 3.5 0 0 0 4.95.5l2-2a3.5 3.5 0 0 0-4.95-4.95l-1 1" />
+      <path d="M9.5 6.5a3.5 3.5 0 0 0-4.95-.5l-2 2a3.5 3.5 0 0 0 4.95 4.95l1-1" />
+    </svg>
+  )
+}
+
+function PencilIcon() {
+  return (
+    <svg width={10} height={10} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }} aria-hidden="true">
+      <path d="M11.5 2.5a1.5 1.5 0 0 1 2.12 2.12L5 13.25 3 13.5l.25-2L11.5 2.5z" />
+    </svg>
+  )
+}
+
+function PricingStateIcon({ row }: { row: JobWorksheetRow }) {
   const isLinked = row.pricing_source_row_id !== null
+  const isOverridden = row.unit_cost_is_overridden
+
+  if (!isLinked && !isOverridden) return null
+
+  const sku = row.source_sku ?? row.catalog_sku ?? ''
+  const skuPart = sku ? ` · ${sku}` : ''
+
+  const title = isOverridden
+    ? `Override active · source ${fmt(row.unit_cost_source)} → ${fmt(row.unit_cost_override)}${skuPart}`
+    : `Linked · source ${fmt(row.unit_cost_source)}${skuPart}`
+
   return (
     <span
-      title={isLinked ? `Linked · SKU: ${row.source_sku ?? row.catalog_sku ?? ''}` : 'No pricing source linked'}
+      title={title}
       style={{
-        display: 'inline-block',
-        fontSize: '10px',
-        fontWeight: 700,
-        padding: '2px 6px',
-        borderRadius: '4px',
-        letterSpacing: '.03em',
-        background: isLinked ? 'rgba(37,99,235,.1)' : 'var(--bg)',
-        color: isLinked ? 'var(--blue, #2563eb)' : 'var(--text-muted)',
-        border: `1px solid ${isLinked ? 'rgba(37,99,235,.25)' : 'var(--border)'}`,
-        whiteSpace: 'nowrap',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '2px',
+        color: isOverridden ? '#d97706' : '#2563eb',
+        cursor: 'default',
+        userSelect: 'none',
       }}
     >
-      {isLinked ? 'Linked' : 'Manual'}
+      <LinkIcon />
+      {isOverridden && <PencilIcon />}
     </span>
   )
 }
@@ -104,10 +133,10 @@ function getColumns(
     { key:'unit_price',label:'Unit Price',kind:'text',width:'120px',getValue:(row)=>String(resolveUnitCost(row)??''),formatEditableValue:(value,row,editing)=>currency(value,editing) },
     {
       key:'pricing_source',
-      label:'Source',
+      label:'',
       kind:'static',
-      width:'90px',
-      renderStaticCell:(row) => <PricingSourceBadge row={row} />,
+      width:'36px',
+      renderStaticCell:(row) => <PricingStateIcon row={row} />,
     },
     { key:'unit',label:'Unit',kind:'static',width:'120px',renderStaticCell:(row)=>(<input list="unit-options" value={row.unit??'ea'} onChange={(event)=>commit(row.id,'unit',event.currentTarget.value)} />) },
     { key:'total_price',label:'Total',kind:'static',width:'120px',getValue:(row)=>currency(rowTotal(row)) },
@@ -142,10 +171,10 @@ function getColumns(
             <button
               type="button"
               onClick={() => onAcceptSource(row.id)}
-              title="Accept linked source price, discard override"
-              style={{ fontSize: '11px', fontWeight: 600, padding: '2px 6px', border: '1px solid var(--border)', borderRadius: '4px', background: 'var(--surface)', cursor: 'pointer', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}
+              title="Discard override — revert to linked source price"
+              style={{ fontSize: '10px', fontWeight: 500, padding: '1px 5px', border: '1px solid var(--border)', borderRadius: '3px', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', whiteSpace: 'nowrap', lineHeight: '1.6' }}
             >
-              Accept
+              ↩ accept
             </button>
           )}
           <button
