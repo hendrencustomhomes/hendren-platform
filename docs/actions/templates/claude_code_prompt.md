@@ -26,10 +26,7 @@ Ensure working tree reflects latest remote state before continuing.
 
 ---
 
-Context already resolved by Actions GPT.
-Do not read general Actions docs unless explicitly listed below.
-
-Read only:
+Read:
 1. [ADD ONLY DOCS NEEDED TO EXECUTE THIS SLICE]
 2. [ADD ONLY TARGET MODULE FILES/DOCS IF KNOWN]
 
@@ -92,13 +89,6 @@ STOP CONDITIONS
 
 Slice report:
 - Write a concise completion report to: [MODULE-CORRECT SLICE REPORT PATH UNDER docs/modules/]
-- Do NOT write reports to legacy directories such as `docs/actions/slices/`, `docs/slices/`, `docs/audits/`, or `docs/archive/`.
-- Use the module mapping in `docs/actions/START_HERE.md`:
-  - Estimate / proposal / worksheet-in-estimate / send pipeline → `docs/modules/estimate/`
-  - Pricing / catalog / pricing sources → `docs/modules/pricing/`
-  - Cross-cutting platform / permissions / shared foundation / worksheet engine audits / repo-wide bugfixes → `docs/modules/platform/`
-- File naming remains `slice_##_<short_name>.md`.
-- Create the parent folder if needed.
 - The report must include:
   1. Slice name
   2. Status: completed / stopped
@@ -107,7 +97,6 @@ Slice report:
   5. Validation results
   6. Risks / follow-up
   7. Anything intentionally not changed
-- This report is required so Actions GPT can resync later without a full repo audit.
 
 ---
 
@@ -116,7 +105,6 @@ Rules:
 - Keep this to one bounded slice.
 - Do not refactor unrelated code.
 - Do not introduce new architecture unless the docs explicitly require it.
-- Do not change schema unless this prompt explicitly includes a migration task.
 - If docs conflict with code, stop and report the conflict before patching around it.
 - If the task cannot be completed safely, stop with a short report instead of improvising.
 
