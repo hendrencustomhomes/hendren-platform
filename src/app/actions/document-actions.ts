@@ -27,12 +27,12 @@ async function requireUser() {
 // back by app logic for business decisions. estimates and job_worksheet_items remain
 // the authoritative source of truth for status, scope, and pricing.
 //
+// Eligible estimate statuses: active, staged.
+// Terminal statuses (sent, signed, voided, rejected) and archived are not eligible.
+//
 // doc_status is derived from proposal_status at capture time:
 //   draft → draft_snapshot  |  sent → sent  |  signed → signed  |  voided → voided
 // Does NOT mutate proposal or estimate state.
-//
-// Known gap: the activeEstimate guard below requires status === 'active'. Staged
-// estimates should also be snapshotable. See current.md known gaps.
 export async function createProposalSnapshot(
   estimateId: string,
   jobId: string,
@@ -58,9 +58,11 @@ export async function createProposalSnapshot(
     .order('created_at', { ascending: true })
 
   const estimates = (estimatesRaw ?? []) as Estimate[]
-  const activeEstimate = estimates.find((e) => e.id === estimateId && e.status === 'active') ?? null
+  const eligibleEstimate = estimates.find(
+    (e) => e.id === estimateId && (e.status === 'active' || e.status === 'staged'),
+  ) ?? null
 
-  if (!activeEstimate) return { error: 'No active estimate found for the given estimate ID' }
+  if (!eligibleEstimate) return { error: 'Snapshots can only be created for active or staged estimates' }
 
   const [{ data: rowsRaw }, { data: structureRecord }] = await Promise.all([
     auth.supabase
@@ -105,7 +107,7 @@ export async function createProposalSnapshot(
     captured_at: new Date().toISOString(),
     proposal_status: proposalStatus,
     job_name: job.job_name || '',
-    estimate_title: activeEstimate.title,
+    estimate_title: eligibleEstimate.title,
     grand_total: summary.grandTotal,
     sections: summary.sections.map((section) => ({
       id: section.id,
