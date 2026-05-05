@@ -22,12 +22,36 @@ import {
 } from './access-control'
 
 // ---------------------------------------------------------------------------
+// Centralized DB write mapper — dual-writes new and legacy column names.
+// ---------------------------------------------------------------------------
+// New column names are authoritative for reads. Legacy columns are kept in
+// sync on every write so existing DB functions and RLS policies continue to
+// work until the rename migration runs.
+//
+//   canManage  → can_edit (new) + can_manage (legacy)
+//   canAssign  → can_manage_next (new) + can_assign (legacy)
+//   canView    → can_view (unchanged)
+// ---------------------------------------------------------------------------
+function toPermissionDbColumns(row: { canView: boolean; canManage: boolean; canAssign: boolean }) {
+  return {
+    can_view: row.canView,
+    can_edit: row.canManage,
+    can_manage_next: row.canAssign,
+    can_manage: row.canManage,
+    can_assign: row.canAssign,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Per-action permission guard
 // ---------------------------------------------------------------------------
 // Permission level semantics (maps to DB columns):
 //   view   = read access            (DB: can_view)
-//   edit   = build/mutate work      (DB: can_manage)
-//   manage = workflow authority     (DB: can_assign)
+//   edit   = build/mutate work      (DB: can_edit — legacy: can_manage)
+//   manage = workflow authority     (DB: can_manage_next — legacy: can_assign)
+//
+// Reads use the new column names. Writes dual-write new + legacy via
+// toPermissionDbColumns() so both column sets stay in sync during transition.
 //
 // Hierarchy (enforced by normalizePermissionState):
 //   manage satisfies edit + view
@@ -68,10 +92,10 @@ export async function requireModuleAccess(
   if (permRowError) return { error: permRowError.message }
   if (!permRow?.id) return { error: `Permission row '${rowKey}' not found` }
 
-  // 4. Check user_permission_snapshots first.
+  // 4. Check user_permission_snapshots first (reads new column names).
   const { data: snapshot, error: snapshotError } = await admin
     .from('user_permission_snapshots')
-    .select('can_view, can_manage, can_assign')
+    .select('can_view, can_edit, can_manage_next')
     .eq('profile_id', profileId)
     .eq('permission_row_id', permRow.id)
     .maybeSingle()
@@ -86,7 +110,7 @@ export async function requireModuleAccess(
     // Fall back to the user's assigned template when no personal snapshot exists.
     const { data: templatePerm, error: templateError } = await admin
       .from('template_permissions')
-      .select('can_view, can_manage, can_assign')
+      .select('can_view, can_edit, can_manage_next')
       .eq('permission_template_id', access.permission_template_id)
       .eq('permission_row_id', permRow.id)
       .maybeSingle()
@@ -97,9 +121,9 @@ export async function requireModuleAccess(
     perms = { canView: false, canManage: false, canAssign: false }
   }
 
-  // level 'view'   → DB can_view   (canView)
-  // level 'edit'   → DB can_manage (canManage) — satisfied by canAssign too via normalizePermissionState
-  // level 'manage' → DB can_assign (canAssign)
+  // level 'view'   → DB can_view        (canView)
+  // level 'edit'   → DB can_edit        (canManage) — satisfied by canAssign too via normalizePermissionState
+  // level 'manage' → DB can_manage_next (canAssign)
   if (level === 'view' && !perms.canView) {
     return { error: `You do not have permission to view ${rowKey}` }
   }
@@ -351,9 +375,7 @@ export async function saveUserAccessModel(input: {
     return {
       profile_id: input.profileId,
       permission_row_id: permissionRow.id,
-      can_view: row.canView,
-      can_manage: row.canManage,
-      can_assign: row.canAssign,
+      ...toPermissionDbColumns(row),
     }
   }).filter(Boolean) as any[]
 
@@ -427,9 +449,7 @@ export async function saveTemplatePermissionMatrix(input: {
     return {
       permission_template_id: template.id,
       permission_row_id: permissionRow.id,
-      can_view: normalized.canView,
-      can_manage: normalized.canManage,
-      can_assign: normalized.canAssign,
+      ...toPermissionDbColumns(normalized),
     }
   }).filter(Boolean) as any[]
 

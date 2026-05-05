@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/utils/supabase/server'
 import { getCurrentPricingAccess } from '@/app/actions/pricing-access-actions'
+import { requireModuleAccess } from '@/lib/access-control-server'
 import { isEstimateEditable } from '@/lib/estimateTypes'
 import type { JobWorksheetRow } from '@/components/patterns/estimate/JobWorksheetTableAdapter'
 import type { PricingHeader, PricingRow } from '@/lib/pricing/types'
@@ -237,6 +238,9 @@ export async function unlinkRowFromPricing(
 ): Promise<{ row: JobWorksheetRow } | { error: string }> {
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
+  if (permGuard) return permGuard
 
   // Verify worksheet item belongs to this job and estimate is editable in parallel
   const [
