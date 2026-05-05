@@ -102,3 +102,28 @@ current resolved cost (using the same precedence rules) and preserves it:
 - UI icons/badges indicating override state
 - Pricing sync jobs
 - Quantity / extended cost logic
+
+---
+
+## Slice 40B.1 — Resolver Hardening
+
+**Addressed in a follow-up commit.** See also `slice_40b1_resolver_hardening.md`.
+
+The only inline duplication found after Slice 40B was in `unlinkRowFromPricing`
+(`src/app/actions/worksheet-pricing-actions.ts`). It hand-rolled the same
+three-way precedence logic rather than calling the resolver:
+
+```typescript
+// BEFORE (duplicated logic)
+const resolvedCost: number | null = item.unit_cost_is_overridden
+  ? (item.unit_cost_override ?? null)
+  : item.pricing_source_row_id !== null
+    ? (item.unit_cost_source ?? null)
+    : (item.unit_cost_manual ?? null)
+
+// AFTER (resolver)
+const resolvedCost = resolveUnitCost(item)
+```
+
+`resolveUnitCost` is now imported into the server action file. No other
+resolution duplicates were found.

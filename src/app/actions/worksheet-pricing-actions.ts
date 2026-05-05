@@ -6,6 +6,7 @@ import { getCurrentPricingAccess } from '@/app/actions/pricing-access-actions'
 import { requireModuleAccess } from '@/lib/access-control-server'
 import { isEstimateEditable } from '@/lib/estimateTypes'
 import type { JobWorksheetRow } from '@/components/patterns/estimate/JobWorksheetTableAdapter'
+import { resolveUnitCost } from '@/components/patterns/estimate/_lib/unitCostResolver'
 import type { PricingHeader, PricingRow } from '@/lib/pricing/types'
 
 async function requireUser() {
@@ -279,13 +280,9 @@ export async function unlinkRowFromPricing(
     return { error: 'Worksheet item does not belong to this job' }
   }
 
-  // Compute resolved cost before clearing source fields, then move it to unit_cost_manual
+  // Resolve current effective cost before detaching, then preserve it as unit_cost_manual
   const item = worksheetItem as any
-  const resolvedCost: number | null = item.unit_cost_is_overridden
-    ? (item.unit_cost_override ?? null)
-    : item.pricing_source_row_id !== null
-      ? (item.unit_cost_source ?? null)
-      : (item.unit_cost_manual ?? null)
+  const resolvedCost = resolveUnitCost(item)
 
   const { data: updated, error: updateError } = await auth.supabase
     .from('job_worksheet_items')
