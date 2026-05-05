@@ -1,4 +1,13 @@
 // Types for immutable proposal document snapshots stored in proposal_documents.
+//
+// AUDIT-ARTIFACT CONTRACT
+// snapshot_json is a write-once, point-in-time record. Once inserted into
+// proposal_documents it is never updated. No app or server action may read
+// snapshot_json back to resolve estimate status, scope, or pricing — those
+// always come from estimates and job_worksheet_items.
+// The only valid reader of snapshot_json is a display-only document page
+// (e.g., /proposal/documents/[documentId]) that renders the historical record
+// to a user. All other reads are a contract violation.
 
 export type ProposalSnapshotItem = {
   id: string

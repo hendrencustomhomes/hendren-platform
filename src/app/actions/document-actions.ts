@@ -22,10 +22,17 @@ async function requireUser() {
   return { supabase, user }
 }
 
-// Create an immutable snapshot of the current proposal state.
-// doc_status is derived from the current proposal_status:
+// Capture a point-in-time audit snapshot of the current proposal state.
+// The resulting proposal_documents row is write-once: snapshot_json is never read
+// back by app logic for business decisions. estimates and job_worksheet_items remain
+// the authoritative source of truth for status, scope, and pricing.
+//
+// doc_status is derived from proposal_status at capture time:
 //   draft → draft_snapshot  |  sent → sent  |  signed → signed  |  voided → voided
 // Does NOT mutate proposal or estimate state.
+//
+// Known gap: the activeEstimate guard below requires status === 'active'. Staged
+// estimates should also be snapshotable. See current.md known gaps.
 export async function createProposalSnapshot(
   estimateId: string,
   jobId: string,
@@ -92,6 +99,7 @@ export async function createProposalSnapshot(
   }
   const docStatus: ProposalDocStatus = docStatusMap[proposalStatus]
 
+  // Audit artifact only — this value is inserted once and never read back for decisions.
   const snapshotJson: ProposalSnapshotJson = {
     version: 1,
     captured_at: new Date().toISOString(),
@@ -204,6 +212,9 @@ export async function sendProposal(
 
   const summary = applyStructure(structure, worksheetRows)
 
+  // Send-time audit artifact — captures estimate state at the moment of send.
+  // Passed to the RPC and stored in proposal_documents as a write-once record.
+  // No app code reads snapshot_json back to determine status or scope.
   const snapshotJson: ProposalSnapshotJson = {
     version: 1,
     captured_at: new Date().toISOString(),
