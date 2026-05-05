@@ -1,8 +1,8 @@
 'use server'
 
-import { normalizePermissionState, type PermissionRowKey } from '@/lib/access-control'
-import { createAdminClient } from '@/utils/supabase/admin'
 import { createClient } from '@/utils/supabase/server'
+import { requireModuleAccess } from '@/lib/access-control-server'
+import type { PermissionRowKey } from '@/lib/access-control'
 
 type SupportedPricingPermissionRowKey = Extract<PermissionRowKey, 'pricing_sources' | 'bids' | 'catalog'>
 
@@ -13,118 +13,38 @@ type PricingAccessResult = {
   error?: string
 }
 
+// Returns the full permission state for the current user on the given pricing row.
+// This is a query function, not a guard: it exposes {canView, canManage, canAssign}
+// so callers can render appropriate UI or apply fine-grained access decisions.
+//
+// Delegates all permission resolution to requireModuleAccess, which handles the admin
+// bypass, active-user check, snapshot resolution, and template fallback consistently
+// with all other modules. Three parallel calls (view, edit, manage) produce the full
+// state with the same DB overhead as a single call.
+//
+// Error is propagated only when the view check fails, which signals a fundamental
+// failure (not authenticated, DB error, inactive user). A user who can view but not
+// manage simply gets canManage = false; no error is set in that case.
 export async function getCurrentPricingAccess(
-  rowKey: SupportedPricingPermissionRowKey
+  rowKey: SupportedPricingPermissionRowKey,
 ): Promise<PricingAccessResult> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    return {
-      canView: false,
-      canManage: false,
-      canAssign: false,
-      error: 'Not authenticated',
-    }
+    return { canView: false, canManage: false, canAssign: false, error: 'Not authenticated' }
   }
 
-  const admin = createAdminClient()
+  const [viewResult, editResult, manageResult] = await Promise.all([
+    requireModuleAccess(user.id, rowKey, 'view'),
+    requireModuleAccess(user.id, rowKey, 'edit'),
+    requireModuleAccess(user.id, rowKey, 'manage'),
+  ])
 
-  const { data: access, error: accessError } = await admin
-    .from('internal_access')
-    .select('permission_template_id, is_active')
-    .eq('profile_id', user.id)
-    .maybeSingle()
-
-  if (accessError) {
-    return {
-      canView: false,
-      canManage: false,
-      canAssign: false,
-      error: accessError.message,
-    }
+  return {
+    canView: viewResult === null,
+    canManage: editResult === null,
+    canAssign: manageResult === null,
+    ...(viewResult !== null && { error: viewResult.error }),
   }
-
-  if (!access?.is_active) {
-    return {
-      canView: false,
-      canManage: false,
-      canAssign: false,
-      error: 'Internal user access required',
-    }
-  }
-
-  const { data: permissionRow, error: rowError } = await admin
-    .from('permission_rows')
-    .select('id')
-    .eq('key', rowKey)
-    .maybeSingle()
-
-  if (rowError) {
-    return {
-      canView: false,
-      canManage: false,
-      canAssign: false,
-      error: rowError.message,
-    }
-  }
-
-  if (!permissionRow?.id) {
-    return {
-      canView: false,
-      canManage: false,
-      canAssign: false,
-      error: 'Permission row not found',
-    }
-  }
-
-  const { data: snapshot, error: snapshotError } = await admin
-    .from('user_permission_snapshots')
-    .select('can_view, can_manage, can_assign')
-    .eq('profile_id', user.id)
-    .eq('permission_row_id', permissionRow.id)
-    .maybeSingle()
-
-  if (snapshotError) {
-    return {
-      canView: false,
-      canManage: false,
-      canAssign: false,
-      error: snapshotError.message,
-    }
-  }
-
-  if (snapshot) {
-    return normalizePermissionState(rowKey, snapshot)
-  }
-
-  if (access.permission_template_id) {
-    const { data: templatePermission, error: templateError } = await admin
-      .from('template_permissions')
-      .select('can_view, can_manage, can_assign')
-      .eq('permission_template_id', access.permission_template_id)
-      .eq('permission_row_id', permissionRow.id)
-      .maybeSingle()
-
-    if (templateError) {
-      return {
-        canView: false,
-        canManage: false,
-        canAssign: false,
-        error: templateError.message,
-      }
-    }
-
-    if (templatePermission) {
-      return normalizePermissionState(rowKey, templatePermission)
-    }
-  }
-
-  return normalizePermissionState(rowKey, {
-    canView: false,
-    canManage: false,
-    canAssign: false,
-  })
 }
