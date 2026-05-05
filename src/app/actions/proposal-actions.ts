@@ -170,9 +170,20 @@ export async function voidProposal(
   return { success: true }
 }
 
-// Reject the proposal (sent → rejected on estimates).
-// The proposal_structures record remains at 'sent' — ProposalStatus does not include 'rejected'.
-// Estimates is the authoritative status source; rejection is an estimate-lifecycle event.
+// Reject the proposal (sent → rejected on estimates only).
+//
+// proposal_structures.proposal_status intentionally stays at 'sent'. This is correct
+// design, not an unresolved gap. Rejection is an estimate lifecycle event; the proposal
+// document was sent and is preserved at 'sent' as an accurate audit record. The business
+// outcome (client rejected) is tracked in estimates.status, which is authoritative.
+//
+// ProposalStatus does not include 'rejected'. Adding it would require schema changes to
+// the proposal_structures.proposal_status column and would cascade through all ProposalStatus
+// consumers (docStatusMap, STATUS_BADGE, proposal_status guards). That work is deferred
+// unless a concrete UI requirement demands it.
+//
+// Any code that needs to show or act on a rejected state must read estimates.status,
+// not proposal_structures.proposal_status.
 export async function rejectProposal(
   estimateId: string,
   jobId: string,

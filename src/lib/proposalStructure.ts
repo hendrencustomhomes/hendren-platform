@@ -4,6 +4,19 @@ import type { JobWorksheetRow } from '@/components/patterns/estimate/JobWorkshee
 import { rowTotal } from '@/components/patterns/estimate/_worksheetFormatters'
 import type { ProposalLineItem, ProposalSection, ProposalSummary } from './proposalSummary'
 
+// ProposalStatus models proposal_structures.proposal_status — the document workflow state.
+// It is intentionally narrower than EstimateStatus:
+//
+//   'rejected' is absent by design. Rejection is an estimate lifecycle event, not a
+//   document state change. After rejectProposal, proposal_structures.proposal_status
+//   stays at 'sent' — the proposal document was sent; the business outcome (rejection)
+//   is recorded in estimates.status. This is correct behavior, not a gap. Any code
+//   that needs to know whether a proposal was rejected must read estimates.status.
+//
+//   'staged' is absent by design. Staging is an estimate transition; proposal_structures
+//   has no staged concept.
+//
+// estimates.status is always the authoritative lifecycle source.
 export type ProposalStatus = 'draft' | 'sent' | 'signed' | 'voided'
 
 export type ProposalStructureSection = {
