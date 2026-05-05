@@ -61,6 +61,7 @@ Expected files to modify:
 - [FILE]
 - [FILE]
 - [MODULE-CORRECT SLICE REPORT PATH UNDER docs/modules/]
+- docs/actions/current.md
 
 Files/modules not to touch:
 - [FILE OR MODULE]
@@ -100,6 +101,13 @@ Slice report:
 
 ---
 
+Current state update:
+- Update docs/actions/current.md in the same commit when the slice changes repo truth, platform state, known gaps, or next recommended work.
+- If docs/actions/current.md does not need changes, state that explicitly in the slice report and final response.
+- Do not leave current.md stale after completing a slice.
+
+---
+
 Rules:
 - Work only on dev.
 - Keep this to one bounded slice.
@@ -119,10 +127,11 @@ Required final response:
 3. Validation results
 4. Risks / follow-up
 5. Slice report path
-6. Anything intentionally not changed
+6. current.md updated or intentionally unchanged
+7. Anything intentionally not changed
 
 Commit:
-- Commit only the completed bounded slice, including the slice report.
+- Commit only the completed bounded slice, including the slice report and docs/actions/current.md update when required.
 - Commit message: [COMMIT MESSAGE]
 ```
 
@@ -140,6 +149,7 @@ Before generating a Claude Code prompt:
 6. Do not include general Actions docs in Claude prompts unless directly needed for implementation.
 7. Use a deterministic module-correct slice report path under `docs/modules/`.
 8. Never use legacy report directories such as `docs/actions/slices/`, `docs/slices/`, `docs/audits/`, or `docs/archive/`.
+9. Require docs/actions/current.md to be updated by Claude Code whenever the slice changes current repo truth, platform state, known gaps, or next recommended work.
 
 Do not send Claude Code a broad platform prompt.
 Do not ask Claude Code to plan multiple phases at once.
