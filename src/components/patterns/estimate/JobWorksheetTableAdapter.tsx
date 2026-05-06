@@ -88,6 +88,15 @@ function PencilIcon() {
   )
 }
 
+function SyncIcon() {
+  return (
+    <svg width={12} height={12} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }} aria-hidden="true">
+      <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" />
+      <path d="M13.5 2.5v3.5h-3.5" />
+    </svg>
+  )
+}
+
 function StaleSourceDot() {
   return (
     <svg width={6} height={6} viewBox="0 0 6 6" style={{ marginLeft: '1px', flexShrink: 0 }} aria-hidden="true">
@@ -225,6 +234,7 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
   const [unlinkPending, startUnlinkTransition] = useTransition()
   const [acceptPending, startAcceptTransition] = useTransition()
   const [staleRowIds, setStaleRowIds] = useState<Set<string>>(new Set())
+  const [syncPending, setSyncPending] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -236,6 +246,19 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeEstimateId, jobId])
+
+  async function handleManualSync() {
+    if (syncPending) return
+    setSyncPending(true)
+    try {
+      const result = await syncLinkedPricing(activeEstimateId, jobId)
+      if ('error' in result) return
+      setStaleRowIds(new Set(result.staleRowIds))
+      result.syncedRows.forEach(props.forceUpdateRow)
+    } finally {
+      setSyncPending(false)
+    }
+  }
 
   const rowsById = useMemo<Map<string, JobWorksheetRow>>(
     () => new Map<string, JobWorksheetRow>(rows.map((row) => [row.id, row])),
@@ -314,6 +337,32 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
   return (
     <>
       <datalist id="unit-options">{unitOptions.map((unit)=><option key={unit} value={unit}/>)}</datalist>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px' }}>
+        <button
+          type="button"
+          onClick={handleManualSync}
+          disabled={syncPending}
+          title="Re-sync linked source prices"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            fontSize: '11px',
+            fontWeight: 500,
+            color: 'var(--text-muted)',
+            background: 'none',
+            border: 'none',
+            cursor: syncPending ? 'default' : 'pointer',
+            opacity: syncPending ? 0.4 : 1,
+            padding: '2px 4px',
+            userSelect: 'none',
+          }}
+        >
+          <SyncIcon />
+          {syncPending ? 'Syncing…' : 'Sync prices'}
+        </button>
+      </div>
 
       <EditableDataTable
         columns={columns}

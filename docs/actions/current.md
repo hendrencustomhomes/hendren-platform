@@ -2,7 +2,7 @@
 
 Status: authoritative current-state file for fresh sessions  
 Branch: `dev`  
-Last updated: 2026-05-06
+Last updated: 2026-05-07
 
 ---
 
@@ -18,7 +18,7 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 ## 2. Last verified completed work
 
-Latest completed slice: **Slice 40D — Pricing Source Sync**
+Latest completed slice: **Slice 40E — Pricing Sync Trigger**
 
 Recent completed work:
 - Slice 38 — Pricing Permission Alignment
@@ -28,6 +28,7 @@ Recent completed work:
 - Slice 40B.1 — Resolver hardening
 - Slice 40C — Minimal pricing resolution UI
 - Slice 40D — Pricing source sync and mismatch surfacing
+- Slice 40E — On-demand pricing sync trigger
 
 Reports:
 - docs/modules/pricing/slice_38_pricing_permission_alignment.md
@@ -39,6 +40,7 @@ Reports:
 - docs/modules/estimate/slice_40b1_resolver_hardening.md
 - docs/modules/estimate/slice_40c_pricing_resolution_ui.md
 - docs/modules/estimate/slice_40d_pricing_source_sync.md
+- docs/modules/estimate/slice_40e_pricing_sync_trigger.md
 
 ---
 
@@ -55,6 +57,7 @@ Final and stable.
 - UI indicators: linked (blue chain), overridden (amber chain + pencil), stale mismatch (orange dot), tooltip with values
 - Source sync: non-overridden linked rows auto-sync `unit_cost_source` on worksheet load
 - Overridden rows with changed source: preserved override + stale dot indicator
+- On-demand sync: "Sync prices" button above table; disabled + dimmed while pending
 
 System is structurally correct and consistent.
 
@@ -64,20 +67,20 @@ System is structurally correct and consistent.
 
 - Stale mismatch state is not persisted (derived on load, lost on page leave)
 - Override state not shown in mobile view
-- No on-demand sync trigger (sync runs once on mount only)
+- No "up to date" confirmation after manual sync
 
 ---
 
 ## 5. Next recommended work
 
-1. Slice 40E — Pricing sync re-trigger (on-demand refresh button)
-2. Slice 40F — Mobile view: override + stale indicators
+1. Slice 40F — Mobile view: override + stale indicators
+2. Slice 40G — "Up to date" sync confirmation feedback
 
 ---
 
 ## 6. Summary
 
 Pricing resolution is complete end-to-end: resolver, write paths, UI indicators,
-source sync, and mismatch surfacing. Non-overridden linked rows auto-sync on
-load; overridden rows with changed source show a subtle dot indicator. No new DB
-columns were required.
+source sync, mismatch surfacing, and on-demand re-sync. Auto-sync fires on
+worksheet load; a compact "Sync prices" button lets users trigger it again at
+any time. No new DB columns were required across the full 40A–40E series.
