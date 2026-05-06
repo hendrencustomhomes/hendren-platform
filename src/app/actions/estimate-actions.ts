@@ -6,6 +6,7 @@ import type { Estimate } from '@/lib/estimateTypes'
 import { ESTIMATE_SELECT, isEstimateEditable, NON_ARCHIVABLE_STATUSES } from '@/lib/estimateTypes'
 import { parseImportCsv } from '@/lib/worksheetCsv'
 import { requireModuleAccess } from '@/lib/access-control-server'
+import { resolveUnitCost } from '@/components/patterns/estimate/_lib/unitCostResolver'
 
 async function requireUser() {
   const supabase = await createClient()
@@ -173,6 +174,12 @@ export async function duplicateEstimate(
       idMap.set(row.id, crypto.randomUUID())
     }
 
+    // Sever the pricing link on the copy and freeze the source row's resolved unit cost
+    // into unit_cost_manual on the new row. The duplicate must be self-contained: it cannot
+    // continue resolving through pricing_source_row_id (link is reset) or unit_cost_source
+    // (would silently drift if the source is later edited). resolveUnitCost is the single
+    // source of truth for the precedence (override → source → manual); using it here keeps
+    // the duplicate's resolved truth identical to the source's at duplication time.
     const copiedRows = rows.map((row: any) => ({
       id: idMap.get(row.id)!,
       estimate_id: data.id,
@@ -184,7 +191,6 @@ export async function duplicateEstimate(
       location: row.location,
       quantity: row.quantity,
       unit: row.unit,
-      unit_price: row.unit_price,
       notes: row.notes,
       scope_status: row.scope_status,
       is_upgrade: row.is_upgrade,
@@ -194,7 +200,10 @@ export async function duplicateEstimate(
       pricing_header_id: null,
       catalog_sku: row.catalog_sku,
       source_sku: row.source_sku,
-      total_price: row.total_price,
+      unit_cost_manual: resolveUnitCost(row),
+      unit_cost_source: null,
+      unit_cost_override: null,
+      unit_cost_is_overridden: false,
     }))
 
     const { error: insertError } = await auth.supabase

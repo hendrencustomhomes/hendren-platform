@@ -2,7 +2,7 @@
 
 Status: authoritative current-state file for fresh sessions  
 Branch: `dev`  
-Last updated: 2026-05-11
+Last updated: 2026-05-06
 
 ---
 
@@ -18,7 +18,7 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 ## 2. Last verified completed work
 
-Latest completed slice: **Slice 40I — Extended Cost Alignment Audit**
+Latest completed slice: **Slice 41 — Proposal Truth Consolidation**
 
 Recent completed work:
 - Slice 38 — Pricing Permission Alignment
@@ -33,6 +33,7 @@ Recent completed work:
 - Slice 40G — Sync confirmation feedback
 - Slice 40H — Mobile tap-to-reveal pricing detail
 - Slice 40I — Extended cost alignment audit (no gaps found)
+- Slice 41 — Proposal truth consolidation (one duplicateEstimate gap closed)
 
 Reports:
 - docs/modules/pricing/slice_38_pricing_permission_alignment.md
@@ -49,6 +50,7 @@ Reports:
 - docs/modules/estimate/slice_40g_sync_confirmation_feedback.md
 - docs/modules/estimate/slice_40h_mobile_pricing_detail.md
 - docs/modules/estimate/slice_40i_extended_cost_alignment.md
+- docs/modules/estimate/slice_41_proposal_truth_consolidation.md
 
 ---
 
@@ -72,6 +74,25 @@ Final and stable.
 Slice 40I audit confirmed: all 21 extended cost / total computation paths
 route through `resolveUnitCost` or `rowTotal`. No gaps found.
 
+Slice 41 re-audited the proposal layer end-to-end against the resolver
+contract and the freeze model. Findings:
+
+- Truth pipeline clean: summary, preview, PDF, snapshot, and send all
+  funnel through one `applyStructure` builder that calls `resolveUnitCost`
+  and `rowTotal`. No parallel proposal totals system.
+- Freeze model intact: estimate `locked_at` blocks worksheet writes,
+  `proposal_structures.locked_at` blocks structure saves and bypasses
+  `reconcileStructure`, and `proposal_documents.snapshot_json` is
+  write-once with an explicit AUDIT-ARTIFACT CONTRACT.
+- One bug fixed: `duplicateEstimate` was carrying the legacy `unit_price`
+  / `total_price` columns forward but failing to initialize the new row's
+  resolution columns (`unit_cost_manual`, `unit_cost_source`,
+  `unit_cost_override`, `unit_cost_is_overridden`). Result: every row in a
+  duplicated estimate resolved to `null` / $0. Fixed by freezing
+  `resolveUnitCost(sourceRow)` into the duplicate's `unit_cost_manual` and
+  resetting the other three resolution columns; legacy `unit_price` /
+  `total_price` carry-over was dropped.
+
 System is structurally correct and consistent.
 
 ---
@@ -87,7 +108,19 @@ System is structurally correct and consistent.
 ## 5. Next recommended work
 
 1. Slice 40J — Animation polish: sync feedback fade + mobile detail panel open/close
-2. Slice 41A — Proposal builder: remove legacy unit_price column (prerequisite audit complete)
+2. Slice 42 — Legacy column removal: drop `job_worksheet_items.unit_price` and
+   `job_worksheet_items.total_price`. Prerequisite audit is now complete
+   (Slice 40I + Slice 41 confirm zero call sites read these columns for
+   resolution; no remaining write paths propagate them forward). Requires
+   a migration audit and a confirmed snapshot-compat plan before drop.
+3. Snapshot-button visibility: `SnapshotCreateButton` is currently
+   rendered when `proposalStatus !== 'voided'` but the action only
+   accepts `active` / `staged` estimates. Hide / disable post-send to
+   match. UI tidy only — truth model unaffected.
+4. Permission audit: `linkRowToPricing` does not call
+   `requireModuleAccess('estimates', 'edit')` while its peers do. Other
+   gates still authorize correctly; bring the check into line with the
+   peers.
 
 ---
 
@@ -99,3 +132,11 @@ with confirmation feedback, full mobile parity with tap-to-reveal detail
 panels, and a clean extended cost alignment audit confirming zero gaps across
 all 21 computation paths. No new DB columns were required across the full
 40A–40I series.
+
+Slice 41 closes the proposal layer's audit: the same resolver contract is
+now enforced on every proposal totals path, the freeze model (estimate
+lock + structure lock + write-once snapshot) is consistent across summary,
+preview, PDF, builder, snapshot, and send, and the last legacy
+`unit_price` propagation path (`duplicateEstimate`) has been replaced with
+a `resolveUnitCost`-based freeze. No parallel proposal system, no
+duplicated total logic, no mutable proposal truth after send.
