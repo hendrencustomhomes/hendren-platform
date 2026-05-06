@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { EditableDataTable } from '@/components/data-display/EditableDataTable'
 import type { EditableDataTableColumn } from '@/components/data-display/EditableDataTable'
 import { useWorksheetInteraction } from '@/components/data-display/worksheet/useWorksheetInteraction'
@@ -15,7 +15,7 @@ import {
 import { resolveUnitCost } from './_lib/unitCostResolver'
 import { JobWorksheetMobileView } from './JobWorksheetMobileView'
 import { PricingLinkModal } from './PricingLinkModal'
-import { unlinkRowFromPricing, acceptPricingSource } from '@/app/actions/worksheet-pricing-actions'
+import { unlinkRowFromPricing, acceptPricingSource, syncLinkedPricing } from '@/app/actions/worksheet-pricing-actions'
 
 export type JobWorksheetRowKind = 'line_item' | 'assembly' | 'note' | 'allowance'
 export type JobWorksheetPricingType = 'unit' | 'lump_sum' | 'allowance' | 'manual' | 'unpriced'
@@ -88,7 +88,15 @@ function PencilIcon() {
   )
 }
 
-function PricingStateIcon({ row }: { row: JobWorksheetRow }) {
+function StaleSourceDot() {
+  return (
+    <svg width={6} height={6} viewBox="0 0 6 6" style={{ marginLeft: '1px', flexShrink: 0 }} aria-hidden="true">
+      <circle cx="3" cy="3" r="3" fill="#ea580c" />
+    </svg>
+  )
+}
+
+function PricingStateIcon({ row, isStale }: { row: JobWorksheetRow; isStale: boolean }) {
   const isLinked = row.pricing_source_row_id !== null
   const isOverridden = row.unit_cost_is_overridden
 
@@ -96,10 +104,11 @@ function PricingStateIcon({ row }: { row: JobWorksheetRow }) {
 
   const sku = row.source_sku ?? row.catalog_sku ?? ''
   const skuPart = sku ? ` · ${sku}` : ''
+  const staleSuffix = isStale ? ' · source price updated' : ''
 
   const title = isOverridden
-    ? `Override active · source ${fmt(row.unit_cost_source)} → ${fmt(row.unit_cost_override)}${skuPart}`
-    : `Linked · source ${fmt(row.unit_cost_source)}${skuPart}`
+    ? `Override active · source ${fmt(row.unit_cost_source)} → ${fmt(row.unit_cost_override)}${skuPart}${staleSuffix}`
+    : `Linked · source ${fmt(row.unit_cost_source)}${skuPart}${staleSuffix}`
 
   return (
     <span
@@ -115,12 +124,14 @@ function PricingStateIcon({ row }: { row: JobWorksheetRow }) {
     >
       <LinkIcon />
       {isOverridden && <PencilIcon />}
+      {isStale && <StaleSourceDot />}
     </span>
   )
 }
 
 function getColumns(
   rowsById: Map<string, JobWorksheetRow>,
+  staleRowIds: Set<string>,
   onDeleteRow: (rowId: string) => void,
   commit: (rowId: string, field: JobWorksheetEditableCellKey, value: string) => void,
   onLinkRow: (rowId: string) => void,
@@ -136,7 +147,7 @@ function getColumns(
       label:'',
       kind:'static',
       width:'36px',
-      renderStaticCell:(row) => <PricingStateIcon row={row} />,
+      renderStaticCell:(row) => <PricingStateIcon row={row} isStale={staleRowIds.has(row.id)} />,
     },
     { key:'unit',label:'Unit',kind:'static',width:'120px',renderStaticCell:(row)=>(<input list="unit-options" value={row.unit??'ea'} onChange={(event)=>commit(row.id,'unit',event.currentTarget.value)} />) },
     { key:'total_price',label:'Total',kind:'static',width:'120px',getValue:(row)=>currency(rowTotal(row)) },
@@ -213,6 +224,18 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
   const [pendingPriceEdit, setPendingPriceEdit] = useState<{ rowId: string; value: string } | null>(null)
   const [unlinkPending, startUnlinkTransition] = useTransition()
   const [acceptPending, startAcceptTransition] = useTransition()
+  const [staleRowIds, setStaleRowIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    let cancelled = false
+    syncLinkedPricing(activeEstimateId, jobId).then((result) => {
+      if (cancelled || 'error' in result) return
+      setStaleRowIds(new Set(result.staleRowIds))
+      result.syncedRows.forEach(props.forceUpdateRow)
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeEstimateId, jobId])
 
   const rowsById = useMemo<Map<string, JobWorksheetRow>>(
     () => new Map<string, JobWorksheetRow>(rows.map((row) => [row.id, row])),
@@ -252,9 +275,9 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
   }
 
   const columns = useMemo(
-    () => getColumns(rowsById, props.deleteRow, props.commitCellValue, setLinkModalRowId, handleUnlinkRow, handleAcceptSource),
+    () => getColumns(rowsById, staleRowIds, props.deleteRow, props.commitCellValue, setLinkModalRowId, handleUnlinkRow, handleAcceptSource),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rowsById, props.deleteRow, props.commitCellValue, unlinkPending, acceptPending],
+    [rowsById, staleRowIds, props.deleteRow, props.commitCellValue, unlinkPending, acceptPending],
   )
 
   const virt = useWorksheetVirtualization<JobWorksheetRow>({ rows, rowHeight:64, overscan:8, threshold:20, maxBodyHeight:560 })
@@ -329,7 +352,7 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
         />
       )}
 
-      {/* Inline confirm: manual price edit drops the link */}
+      {/* Inline confirm: price edit on a linked row — writes an override, keeps the link */}
       {pendingPriceEdit && (
         <div
           style={{

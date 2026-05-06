@@ -307,6 +307,91 @@ export async function unlinkRowFromPricing(
   return { row: updated as unknown as JobWorksheetRow }
 }
 
+export async function syncLinkedPricing(
+  estimateId: string,
+  jobId: string,
+): Promise<{ syncedRows: JobWorksheetRow[]; staleRowIds: string[] } | { error: string }> {
+  const auth = await requireUser()
+  if ('error' in auth) return { error: 'Not authenticated' }
+
+  const [
+    { data: items, error: itemsError },
+    { data: estimate, error: estimateError },
+  ] = await Promise.all([
+    auth.supabase
+      .from('job_worksheet_items')
+      .select(`${WORKSHEET_COST_COLS}, job_id`)
+      .eq('estimate_id', estimateId)
+      .not('pricing_source_row_id', 'is', null),
+    auth.supabase
+      .from('estimates')
+      .select('status, locked_at')
+      .eq('id', estimateId)
+      .single(),
+  ])
+
+  if (itemsError) return { error: itemsError.message }
+  if (estimateError || !estimate) return { error: estimateError?.message ?? 'Estimate not found' }
+  if (!items || items.length === 0) return { syncedRows: [], staleRowIds: [] }
+
+  if ((items as any[]).some((i) => i.job_id !== jobId)) {
+    return { error: 'Worksheet items do not belong to this job' }
+  }
+
+  const pricingRowIds = [...new Set((items as any[]).map((i) => i.pricing_source_row_id as string))]
+
+  const { data: pricingRows, error: pricingError } = await auth.supabase
+    .from('pricing_rows')
+    .select('id, unit_price')
+    .in('id', pricingRowIds)
+
+  if (pricingError) return { error: pricingError.message }
+
+  const livePriceMap = new Map<string, number | null>(
+    (pricingRows ?? []).map((r: any) => [r.id, r.unit_price ?? null])
+  )
+
+  const canWrite = isEstimateEditable(estimate)
+  const toSync: { id: string; unit_cost_source: number | null }[] = []
+  const staleRowIds: string[] = []
+
+  for (const item of items as any[]) {
+    const livePrice = livePriceMap.get(item.pricing_source_row_id) ?? null
+    const storedSource: number | null = item.unit_cost_source ?? null
+    if (livePrice === storedSource) continue
+
+    if (item.unit_cost_is_overridden || !canWrite) {
+      staleRowIds.push(item.id)
+    } else {
+      toSync.push({ id: item.id, unit_cost_source: livePrice })
+    }
+  }
+
+  if (toSync.length === 0) return { syncedRows: [], staleRowIds }
+
+  const updateResults = await Promise.all(
+    toSync.map(({ id, unit_cost_source }) =>
+      auth.supabase
+        .from('job_worksheet_items')
+        .update({ unit_cost_source })
+        .eq('id', id)
+        .eq('estimate_id', estimateId)
+        .select('*')
+        .single()
+    )
+  )
+
+  const syncedRows: JobWorksheetRow[] = []
+  for (const result of updateResults) {
+    if (result.error || !result.data) continue
+    syncedRows.push(result.data as unknown as JobWorksheetRow)
+  }
+
+  if (syncedRows.length > 0) revalidateWorksheet(jobId)
+
+  return { syncedRows, staleRowIds }
+}
+
 export async function acceptPricingSource(
   rowId: string,
   estimateId: string,
