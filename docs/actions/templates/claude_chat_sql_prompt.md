@@ -19,7 +19,7 @@ Task:
 [ONE-SENTENCE DATABASE OBJECTIVE]
 
 Context:
-[ALL REQUIRED CONTEXT MUST BE PROVIDED HERE — do not rely on external docs unless explicitly listed above]
+[ONLY CONTEXT REQUIRED FOR DATABASE SAFETY — avoid architectural history or repo implementation rationale unless it changes what SQL is safe to run]
 
 Database scope:
 - [TABLE / FUNCTION / POLICY / VIEW]
@@ -45,6 +45,7 @@ Required inspection before changes:
 - Confirm existing columns and types.
 - Confirm row counts if destructive or migration-sensitive.
 - Confirm dependent views/functions/policies before changing objects.
+- For destructive changes, explicitly inspect dependent views, functions/RPCs, triggers, indexes, constraints, and RLS policies before DDL.
 
 Documentation requirements:
 - Provide the SQL used/applied.
@@ -71,6 +72,17 @@ Required final report:
 
 - ALL required context should be embedded directly in the prompt whenever possible.
 - Only reference docs when absolutely necessary for that specific slice.
+- Do not ask the SQL executor to read repo files or docs unless their content is included in the prompt or known to be available in that execution environment.
+- If repo evidence matters, summarize the verified repo finding inline instead of sending the SQL executor to the repo.
+- Keep SQL prompts short and high-signal:
+  - objective
+  - minimal context
+  - database scope
+  - inspection checklist
+  - authorized SQL action
+  - stop conditions
+  - final report
+- Do not pad SQL prompts with constraints that are physically impossible for the SQL executor to violate. Keep such reminders here as internal Actions GPT notes, not executor-facing boilerplate.
 
 Use this template when the task involves:
 
