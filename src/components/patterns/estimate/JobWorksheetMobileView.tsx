@@ -9,14 +9,16 @@ import {
 } from './_worksheetFormatters'
 import { resolveUnitCost } from './_lib/unitCostResolver'
 import { validationLabel } from './_worksheetValidation'
+import { PricingStateIcon } from './_lib/pricingStateIcon'
 
 type Props = {
   rows: JobWorksheetRow[]
   commitCellValue: (rowId: string, field: JobWorksheetEditableCellKey, value: string) => void
   createDraftRowAfter?: () => void
+  staleRowIds?: Set<string>
 }
 
-export function JobWorksheetMobileView({ rows, commitCellValue, createDraftRowAfter }: Props) {
+export function JobWorksheetMobileView({ rows, commitCellValue, createDraftRowAfter, staleRowIds = new Set() }: Props) {
   const total = rows.reduce((sum, row) => sum + rowTotal(row), 0)
 
   return (
@@ -31,12 +33,15 @@ export function JobWorksheetMobileView({ rows, commitCellValue, createDraftRowAf
         const subtotal = parentSubtotal(row, rows)
         return (
           <div key={row.id} style={{ marginBottom: 10, paddingLeft: row.parent_id ? 12 : 0 }}>
-            <input
-              value={row.description}
-              placeholder="Item"
-              onChange={(event) => commitCellValue(row.id, 'description', event.currentTarget.value)}
-              style={{ width: '100%', fontSize: 14, fontWeight: row.parent_id ? 500 : 700, border: warning ? '1px solid #dc2626' : '1px solid var(--border)', borderRadius: 8, padding: 8, boxSizing: 'border-box' }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                value={row.description}
+                placeholder="Item"
+                onChange={(event) => commitCellValue(row.id, 'description', event.currentTarget.value)}
+                style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: row.parent_id ? 500 : 700, border: warning ? '1px solid #dc2626' : '1px solid var(--border)', borderRadius: 8, padding: 8, boxSizing: 'border-box' }}
+              />
+              <PricingStateIcon row={row} isStale={staleRowIds.has(row.id)} />
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '0.7fr 1fr 0.9fr 1fr', gap: 6, marginTop: 4, alignItems: 'center' }}>
               <input value={row.quantity ?? ''} inputMode="decimal" onChange={(event) => commitCellValue(row.id, 'quantity', event.currentTarget.value)} style={{ minWidth: 0 }} />
               <input value={currency(resolveUnitCost(row), true)} inputMode="decimal" onChange={(event) => commitCellValue(row.id, 'unit_price', event.currentTarget.value)} style={{ minWidth: 0 }} />
