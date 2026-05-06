@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { EditableDataTable } from '@/components/data-display/EditableDataTable'
 import type { EditableDataTableColumn } from '@/components/data-display/EditableDataTable'
 import { useWorksheetInteraction } from '@/components/data-display/worksheet/useWorksheetInteraction'
@@ -62,6 +62,8 @@ export type JobWorksheetEditableCellKey =
 const editableCellOrder: readonly JobWorksheetEditableCellKey[] = [
   'description','quantity','unit_price','unit','location','notes'
 ]
+
+type SyncFeedback = 'up-to-date' | 'updated' | 'needs-review' | null
 
 function isMobile() {
   if (typeof window === 'undefined') return false
@@ -174,6 +176,8 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
   const [acceptPending, startAcceptTransition] = useTransition()
   const [staleRowIds, setStaleRowIds] = useState<Set<string>>(new Set())
   const [syncPending, setSyncPending] = useState(false)
+  const [syncFeedback, setSyncFeedback] = useState<SyncFeedback>(null)
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -186,14 +190,26 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeEstimateId, jobId])
 
+  useEffect(() => {
+    return () => { if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current) }
+  }, [])
+
   async function handleManualSync() {
     if (syncPending) return
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
+    setSyncFeedback(null)
     setSyncPending(true)
     try {
       const result = await syncLinkedPricing(activeEstimateId, jobId)
       if ('error' in result) return
       setStaleRowIds(new Set(result.staleRowIds))
       result.syncedRows.forEach(props.forceUpdateRow)
+      const feedback: SyncFeedback =
+        result.staleRowIds.length > 0 ? 'needs-review' :
+        result.syncedRows.length > 0 ? 'updated' :
+        'up-to-date'
+      setSyncFeedback(feedback)
+      feedbackTimerRef.current = setTimeout(() => setSyncFeedback(null), 3000)
     } finally {
       setSyncPending(false)
     }
@@ -278,7 +294,20 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
     <>
       <datalist id="unit-options">{unitOptions.map((unit)=><option key={unit} value={unit}/>)}</datalist>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+        {syncFeedback && (
+          <span style={{
+            fontSize: '11px',
+            fontWeight: 500,
+            color: syncFeedback === 'needs-review' ? '#d97706' :
+                   syncFeedback === 'updated' ? '#16a34a' :
+                   'var(--text-muted)',
+          }}>
+            {syncFeedback === 'up-to-date' ? 'Up to date' :
+             syncFeedback === 'updated' ? 'Updated' :
+             'Needs review'}
+          </span>
+        )}
         <button
           type="button"
           onClick={handleManualSync}
