@@ -2,7 +2,7 @@
 
 Status: authoritative current-state file for fresh sessions  
 Branch: `dev`  
-Last updated: 2026-05-09
+Last updated: 2026-05-10
 
 ---
 
@@ -18,7 +18,7 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 ## 2. Last verified completed work
 
-Latest completed slice: **Slice 40G — Sync Confirmation Feedback**
+Latest completed slice: **Slice 40H — Mobile Pricing Detail**
 
 Recent completed work:
 - Slice 38 — Pricing Permission Alignment
@@ -31,6 +31,7 @@ Recent completed work:
 - Slice 40E — On-demand pricing sync trigger
 - Slice 40F — Mobile pricing state indicators
 - Slice 40G — Sync confirmation feedback
+- Slice 40H — Mobile tap-to-reveal pricing detail
 
 Reports:
 - docs/modules/pricing/slice_38_pricing_permission_alignment.md
@@ -45,6 +46,7 @@ Reports:
 - docs/modules/estimate/slice_40e_pricing_sync_trigger.md
 - docs/modules/estimate/slice_40f_mobile_pricing_indicators.md
 - docs/modules/estimate/slice_40g_sync_confirmation_feedback.md
+- docs/modules/estimate/slice_40h_mobile_pricing_detail.md
 
 ---
 
@@ -63,7 +65,7 @@ Final and stable.
 - Overridden rows with changed source: preserved override + stale dot indicator
 - On-demand sync: "Sync prices" button above table; disabled + dimmed while pending
 - Sync feedback: inline label auto-clears after 3 s — "Up to date" / "Updated" / "Needs review"
-- Mobile: linked / overridden / stale icons shown beside description input; icon SVGs extracted to shared `_lib/pricingStateIcon.tsx`
+- Mobile: linked / overridden / stale icons beside description input; tap icon to reveal inline detail (source, override, SKU, stale notice)
 
 System is structurally correct and consistent.
 
@@ -73,14 +75,14 @@ System is structurally correct and consistent.
 
 - Stale mismatch state is not persisted (derived on load, lost on page leave)
 - Sync feedback label has no fade animation (appears/disappears abruptly)
-- Mobile: no tooltip on touch (title attribute not shown); icon-only state indication
+- Mobile detail panel: no close-on-outside-tap; no open/close animation
 
 ---
 
 ## 5. Next recommended work
 
-1. Slice 40H — Mobile: tap-to-reveal popover for pricing state detail
-2. Slice 40I — Sync feedback fade animation
+1. Slice 40I — Pricing resolution: quantity-based extended cost exposure
+2. Slice 40J — Sync feedback / mobile detail panel animation polish
 
 ---
 
@@ -88,6 +90,6 @@ System is structurally correct and consistent.
 
 Pricing resolution is complete end-to-end: resolver, write paths, state
 indicators (chain / pencil / dot), source sync, mismatch surfacing, on-demand
-re-sync with inline confirmation feedback, and mobile parity. Icon SVGs are
-extracted to a shared module. No new DB columns were required across the full
-40A–40G series.
+re-sync with confirmation feedback, and full mobile parity including
+tap-to-reveal detail panels. Icon SVGs and formatting live in a shared module.
+No new DB columns were required across the full 40A–40H series.
