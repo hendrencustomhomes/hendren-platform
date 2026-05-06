@@ -12,6 +12,9 @@ Start here. Not from memory. Not from prior chats. Not from `main`.
 
 All rules in this file remain active for the entire session. Re-check before writing or modifying files.
 
+Long sessions increase the risk of process drift and memory-based assumptions.
+Re-ground from START_HERE and the actual template files before every new execution prompt.
+
 ---
 
 ## 2. Startup sequence (always follow)
@@ -23,6 +26,10 @@ All rules in this file remain active for the entire session. Re-check before wri
 5. Summarize current state + next 1–3 slices BEFORE doing work
 
 If `current.md` does not exist → create it before implementation work.
+
+Before drafting any execution prompt:
+- open the required template file directly from `docs/actions/templates/`
+- do not rely on remembered template structure
 
 ---
 
@@ -257,6 +264,22 @@ All Claude Code prompts MUST use:
 All Claude Chat / SQL / DB prompts MUST use:
 
 `docs/actions/templates/claude_chat_sql_prompt.md`
+
+Do not reconstruct templates from memory or prior sessions.
+Open and use the actual template file every time before drafting a Claude prompt.
+
+Claude Chat / SQL prompts must assume ZERO repo visibility unless repo content is explicitly pasted into the prompt.
+
+Do not instruct Claude Chat to read repo docs/files directly.
+Instead:
+- inline required context into the prompt, or
+- use Claude Code if repo inspection is required.
+
+Example:
+- DB schema removal → Claude Chat / SQL prompt
+- Repo type cleanup after DB removal → separate Claude Code prompt
+
+Do not combine these into one executor prompt.
 
 Claude Code prompts must include an explicit module-correct slice report path from Section 9. Do not use legacy report directories.
 
