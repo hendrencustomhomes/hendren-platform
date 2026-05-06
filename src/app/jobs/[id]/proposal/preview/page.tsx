@@ -169,7 +169,7 @@ export default async function ProposalPreviewPage({ params }: { params: Promise<
                   Latest snapshot →
                 </a>
               )}
-              {proposalStatus !== 'voided' && (
+              {proposalStatus === 'draft' && (
                 <SnapshotCreateButton estimateId={activeEstimate.id} jobId={id} />
               )}
             </div>

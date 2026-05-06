@@ -133,6 +133,9 @@ export async function linkRowToPricing(
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
 
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
+  if (permGuard) return permGuard
+
   // Round 1: fetch pricing row, worksheet item, and estimate status in parallel
   const [
     { data: pricingRow, error: pricingError },
@@ -313,6 +316,9 @@ export async function syncLinkedPricing(
 ): Promise<{ syncedRows: JobWorksheetRow[]; staleRowIds: string[] } | { error: string }> {
   const auth = await requireUser()
   if ('error' in auth) return { error: 'Not authenticated' }
+
+  const permGuard = await requireModuleAccess(auth.user.id, 'estimates', 'edit')
+  if (permGuard) return permGuard
 
   const [
     { data: items, error: itemsError },

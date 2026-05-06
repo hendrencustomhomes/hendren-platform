@@ -40,7 +40,7 @@ export type JobWorksheetRow = {
   pricing_header_id: string | null
   catalog_sku: string | null
   source_sku: string | null
-  // Legacy column — kept for snapshot compatibility. Do NOT use for resolution.
+  // Legacy DB columns. No longer written by any active write path. Pending schema removal. Do NOT use for resolution.
   unit_price: number | string | null
   total_price: number | string | null
   pricing_type: JobWorksheetPricingType
