@@ -2,7 +2,7 @@
 
 Status: authoritative current-state file for fresh sessions  
 Branch: `dev`  
-Last updated: 2026-05-06 (Slice 42)
+Last updated: 2026-05-06 (Slice 43B)
 
 ---
 
@@ -18,7 +18,7 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 ## 2. Last verified completed work
 
-Latest completed slice: **Slice 42 — Estimate Model Cleanup and Legacy Pricing Removal Audit**
+Latest completed slice: **Slice 43B — Repo Cleanup After Legacy Pricing Column Removal**
 
 Recent completed work:
 - Slice 38 — Pricing Permission Alignment
@@ -35,6 +35,8 @@ Recent completed work:
 - Slice 40I — Extended cost alignment audit (no gaps found)
 - Slice 41 — Proposal truth consolidation (one duplicateEstimate gap closed)
 - Slice 42 — Estimate model cleanup (permission symmetry, snapshot button, migration plan)
+- Slice 43A — Legacy pricing column DB migration (`job_worksheet_items.unit_price` and `total_price` dropped)
+- Slice 43B — Repo cleanup after legacy pricing removal (type fields, draft defaults, column key)
 
 Reports:
 - docs/modules/pricing/slice_38_pricing_permission_alignment.md
@@ -53,6 +55,7 @@ Reports:
 - docs/modules/estimate/slice_40i_extended_cost_alignment.md
 - docs/modules/estimate/slice_41_proposal_truth_consolidation.md
 - docs/modules/estimate/slice_42_estimate_model_cleanup.md
+- docs/modules/estimate/slice_43b_repo_cleanup_after_legacy_pricing_removal.md
 
 ---
 
@@ -104,19 +107,12 @@ System is structurally correct and consistent.
 - Stale mismatch state is not persisted (derived on load, lost on page leave)
 - Sync feedback label has no fade animation (appears/disappears abruptly)
 - Mobile detail panel: no close-on-outside-tap; no open/close animation
-- `job_worksheet_items.unit_price` and `total_price` DB columns remain on disk
-  (no write path uses them; migration plan documented in Slice 42; execution
-  requires explicit approval)
 
 ---
 
 ## 5. Next recommended work
 
 1. Slice 40J — Animation polish: sync feedback fade + mobile detail panel open/close
-2. Slice 43 — Legacy column removal: execute the migration documented in Slice 42
-   to drop `job_worksheet_items.unit_price` and `total_price`. Follow with the
-   code cleanup (remove type fields, rename `'total_price'` column key to
-   `'row_total'`, remove draft row defaults). Prerequisites confirmed complete.
 
 ---
 
@@ -145,3 +141,15 @@ uniformly carry `requireModuleAccess('estimates', 'edit')` (added to
 migration plan for dropping `job_worksheet_items.unit_price` / `total_price`
 is documented and ready for explicit approval. No write path propagates the
 legacy columns forward; the columns are structurally dead.
+
+Slice 43A executed the migration: `job_worksheet_items.unit_price` and
+`total_price` are dropped from the live database. Slice 43B completes the
+matching repo cleanup — `JobWorksheetRow` no longer carries the legacy
+fields, the draft-row defaults that referenced them are gone, and the static
+Total column key is renamed `'total_price'` → `'row_total'`. The remaining
+`unit_price` references in the codebase are intentional and classified:
+`pricing_rows.unit_price` (different table), `ProposalLineItem` /
+`ProposalSnapshotItem.unit_price` (resolved value, never the DB column), the
+CSV external label, and the worksheet UI editable cell key (state-translated
+to `unit_cost_manual` / `unit_cost_override`). The legacy pricing column arc
+is closed.

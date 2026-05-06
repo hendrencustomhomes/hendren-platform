@@ -40,9 +40,6 @@ export type JobWorksheetRow = {
   pricing_header_id: string | null
   catalog_sku: string | null
   source_sku: string | null
-  // Legacy DB columns. No longer written by any active write path. Pending schema removal. Do NOT use for resolution.
-  unit_price: number | string | null
-  total_price: number | string | null
   pricing_type: JobWorksheetPricingType
   // Unit cost resolution fields
   unit_cost_manual: number | null
@@ -100,7 +97,7 @@ function getColumns(
       renderStaticCell:(row) => <PricingStateIcon row={row} isStale={staleRowIds.has(row.id)} />,
     },
     { key:'unit',label:'Unit',kind:'static',width:'120px',renderStaticCell:(row)=>(<input list="unit-options" value={row.unit??'ea'} onChange={(event)=>commit(row.id,'unit',event.currentTarget.value)} />) },
-    { key:'total_price',label:'Total',kind:'static',width:'120px',getValue:(row)=>currency(rowTotal(row)) },
+    { key:'row_total',label:'Total',kind:'static',width:'120px',getValue:(row)=>currency(rowTotal(row)) },
     { key:'location',label:'Location',kind:'text',width:'140px',getValue:(row)=>row.location??'' },
     { key:'notes',label:'Notes',kind:'text',width:'200px',getValue:(row)=>row.notes??'' },
     {
@@ -268,7 +265,7 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
     onActiveCellChange:props.setActiveCell,
     activeDraft:props.activeDraft,
     onActiveDraftChange:props.setActiveDraft,
-    getCellValue:(row,field)=>String(row[field]??''),
+    getCellValue:(row,field)=>field==='unit_price'?String(resolveUnitCost(row)??''):String(row[field]??''),
     commitCellValue: wrappedCommitCellValue,
     handleUndo:props.handleUndo,
     onCreateRow:props.createDraftRowAfter,

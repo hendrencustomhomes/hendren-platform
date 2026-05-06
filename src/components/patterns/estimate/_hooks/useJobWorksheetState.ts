@@ -322,8 +322,6 @@ function createDraftRow(jobId: string, estimateId: string, sourceRow: JobWorkshe
     pricing_header_id: null,
     catalog_sku: null,
     source_sku: null,
-    unit_price: null,
-    total_price: null,
     pricing_type: 'unpriced',
     unit_cost_manual: null,
     unit_cost_source: null,
