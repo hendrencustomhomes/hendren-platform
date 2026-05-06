@@ -2,7 +2,7 @@
 
 Status: authoritative current-state file for fresh sessions  
 Branch: `dev`  
-Last updated: 2026-05-10
+Last updated: 2026-05-11
 
 ---
 
@@ -18,7 +18,7 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 ## 2. Last verified completed work
 
-Latest completed slice: **Slice 40H — Mobile Pricing Detail**
+Latest completed slice: **Slice 40I — Extended Cost Alignment Audit**
 
 Recent completed work:
 - Slice 38 — Pricing Permission Alignment
@@ -32,6 +32,7 @@ Recent completed work:
 - Slice 40F — Mobile pricing state indicators
 - Slice 40G — Sync confirmation feedback
 - Slice 40H — Mobile tap-to-reveal pricing detail
+- Slice 40I — Extended cost alignment audit (no gaps found)
 
 Reports:
 - docs/modules/pricing/slice_38_pricing_permission_alignment.md
@@ -47,6 +48,7 @@ Reports:
 - docs/modules/estimate/slice_40f_mobile_pricing_indicators.md
 - docs/modules/estimate/slice_40g_sync_confirmation_feedback.md
 - docs/modules/estimate/slice_40h_mobile_pricing_detail.md
+- docs/modules/estimate/slice_40i_extended_cost_alignment.md
 
 ---
 
@@ -67,6 +69,9 @@ Final and stable.
 - Sync feedback: inline label auto-clears after 3 s — "Up to date" / "Updated" / "Needs review"
 - Mobile: linked / overridden / stale icons beside description input; tap icon to reveal inline detail (source, override, SKU, stale notice)
 
+Slice 40I audit confirmed: all 21 extended cost / total computation paths
+route through `resolveUnitCost` or `rowTotal`. No gaps found.
+
 System is structurally correct and consistent.
 
 ---
@@ -81,15 +86,16 @@ System is structurally correct and consistent.
 
 ## 5. Next recommended work
 
-1. Slice 40I — Pricing resolution: quantity-based extended cost exposure
-2. Slice 40J — Sync feedback / mobile detail panel animation polish
+1. Slice 40J — Animation polish: sync feedback fade + mobile detail panel open/close
+2. Slice 41A — Proposal builder: remove legacy unit_price column (prerequisite audit complete)
 
 ---
 
 ## 6. Summary
 
-Pricing resolution is complete end-to-end: resolver, write paths, state
-indicators (chain / pencil / dot), source sync, mismatch surfacing, on-demand
-re-sync with confirmation feedback, and full mobile parity including
-tap-to-reveal detail panels. Icon SVGs and formatting live in a shared module.
-No new DB columns were required across the full 40A–40H series.
+Pricing resolution is complete and fully audited end-to-end: resolver, write
+paths, state indicators, source sync, mismatch surfacing, on-demand re-sync
+with confirmation feedback, full mobile parity with tap-to-reveal detail
+panels, and a clean extended cost alignment audit confirming zero gaps across
+all 21 computation paths. No new DB columns were required across the full
+40A–40I series.
