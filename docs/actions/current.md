@@ -18,7 +18,7 @@ Price Sheets / Bids → Selections → Estimate → Proposal → Financials
 
 ## 2. Last verified completed work
 
-Latest completed slice: **Slice 43B — Repo Cleanup After Legacy Pricing Column Removal**
+Latest completed slice: **Slice 44 — Estimate UX Consolidation Pass**
 
 Recent completed work:
 - Slice 38 — Pricing Permission Alignment
@@ -37,6 +37,7 @@ Recent completed work:
 - Slice 42 — Estimate model cleanup (permission symmetry, snapshot button, migration plan)
 - Slice 43A — Legacy pricing column DB migration (`job_worksheet_items.unit_price` and `total_price` dropped)
 - Slice 43B — Repo cleanup after legacy pricing removal (type fields, draft defaults, column key)
+- Slice 44 — Estimate UX consolidation (header copy, sync toolbar gating, note row Link button, delete title)
 
 Reports:
 - docs/modules/pricing/slice_38_pricing_permission_alignment.md
@@ -56,6 +57,7 @@ Reports:
 - docs/modules/estimate/slice_41_proposal_truth_consolidation.md
 - docs/modules/estimate/slice_42_estimate_model_cleanup.md
 - docs/modules/estimate/slice_43b_repo_cleanup_after_legacy_pricing_removal.md
+- docs/modules/estimate/slice_44_estimate_ux_consolidation.md
 
 ---
 
@@ -107,12 +109,14 @@ System is structurally correct and consistent.
 - Stale mismatch state is not persisted (derived on load, lost on page leave)
 - Sync feedback label has no fade animation (appears/disappears abruptly)
 - Mobile detail panel: no close-on-outside-tap; no open/close animation
+- Mobile has no manual sync trigger (auto-sync on mount covers the common case)
 
 ---
 
 ## 5. Next recommended work
 
 1. Slice 40J — Animation polish: sync feedback fade + mobile detail panel open/close
+2. Slice 45 — Mobile sync trigger: thread `handleManualSync` as prop to `JobWorksheetMobileView` so linked-row sync is user-invocable on mobile
 
 ---
 

@@ -164,9 +164,9 @@ export default function JobWorksheetPageOrchestrator({ jobId, jobName, activeEst
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
             <div>
-              <div style={{ fontSize: '18px', fontWeight: 700 }}>Internal Job Worksheet</div>
+              <div style={{ fontSize: '18px', fontWeight: 700 }}>Estimate</div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                {isLocked ? 'Locked — read only.' : 'Editable slice. Changes auto-save.'}
+                {isLocked ? 'Read only.' : 'Auto-saves.'}
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

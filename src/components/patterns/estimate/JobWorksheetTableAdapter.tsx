@@ -107,14 +107,16 @@ function getColumns(
       width:'120px',
       renderStaticCell:(row) => (
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={() => onLinkRow(row.id)}
-            title="Link to price source"
-            style={{ fontSize: '11px', fontWeight: 600, padding: '2px 6px', border: '1px solid var(--border)', borderRadius: '4px', background: 'var(--surface)', cursor: 'pointer', color: 'var(--text)', whiteSpace: 'nowrap' }}
-          >
-            Link
-          </button>
+          {row.row_kind !== 'note' && (
+            <button
+              type="button"
+              onClick={() => onLinkRow(row.id)}
+              title="Link to price source"
+              style={{ fontSize: '11px', fontWeight: 600, padding: '2px 6px', border: '1px solid var(--border)', borderRadius: '4px', background: 'var(--surface)', cursor: 'pointer', color: 'var(--text)', whiteSpace: 'nowrap' }}
+            >
+              Link
+            </button>
+          )}
           {row.pricing_source_row_id && (
             <button
               type="button"
@@ -138,6 +140,7 @@ function getColumns(
           <button
             type="button"
             onClick={() => onDeleteRow(row.id)}
+            title="Delete row"
             style={{ color: '#dc2626', background: 'none', border: 'none', fontWeight: 800, cursor: 'pointer' }}
           >
             ✕
@@ -255,6 +258,8 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
     [rowsById, staleRowIds, props.deleteRow, props.commitCellValue, unlinkPending, acceptPending],
   )
 
+  const hasLinkedRows = rows.some((r) => r.pricing_source_row_id !== null)
+
   const virt = useWorksheetVirtualization<JobWorksheetRow>({ rows, rowHeight:64, overscan:8, threshold:20, maxBodyHeight:560 })
 
   const interaction = useWorksheetInteraction<JobWorksheetRow, JobWorksheetEditableCellKey>({
@@ -291,7 +296,7 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
     <>
       <datalist id="unit-options">{unitOptions.map((unit)=><option key={unit} value={unit}/>)}</datalist>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+      {hasLinkedRows && <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
         {syncFeedback && (
           <span style={{
             fontSize: '11px',
@@ -328,7 +333,7 @@ export function JobWorksheetTableAdapter(props: AdapterProps) {
           <SyncIcon />
           {syncPending ? 'Syncing…' : 'Sync prices'}
         </button>
-      </div>
+      </div>}
 
       <EditableDataTable
         columns={columns}
